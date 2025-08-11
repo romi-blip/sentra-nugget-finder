@@ -59,6 +59,8 @@ const Chat = () => {
     setMessages((m) => [...m, typingMsg]);
 
     try {
+      console.log('Chat: Sending request to webhook:', chatWebhookUrl);
+      
       const response = await fetch(chatWebhookUrl, {
         method: 'POST',
         headers: {
@@ -71,12 +73,31 @@ const Chat = () => {
         }),
       });
 
+      console.log('Chat: Response status:', response.status);
+      console.log('Chat: Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      const assistantResponse = data.response || data.message || "I received your message but couldn't generate a proper response.";
+      // Get response as text first to check if it's valid JSON
+      const responseText = await response.text();
+      console.log('Chat: Raw response text:', responseText);
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Webhook returned empty response');
+      }
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('Chat: Parsed JSON data:', data);
+      } catch (parseError) {
+        console.error('Chat: JSON parse error:', parseError);
+        throw new Error(`Invalid JSON response from webhook: ${responseText.substring(0, 100)}...`);
+      }
+
+      const assistantResponse = data.response || data.message || data.content || "I received your message but couldn't generate a proper response.";
 
       // Remove typing indicator and add real response
       setMessages((m) => m.filter(msg => msg.id !== typingId));
@@ -88,6 +109,8 @@ const Chat = () => {
       setMessages((m) => [...m, reply]);
 
     } catch (error) {
+      console.error('Chat: Full error details:', error);
+      
       // Remove typing indicator
       setMessages((m) => m.filter(msg => msg.id !== typingId));
       
