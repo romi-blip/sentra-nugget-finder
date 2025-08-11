@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,11 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
-
+import { supabase } from "@/integrations/supabase/client";
 interface KBItem {
   id: string;
   name: string;
-  type: "file" | "drive";
+  type: "file" | "drive" | "asset";
   sourceUrl?: string;
   size?: number;
   status: "pending" | "processing" | "ready" | "error";
@@ -37,6 +38,34 @@ const KnowledgeBase = () => {
   useEffect(() => saveItems(items), [items]);
 
   const webhookUrl = useMemo(() => localStorage.getItem("n8nWebhookUrl") || "", []);
+
+  // Fetch Sales Enablement Assets from Supabase
+  const { data: assets, isLoading: assetsLoading, error: assetsError } = useQuery({
+    queryKey: ["sales_enablement_assets"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales_enablement_assets")
+        .select("id, file_name, drive_url, mime_type, file_updated_date, created_at, updated_at, external, version")
+        .order("file_updated_date", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Map assets into displayable KB items
+  const assetItems: KBItem[] = useMemo(() => {
+    return (assets || []).map((a: any) => ({
+      id: `asset-${a.id}`,
+      name: a.file_name,
+      type: "asset",
+      sourceUrl: a.drive_url,
+      status: "ready",
+      createdAt: a.file_updated_date || a.updated_at || a.created_at || new Date().toISOString(),
+    }));
+  }, [assets]);
+
+  // Combine Supabase assets with local items for display only
+  const displayItems = useMemo(() => [...assetItems, ...items], [assetItems, items]);
 
   const triggerWebhook = async (payload: FormData | object) => {
     const url = localStorage.getItem("n8nWebhookUrl") || "";
@@ -95,6 +124,15 @@ const KnowledgeBase = () => {
   const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
   const markReady = (id: string) => setItems((prev) => prev.map((i) => (i.id === id ? { ...i, status: "ready" } : i)));
 
+  const indexAsset = async (asset: KBItem) => {
+    await triggerWebhook({
+      source: "sales_enablement_asset",
+      url: asset.sourceUrl,
+      name: asset.name,
+    });
+    toast({ title: "Indexing triggered", description: `${asset.name} sent to n8n for indexing` });
+  };
+
   return (
     <main className="min-h-screen">
       <SEO title="Sentra Knowledge Base Manager" description="Upload files or connect Google Drive and index content to your Supabase vector DB via n8n." canonicalPath="/kb" />
@@ -151,20 +189,33 @@ const KnowledgeBase = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.length === 0 ? (
+                {displayItems.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground">No items yet. Upload files or connect a Drive folder.</TableCell>
                   </TableRow>
                 ) : (
-                  items.map((i) => (
+                  displayItems.map((i) => (
                     <TableRow key={i.id}>
                       <TableCell className="max-w-[280px] truncate" title={i.name}>{i.name}</TableCell>
                       <TableCell className="capitalize">{i.type}</TableCell>
                       <TableCell className="capitalize">{i.status}</TableCell>
                       <TableCell>{new Date(i.createdAt).toLocaleString()}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button size="sm" variant="secondary" onClick={() => markReady(i.id)}>Mark ready</Button>
-                        <Button size="sm" variant="destructive" onClick={() => removeItem(i.id)}>Delete</Button>
+                        {i.type === "asset" ? (
+                          <>
+                            <Button size="sm" variant="secondary" onClick={() => indexAsset(i)}>Index</Button>
+                            {i.sourceUrl ? (
+                              <Button size="sm" variant="outline" asChild>
+                                <a href={i.sourceUrl} target="_blank" rel="noreferrer">Open</a>
+                              </Button>
+                            ) : null}
+                          </>
+                        ) : (
+                          <>
+                            <Button size="sm" variant="secondary" onClick={() => markReady(i.id)}>Mark ready</Button>
+                            <Button size="sm" variant="destructive" onClick={() => removeItem(i.id)}>Delete</Button>
+                          </>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
