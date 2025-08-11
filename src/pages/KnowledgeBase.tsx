@@ -33,6 +33,69 @@ const loadItems = (): KBItem[] => {
   }
 };
 
+// Helper: validate a Google Drive/Docs URL
+const isValidGoogleUrl = (url?: string | null) => {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    const host = u.hostname;
+    const isGoogleHost = host.endsWith("google.com");
+    if (!isGoogleHost) return false;
+
+    if (host === "drive.google.com") {
+      return (
+        u.pathname.includes("/drive/folders/") ||
+        u.pathname.includes("/file/d/") ||
+        u.pathname.includes("/open") ||
+        u.pathname.includes("/uc") ||
+        u.searchParams.has("id")
+      );
+    }
+    if (host === "docs.google.com") {
+      return (
+        u.pathname.includes("/document/d/") ||
+        u.pathname.includes("/spreadsheets/d/") ||
+        u.pathname.includes("/presentation/d/") ||
+        u.pathname.includes("/forms/d/") ||
+        u.pathname.includes("/drawings/d/")
+      );
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Helper: Build a canonical open URL from drive_id + mime_type, with robust fallbacks
+const buildDriveOpenUrl = (
+  drive_url?: string | null,
+  drive_id?: string | null,
+  mime_type?: string | null
+): string | undefined => {
+  const url = (drive_url || undefined)?.trim();
+  if (isValidGoogleUrl(url)) return url;
+
+  const id = (drive_id || "").trim();
+  const mt = (mime_type || "").toLowerCase();
+  if (!id) {
+    if (url) {
+      console.warn("KnowledgeBase: Provided drive_url is not a recognized Google URL:", url);
+    }
+    return undefined;
+  }
+
+  // Google native types
+  if (mt.includes("vnd.google-apps.folder")) return `https://drive.google.com/drive/folders/${id}`;
+  if (mt.includes("vnd.google-apps.document")) return `https://docs.google.com/document/d/${id}/edit`;
+  if (mt.includes("vnd.google-apps.spreadsheet")) return `https://docs.google.com/spreadsheets/d/${id}/edit`;
+  if (mt.includes("vnd.google-apps.presentation")) return `https://docs.google.com/presentation/d/${id}/edit`;
+  if (mt.includes("vnd.google-apps.form")) return `https://docs.google.com/forms/d/${id}/edit`;
+  if (mt.includes("vnd.google-apps.drawing")) return `https://docs.google.com/drawings/d/${id}/edit`;
+
+  // Default to Drive file preview
+  return `https://drive.google.com/file/d/${id}/view`;
+};
+
 const KnowledgeBase = () => {
   const [items, setItems] = useState<KBItem[]>(loadItems());
   const [driveUrl, setDriveUrl] = useState("");
@@ -60,20 +123,7 @@ const KnowledgeBase = () => {
   // Map assets into displayable KB items
   const assetItems: KBItem[] = useMemo(() => {
     return (assets || []).map((a: any) => {
-      const mt = (a.mime_type || "").toLowerCase();
-      const url =
-        a.drive_url ||
-        (a.drive_id
-          ? mt.includes("folder")
-            ? `https://drive.google.com/drive/folders/${a.drive_id}`
-            : mt.includes("document")
-            ? `https://docs.google.com/document/d/${a.drive_id}`
-            : mt.includes("spreadsheet")
-            ? `https://docs.google.com/spreadsheets/d/${a.drive_id}`
-            : mt.includes("presentation")
-            ? `https://docs.google.com/presentation/d/${a.drive_id}`
-            : `https://drive.google.com/file/d/${a.drive_id}/view`
-          : undefined);
+      const url = buildDriveOpenUrl(a.drive_url, a.drive_id, a.mime_type);
 
       return {
         id: `asset-${a.id}`,
@@ -277,7 +327,7 @@ const KnowledgeBase = () => {
                         {i.type === "asset" ? (
                           <>
                             <Button size="sm" variant="secondary" onClick={() => indexAsset(i)}>Index</Button>
-                            {i.sourceUrl ? (
+                            {i.sourceUrl && isValidGoogleUrl(i.sourceUrl) ? (
                               <Button size="sm" variant="outline" asChild>
                                 <a href={i.sourceUrl} target="_blank" rel="noreferrer">Open</a>
                               </Button>
