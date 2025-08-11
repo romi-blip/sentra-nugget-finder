@@ -208,20 +208,24 @@ export const ChatSidebar = ({
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            size="sm"
+                            className="h-8 w-8 p-0 opacity-70 group-hover:opacity-100 transition-opacity hover:bg-muted/80 shrink-0"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <MoreVertical className="h-3 w-3" />
+                            <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-background border shadow-lg z-50">
+                        <DropdownMenuContent 
+                          align="end" 
+                          className="bg-popover border shadow-lg z-[100] min-w-[120px]"
+                          sideOffset={4}
+                        >
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRename(session.id, session.title);
                             }}
-                            className="hover:bg-muted cursor-pointer"
+                            className="hover:bg-accent focus:bg-accent cursor-pointer"
                           >
                             <Edit3 className="h-4 w-4 mr-2" />
                             Rename
@@ -231,7 +235,7 @@ export const ChatSidebar = ({
                               e.stopPropagation();
                               onDeleteSession(session.id);
                             }}
-                            className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                            className="text-destructive hover:bg-destructive/10 focus:bg-destructive/10 cursor-pointer"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
