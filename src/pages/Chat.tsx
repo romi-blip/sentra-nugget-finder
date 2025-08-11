@@ -9,7 +9,7 @@ interface Message { id: string; role: "user" | "assistant"; content: string; }
 
 const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { id: "w", role: "assistant", content: "Hi! Ask about content to share with your prospect. I’ll search your knowledge base once connected." },
+    { id: "w", role: "assistant", content: "Hi! Ask about content to share with your prospect. I'll search your knowledge base once connected." },
   ]);
   const [input, setInput] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -23,25 +23,88 @@ const Chat = () => {
     setMessages((m) => [...m, userMsg]);
     setInput("");
 
-    const webhook = localStorage.getItem("n8nWebhookUrl");
-    if (!webhook) {
+    // Get chat webhook from new webhook system
+    const webhookData = localStorage.getItem("n8n_webhook_configs");
+    let chatWebhookUrl: string | null = null;
+    
+    if (webhookData) {
+      try {
+        const { webhooks } = JSON.parse(webhookData);
+        const chatWebhook = webhooks.find((w: any) => w.type === 'chat' && w.enabled && w.url);
+        chatWebhookUrl = chatWebhook?.url || null;
+      } catch (e) {
+        console.error('Failed to parse webhook config:', e);
+      }
+    }
+
+    // Fallback to legacy webhook
+    if (!chatWebhookUrl) {
+      chatWebhookUrl = localStorage.getItem("n8nWebhookUrl");
+    }
+
+    if (!chatWebhookUrl) {
       const reply: Message = {
         id: `${Date.now()}a`,
         role: 'assistant',
-        content: "To enable AI answers using your knowledge base, add your n8n webhook in Settings and connect Supabase. For now, here’s a generic tip: share a 1-pager with a crisp value prop and 3 proof points, then a case study based on prospect industry.",
+        content: "To enable AI answers using your knowledge base, configure your chat webhook in Settings. For now, here's a generic tip: share a 1-pager with a crisp value prop and 3 proof points, then a case study based on prospect industry.",
       };
       setMessages((m) => [...m, reply]);
-      toast({ title: "Connect backend", description: "Add your n8n webhook in Settings to enable RAG chat." });
+      toast({ title: "Configure Webhook", description: "Add your chat webhook in Settings to enable AI responses." });
       return;
     }
 
-    // Placeholder echo; backend integration will stream real answers
-    const reply: Message = {
-      id: `${Date.now()}a`,
-      role: 'assistant',
-      content: `Got it: "${text}". Once connected, I will query your vector DB for tailored content and draft an email/LinkedIn message.`,
-    };
-    setMessages((m) => [...m, reply]);
+    // Add typing indicator
+    const typingId = `${Date.now()}typing`;
+    const typingMsg: Message = { id: typingId, role: 'assistant', content: '⚡ AI is thinking...' };
+    setMessages((m) => [...m, typingMsg]);
+
+    try {
+      const response = await fetch(chatWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: text,
+          timestamp: new Date().toISOString(),
+          sessionId: `session_${Date.now()}`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const assistantResponse = data.response || data.message || "I received your message but couldn't generate a proper response.";
+
+      // Remove typing indicator and add real response
+      setMessages((m) => m.filter(msg => msg.id !== typingId));
+      const reply: Message = {
+        id: `${Date.now()}a`,
+        role: 'assistant',
+        content: assistantResponse,
+      };
+      setMessages((m) => [...m, reply]);
+
+    } catch (error) {
+      // Remove typing indicator
+      setMessages((m) => m.filter(msg => msg.id !== typingId));
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const reply: Message = {
+        id: `${Date.now()}a`,
+        role: 'assistant',
+        content: `Sorry, I encountered an error: ${errorMessage}. Please check your webhook configuration in Settings.`,
+      };
+      setMessages((m) => [...m, reply]);
+      
+      toast({
+        title: "Connection Failed",
+        description: "Failed to reach the chat webhook. Please check your configuration.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
