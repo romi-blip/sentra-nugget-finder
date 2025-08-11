@@ -53,6 +53,19 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Sentra brand tokens */
+    --brand: 260 69% 56%; /* primary purple */
+    --brand-2: 34 100% 55%; /* orange accent */
+    --brand-foreground: 0 0% 100%;
+    --brand-muted: 258 44% 96%;
+
+    /* Gradients & shadows */
+    --gradient-hero: radial-gradient(600px_600px_at_var(--cursor-x,50%)_var(--cursor-y,40%), hsl(var(--brand)/0.18), transparent 60%), linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(var(--brand-2)) 100%);
+    --shadow-elevated: 0 24px 72px -24px hsl(var(--brand) / 0.35);
+
+    /* Motion */
+    --transition-smooth: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
@@ -91,6 +104,9 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Dark brand adjustments */
+    --brand-muted: 252 34% 12%;
   }
 }
 
@@ -101,5 +117,20 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Utilities built on top of tokens */
+@layer utilities {
+  .bg-hero {
+    background: var(--gradient-hero);
+  }
+  .glass-card {
+    background-color: hsl(var(--card) / 0.65);
+    @apply backdrop-blur-md border;
+    box-shadow: var(--shadow-elevated);
+  }
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
   }
 }
