@@ -61,7 +61,7 @@ All colors MUST be HSL.
     --brand-muted: 258 44% 96%;
 
     /* Gradients & shadows */
-    --gradient-hero: radial-gradient(600px_600px_at_var(--cursor-x,50%)_var(--cursor-y,40%), hsl(var(--brand)/0.18), transparent 60%), linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(var(--brand-2)) 100%);
+    --gradient-hero: radial-gradient(600px 600px at var(--cursor-x, 50%) var(--cursor-y, 40%), hsl(var(--brand) / 0.18), transparent 60%), linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(var(--brand-2)) 100%);
     --shadow-elevated: 0 24px 72px -24px hsl(var(--brand) / 0.35);
 
     /* Motion */
