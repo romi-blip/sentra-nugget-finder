@@ -215,12 +215,13 @@ export const ChatSidebar = ({
                             <MoreVertical className="h-3 w-3" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="bg-background border shadow-lg z-50">
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRename(session.id, session.title);
                             }}
+                            className="hover:bg-muted cursor-pointer"
                           >
                             <Edit3 className="h-4 w-4 mr-2" />
                             Rename
@@ -230,7 +231,7 @@ export const ChatSidebar = ({
                               e.stopPropagation();
                               onDeleteSession(session.id);
                             }}
-                            className="text-destructive"
+                            className="text-destructive hover:bg-destructive/10 cursor-pointer"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
