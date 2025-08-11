@@ -80,7 +80,7 @@ const Chat = () => {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // Get response as text first to check if it's valid JSON
+      // Get response as text first to check format
       const responseText = await response.text();
       console.log('Chat: Raw response text:', responseText);
 
@@ -88,35 +88,48 @@ const Chat = () => {
         throw new Error('Webhook returned empty response');
       }
 
-      let data;
-      try {
-        data = JSON.parse(responseText);
-        console.log('Chat: Parsed JSON data:', data);
-        
-        // Extract the message from N8N response format
-        const assistantResponse = (() => {
-          // Handle N8N array response format: [{ "output": "message" }]
+      let assistantResponse: string;
+
+      // Detect response format and handle accordingly
+      const trimmedResponse = responseText.trim();
+      
+      if (trimmedResponse.startsWith('[') || trimmedResponse.startsWith('{')) {
+        // Looks like JSON, try to parse it
+        console.log('Chat: Detected JSON format response');
+        try {
+          const data = JSON.parse(responseText);
+          console.log('Chat: Successfully parsed JSON:', data);
+          
+          // Extract the message from N8N response format
           if (Array.isArray(data) && data.length > 0 && data[0].output) {
-            return data[0].output;
+            assistantResponse = data[0].output;
+          } else if (data.response || data.message || data.content) {
+            assistantResponse = data.response || data.message || data.content;
+          } else {
+            assistantResponse = "I received your message but couldn't extract a proper response from the JSON.";
           }
-          // Handle direct object formats
-          return data.response || data.message || data.content || "I received your message but couldn't generate a proper response.";
-        })();
-
-        // Remove typing indicator and add real response
-        setMessages((m) => m.filter(msg => msg.id !== typingId));
-        const reply: Message = {
-          id: `${Date.now()}a`,
-          role: 'assistant',
-          content: assistantResponse,
-        };
-        setMessages((m) => [...m, reply]);
-        return; // Successfully processed, exit the function
-
-      } catch (parseError) {
-        console.error('Chat: JSON parse error:', parseError);
-        throw new Error(`Invalid JSON response from webhook: ${responseText.substring(0, 100)}...`);
+        } catch (parseError) {
+          console.error('Chat: JSON parse error:', parseError);
+          throw new Error(`Invalid JSON format from webhook. Expected JSON but got malformed data: ${responseText.substring(0, 100)}...`);
+        }
+      } else {
+        // Plain text/markdown response
+        console.log('Chat: Detected plain text/markdown format response');
+        assistantResponse = responseText;
+        
+        // Log a warning about inconsistent webhook format
+        console.warn('Chat: Webhook returned plain text instead of expected JSON format. Consider configuring your N8N workflow to return consistent JSON: [{"output": "your message"}]');
       }
+
+      // Remove typing indicator and add real response
+      setMessages((m) => m.filter(msg => msg.id !== typingId));
+      const reply: Message = {
+        id: `${Date.now()}a`,
+        role: 'assistant',
+        content: assistantResponse,
+      };
+      setMessages((m) => [...m, reply]);
+      return; // Successfully processed
 
     } catch (error) {
       console.error('Chat: Full error details:', error);
