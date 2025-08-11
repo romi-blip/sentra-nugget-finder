@@ -203,46 +203,69 @@ export const ChatSidebar = ({
                       )}
                     </div>
                     
-                    {editingSessionId !== session.id && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 opacity-70 group-hover:opacity-100 transition-opacity hover:bg-muted/80 shrink-0"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent 
-                          align="end" 
-                          className="bg-popover border shadow-lg z-[100] min-w-[120px]"
-                          sideOffset={4}
-                        >
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRename(session.id, session.title);
-                            }}
-                            className="hover:bg-accent focus:bg-accent cursor-pointer"
-                          >
-                            <Edit3 className="h-4 w-4 mr-2" />
-                            Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteSession(session.id);
-                            }}
-                            className="text-destructive hover:bg-destructive/10 focus:bg-destructive/10 cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                     {/* Action buttons - always visible on hover for better UX */}
+                     {editingSessionId !== session.id && (
+                       <div className="flex items-center gap-1">
+                         {/* Direct delete button */}
+                         <Button
+                           variant="ghost"
+                           size="sm"
+                           className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/20 hover:text-destructive shrink-0"
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             if (window.confirm('Delete this chat session?')) {
+                               onDeleteSession(session.id);
+                             }
+                           }}
+                           title="Delete chat"
+                         >
+                           <Trash2 className="h-3 w-3" />
+                         </Button>
+                         
+                         {/* Dropdown menu as alternative */}
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button
+                               variant="ghost"
+                               size="sm"
+                               className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent shrink-0"
+                               onClick={(e) => e.stopPropagation()}
+                               title="More options"
+                             >
+                               <MoreVertical className="h-3 w-3" />
+                             </Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent 
+                             align="end" 
+                             className="bg-popover border shadow-xl z-[999] min-w-[140px]"
+                             sideOffset={8}
+                           >
+                             <DropdownMenuItem
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 handleRename(session.id, session.title);
+                               }}
+                               className="hover:bg-accent focus:bg-accent cursor-pointer"
+                             >
+                               <Edit3 className="h-4 w-4 mr-2" />
+                               Rename
+                             </DropdownMenuItem>
+                             <DropdownMenuItem
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (window.confirm('Delete this chat session?')) {
+                                   onDeleteSession(session.id);
+                                 }
+                               }}
+                               className="text-destructive hover:bg-destructive/10 focus:bg-destructive/10 cursor-pointer"
+                             >
+                               <Trash2 className="h-4 w-4 mr-2" />
+                               Delete
+                             </DropdownMenuItem>
+                           </DropdownMenuContent>
+                         </DropdownMenu>
+                       </div>
+                     )}
                   </div>
                 </div>
               ))}
