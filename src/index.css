@@ -60,11 +60,8 @@ All colors MUST be HSL.
     --brand-foreground: 0 0% 100%;
     --brand-muted: 258 44% 96%;
 
-    /* Gradients & shadows */
-    --gradient-hero: radial-gradient(600px 600px at var(--cursor-x, 50%) var(--cursor-y, 40%), hsl(var(--brand) / 0.18), transparent 60%), linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(var(--brand-2)) 100%);
+    /* Shadows & motion */
     --shadow-elevated: 0 24px 72px -24px hsl(var(--brand) / 0.35);
-
-    /* Motion */
     --transition-smooth: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -103,27 +100,24 @@ All colors MUST be HSL.
     --sidebar-accent: 240 3.7% 15.9%;
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-
-    /* Dark brand adjustments */
     --brand-muted: 252 34% 12%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
   }
 }
 
+
 /* Utilities built on top of tokens */
 @layer utilities {
   .bg-hero {
-    background: var(--gradient-hero);
+    background:
+      radial-gradient(600px 600px at var(--cursor-x, 50%) var(--cursor-y, 40%), hsl(var(--brand) / 0.14), transparent 60%),
+      linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(var(--brand-2)) 100%);
   }
   .glass-card {
     background-color: hsl(var(--card) / 0.65);
