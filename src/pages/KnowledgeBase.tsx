@@ -9,6 +9,8 @@ import { toast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { File as FileIcon, FileText, FileSpreadsheet, FileImage, FileCode, FileAudio, FileVideo, FileArchive, Folder } from "lucide-react";
 interface KBItem {
   id: string;
@@ -315,113 +317,333 @@ const KnowledgeBase = () => {
   };
 
   const renderIcon = (item: KBItem) => {
-    if (item.type === "drive") return <Folder className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    const iconSize = "h-5 w-5";
+    
+    if (item.type === "drive") {
+      return (
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-file-folder/10">
+          <Folder className={`${iconSize} file-icon-folder`} aria-hidden />
+        </div>
+      );
+    }
+    
     const mt = (item.mimeType || "").toLowerCase();
-    if (mt.startsWith("image/")) return <FileImage className="h-4 w-4 text-muted-foreground" aria-hidden />;
-    if (mt.startsWith("video/")) return <FileVideo className="h-4 w-4 text-muted-foreground" aria-hidden />;
-    if (mt.startsWith("audio/")) return <FileAudio className="h-4 w-4 text-muted-foreground" aria-hidden />;
-    if (mt.includes("folder")) return <Folder className="h-4 w-4 text-muted-foreground" aria-hidden />;
-    if (mt.includes("pdf")) return <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />;
-    if (mt.includes("zip") || mt.includes("compressed") || mt.includes("tar")) return <FileArchive className="h-4 w-4 text-muted-foreground" aria-hidden />;
-    if (mt.includes("spreadsheet") || mt.includes("excel")) return <FileSpreadsheet className="h-4 w-4 text-muted-foreground" aria-hidden />;
-    if (mt.includes("json") || mt.includes("xml") || mt.includes("javascript") || mt.includes("typescript") || mt.includes("html") || mt.includes("css")) return <FileCode className="h-4 w-4 text-muted-foreground" aria-hidden />;
-    return <FileIcon className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    
+    if (mt.startsWith("image/") || mt.startsWith("video/") || mt.startsWith("audio/")) {
+      return (
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-file-media/10">
+          {mt.startsWith("image/") && <FileImage className={`${iconSize} file-icon-media`} aria-hidden />}
+          {mt.startsWith("video/") && <FileVideo className={`${iconSize} file-icon-media`} aria-hidden />}
+          {mt.startsWith("audio/") && <FileAudio className={`${iconSize} file-icon-media`} aria-hidden />}
+        </div>
+      );
+    }
+    
+    if (mt.includes("folder")) {
+      return (
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-file-folder/10">
+          <Folder className={`${iconSize} file-icon-folder`} aria-hidden />
+        </div>
+      );
+    }
+    
+    if (mt.includes("pdf") || mt.includes("document") || mt.includes("text")) {
+      return (
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-file-document/10">
+          <FileText className={`${iconSize} file-icon-document`} aria-hidden />
+        </div>
+      );
+    }
+    
+    if (mt.includes("zip") || mt.includes("compressed") || mt.includes("tar") || mt.includes("archive")) {
+      return (
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-file-archive/10">
+          <FileArchive className={`${iconSize} file-icon-archive`} aria-hidden />
+        </div>
+      );
+    }
+    
+    if (mt.includes("spreadsheet") || mt.includes("excel") || mt.includes("csv")) {
+      return (
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-file-spreadsheet/10">
+          <FileSpreadsheet className={`${iconSize} file-icon-spreadsheet`} aria-hidden />
+        </div>
+      );
+    }
+    
+    if (mt.includes("presentation") || mt.includes("powerpoint")) {
+      return (
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-file-presentation/10">
+          <FileText className={`${iconSize} file-icon-presentation`} aria-hidden />
+        </div>
+      );
+    }
+    
+    if (mt.includes("json") || mt.includes("xml") || mt.includes("javascript") || mt.includes("typescript") || mt.includes("html") || mt.includes("css") || mt.includes("code")) {
+      return (
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-file-code/10">
+          <FileCode className={`${iconSize} file-icon-code`} aria-hidden />
+        </div>
+      );
+    }
+    
+    return (
+      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted/20">
+        <FileIcon className={`${iconSize} file-icon-default`} aria-hidden />
+      </div>
+    );
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "ready":
+        return <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">Ready</Badge>;
+      case "processing":
+        return <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">Processing</Badge>;
+      case "pending":
+        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">Pending</Badge>;
+      case "error":
+        return <Badge variant="destructive">Error</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case "file":
+        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">File</Badge>;
+      case "drive":
+        return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Drive</Badge>;
+      case "asset":
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Asset</Badge>;
+      default:
+        return <Badge variant="outline">{type}</Badge>;
+    }
   };
 
   return (
     <main className="min-h-screen">
       <SEO title="Sentra Knowledge Base Manager" description="Upload files or connect Google Drive and index content to your Supabase vector DB via n8n." canonicalPath="/kb" />
 
-      <section className="bg-hero">
-        <div className="mx-auto max-w-7xl px-4 py-12">
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">Knowledge Base</h1>
-          <p className="text-muted-foreground max-w-2xl">Upload PDFs, docs and decks or connect a Google Drive folder. We'll send them to your n8n webhook for processing into your Supabase vector database.</p>
+      <section className="bg-gradient-to-r from-primary/10 via-brand-2/5 to-primary/10 py-16">
+        <div className="mx-auto max-w-7xl px-4">
+          <div className="text-center space-y-4">
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary to-brand-2 bg-clip-text text-transparent">
+              Knowledge Base
+            </h1>
+            <p className="text-muted-foreground max-w-3xl mx-auto text-lg">
+              Upload PDFs, docs and decks or connect a Google Drive folder. We'll send them to your n8n webhook for processing into your Supabase vector database.
+            </p>
+          </div>
         </div>
       </section>
 
-      <div className="mx-auto max-w-7xl px-4 grid gap-6 md:grid-cols-2 -mt-8">
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle>Upload Files</CardTitle>
-            <CardDescription>Supported: PDF, DOCX, PPTX, TXT, Markdown</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Input ref={fileInputRef} type="file" multiple onChange={(e) => onUpload(e.target.files)} />
-            <div className="text-xs text-muted-foreground">Files are sent directly to your n8n webhook.</div>
-          </CardContent>
-        </Card>
+      <div className="mx-auto max-w-7xl px-4 -mt-12 mb-16">
+        <div className="grid gap-8 md:grid-cols-2">
+          <Card className="glass-card hover:shadow-lg transition-shadow duration-300">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
+                  <FileText className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Upload Files</CardTitle>
+                  <CardDescription>Supported: PDF, DOCX, PPTX, TXT, Markdown</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-3">
+                <Input 
+                  ref={fileInputRef} 
+                  type="file" 
+                  multiple 
+                  onChange={(e) => onUpload(e.target.files)}
+                  className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                />
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  Files are sent directly to your n8n webhook for processing
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle>Connect Google Drive Folder</CardTitle>
-            <CardDescription>Paste a shared link with viewer access</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-end gap-2">
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="drive">Folder URL</Label>
-              <Input id="drive" placeholder="https://drive.google.com/drive/folders/..." value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} />
-            </div>
-            <Button variant="hero" onClick={addDriveFolder}>Add</Button>
-          </CardContent>
-        </Card>
+          <Card className="glass-card hover:shadow-lg transition-shadow duration-300">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-2/10">
+                  <Folder className="h-5 w-5 text-brand-2" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Connect Google Drive</CardTitle>
+                  <CardDescription>Paste a shared link with viewer access</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="drive" className="text-sm font-medium">Folder URL</Label>
+                  <div className="flex gap-3">
+                    <Input 
+                      id="drive" 
+                      placeholder="https://drive.google.com/drive/folders/..." 
+                      value={driveUrl} 
+                      onChange={(e) => setDriveUrl(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button 
+                      variant="default" 
+                      onClick={addDriveFolder}
+                      disabled={!driveUrl.trim()}
+                      className="shrink-0"
+                    >
+                      Connect
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  Folder contents will be indexed automatically
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle>Content Sources</CardTitle>
-            <CardDescription>Manage your indexed files and folders</CardDescription>
+      <div className="mx-auto max-w-7xl px-4 pb-16">
+        <Card className="shadow-lg">
+          <CardHeader className="border-b bg-gradient-to-r from-card to-muted/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-2xl">Content Sources</CardTitle>
+                <CardDescription className="mt-1">Manage your indexed files and folders</CardDescription>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {displayItems.length} {displayItems.length === 1 ? 'item' : 'items'} total
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Added</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {displayItems.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">No items yet. Upload files or connect a Drive folder.</TableCell>
+          <CardContent className="p-0">
+            {assetsLoading ? (
+              <div className="p-6 space-y-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="w-8 h-8 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-b bg-muted/30">
+                    <TableHead className="py-4 font-semibold">File</TableHead>
+                    <TableHead className="py-4 font-semibold">Type</TableHead>
+                    <TableHead className="py-4 font-semibold">Status</TableHead>
+                    <TableHead className="py-4 font-semibold">Date Added</TableHead>
+                    <TableHead className="py-4 font-semibold text-right">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  paginatedItems.map((i) => (
-                    <TableRow key={i.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2 max-w-[280px]">
-                          {renderIcon(i)}
-                          <span className="truncate" title={i.name}>{i.name}</span>
+                </TableHeader>
+                <TableBody>
+                  {displayItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-12 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                            <FileIcon className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-muted-foreground">No content sources yet</p>
+                            <p className="text-sm text-muted-foreground">Upload files or connect a Drive folder to get started</p>
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell className="capitalize">{i.type}</TableCell>
-                      <TableCell className="capitalize">{i.status}</TableCell>
-                      <TableCell>{new Date(i.createdAt).toLocaleString()}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        {i.type === "asset" ? (
-                          <>
-                            <Button size="sm" variant="secondary" onClick={() => indexAsset(i)}>Index</Button>
-                            {i.sourceUrl && isValidGoogleUrl(i.sourceUrl) ? (
-                              <Button size="sm" variant="outline" asChild>
-                                <a href={i.sourceUrl} target="_blank" rel="noreferrer">Open</a>
-                              </Button>
-                            ) : null}
-                          </>
-                        ) : (
-                          <>
-                            <Button size="sm" variant="secondary" onClick={() => markReady(i.id)}>Mark ready</Button>
-                            <Button size="sm" variant="destructive" onClick={() => removeItem(i.id)}>Delete</Button>
-                          </>
-                        )}
-                      </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    paginatedItems.map((i) => (
+                      <TableRow key={i.id} className="hover:bg-muted/30 transition-colors">
+                        <TableCell className="py-4">
+                          <div className="flex items-center gap-3 max-w-[300px]">
+                            {renderIcon(i)}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate" title={i.name}>{i.name}</p>
+                              {i.mimeType && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {i.mimeType.split('/').pop()?.toUpperCase()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-4">
+                          {getTypeBadge(i.type)}
+                        </TableCell>
+                        <TableCell className="py-4">
+                          {getStatusBadge(i.status)}
+                        </TableCell>
+                        <TableCell className="py-4 text-sm text-muted-foreground">
+                          {new Date(i.createdAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </TableCell>
+                        <TableCell className="py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            {i.type === "asset" ? (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  variant="secondary" 
+                                  onClick={() => indexAsset(i)}
+                                  className="hover:bg-primary hover:text-primary-foreground transition-colors"
+                                >
+                                  Index
+                                </Button>
+                                {i.sourceUrl && isValidGoogleUrl(i.sourceUrl) ? (
+                                  <Button size="sm" variant="outline" asChild className="hover:bg-brand-2 hover:text-white hover:border-brand-2 transition-colors">
+                                    <a href={i.sourceUrl} target="_blank" rel="noreferrer">Open</a>
+                                  </Button>
+                                ) : null}
+                              </>
+                            ) : (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  variant="secondary" 
+                                  onClick={() => markReady(i.id)}
+                                  className="hover:bg-green-600 hover:text-white transition-colors"
+                                >
+                                  Mark Ready
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => removeItem(i.id)}
+                                  className="hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
+                                >
+                                  Remove
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
             <div className="mt-4">
               <Pagination>
                 <PaginationContent>
