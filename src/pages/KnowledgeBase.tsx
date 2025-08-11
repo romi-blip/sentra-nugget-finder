@@ -33,8 +33,17 @@ const loadItems = (): KBItem[] => {
   }
 };
 
+// Helper: validate if a string looks like a valid Google Drive ID
+const isValidDriveId = (id?: string | null): boolean => {
+  if (!id) return false;
+  const cleanId = id.trim();
+  // Google Drive IDs are typically 25+ alphanumeric characters with some special chars
+  // They should not be just numbers like "1903"
+  return cleanId.length >= 20 && /^[a-zA-Z0-9_-]+$/.test(cleanId) && !/^\d+$/.test(cleanId);
+};
+
 // Helper: validate a Google Drive/Docs URL
-const isValidGoogleUrl = (url?: string | null) => {
+const isValidGoogleUrl = (url?: string | null): boolean => {
   if (!url) return false;
   try {
     const u = new URL(url);
@@ -66,34 +75,102 @@ const isValidGoogleUrl = (url?: string | null) => {
   }
 };
 
+// Helper: correct malformed Google URLs
+const correctGoogleUrl = (url: string, drive_id?: string | null, mime_type?: string | null): string => {
+  try {
+    const u = new URL(url);
+    const mt = (mime_type || "").toLowerCase();
+    
+    // Extract ID from various URL formats
+    let extractedId = drive_id;
+    if (!extractedId) {
+      const pathMatch = u.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      const idParam = u.searchParams.get("id");
+      extractedId = pathMatch?.[1] || idParam;
+    }
+    
+    if (!isValidDriveId(extractedId)) {
+      console.warn("KnowledgeBase: Invalid or missing drive ID in URL:", url);
+      return url; // Return original if we can't fix it
+    }
+    
+    // Build correct URL based on mime type
+    if (mt.includes("vnd.google-apps.folder")) {
+      return `https://drive.google.com/drive/folders/${extractedId}`;
+    }
+    if (mt.includes("vnd.google-apps.document")) {
+      return `https://docs.google.com/document/d/${extractedId}/edit`;
+    }
+    if (mt.includes("vnd.google-apps.spreadsheet")) {
+      return `https://docs.google.com/spreadsheets/d/${extractedId}/edit`;
+    }
+    if (mt.includes("vnd.google-apps.presentation")) {
+      return `https://docs.google.com/presentation/d/${extractedId}/edit`;
+    }
+    if (mt.includes("vnd.google-apps.form")) {
+      return `https://docs.google.com/forms/d/${extractedId}/edit`;
+    }
+    if (mt.includes("vnd.google-apps.drawing")) {
+      return `https://docs.google.com/drawings/d/${extractedId}/edit`;
+    }
+    
+    // For PDFs and other files, use Drive file view
+    return `https://drive.google.com/file/d/${extractedId}/view`;
+  } catch {
+    console.warn("KnowledgeBase: Could not parse URL for correction:", url);
+    return url;
+  }
+};
+
 // Helper: Build a canonical open URL from drive_id + mime_type, with robust fallbacks
 const buildDriveOpenUrl = (
   drive_url?: string | null,
   drive_id?: string | null,
   mime_type?: string | null
 ): string | undefined => {
-  const url = (drive_url || undefined)?.trim();
-  if (isValidGoogleUrl(url)) return url;
-
+  const url = (drive_url || "").trim();
   const id = (drive_id || "").trim();
   const mt = (mime_type || "").toLowerCase();
-  if (!id) {
+  
+  console.log("KnowledgeBase: Building URL for:", { drive_url: url, drive_id: id, mime_type: mt });
+  
+  // If we have a valid Google URL, try to correct it if needed
+  if (url && isValidGoogleUrl(url)) {
+    const correctedUrl = correctGoogleUrl(url, id, mt);
+    console.log("KnowledgeBase: Using corrected URL:", correctedUrl);
+    return correctedUrl;
+  }
+  
+  // Validate drive ID
+  if (!isValidDriveId(id)) {
+    console.warn("KnowledgeBase: Invalid drive_id provided:", id);
     if (url) {
-      console.warn("KnowledgeBase: Provided drive_url is not a recognized Google URL:", url);
+      console.warn("KnowledgeBase: drive_url is also invalid:", url);
     }
     return undefined;
   }
-
-  // Google native types
-  if (mt.includes("vnd.google-apps.folder")) return `https://drive.google.com/drive/folders/${id}`;
-  if (mt.includes("vnd.google-apps.document")) return `https://docs.google.com/document/d/${id}/edit`;
-  if (mt.includes("vnd.google-apps.spreadsheet")) return `https://docs.google.com/spreadsheets/d/${id}/edit`;
-  if (mt.includes("vnd.google-apps.presentation")) return `https://docs.google.com/presentation/d/${id}/edit`;
-  if (mt.includes("vnd.google-apps.form")) return `https://docs.google.com/forms/d/${id}/edit`;
-  if (mt.includes("vnd.google-apps.drawing")) return `https://docs.google.com/drawings/d/${id}/edit`;
-
-  // Default to Drive file preview
-  return `https://drive.google.com/file/d/${id}/view`;
+  
+  // Build URL from drive_id and mime_type
+  let builtUrl: string;
+  if (mt.includes("vnd.google-apps.folder")) {
+    builtUrl = `https://drive.google.com/drive/folders/${id}`;
+  } else if (mt.includes("vnd.google-apps.document")) {
+    builtUrl = `https://docs.google.com/document/d/${id}/edit`;
+  } else if (mt.includes("vnd.google-apps.spreadsheet")) {
+    builtUrl = `https://docs.google.com/spreadsheets/d/${id}/edit`;
+  } else if (mt.includes("vnd.google-apps.presentation")) {
+    builtUrl = `https://docs.google.com/presentation/d/${id}/edit`;
+  } else if (mt.includes("vnd.google-apps.form")) {
+    builtUrl = `https://docs.google.com/forms/d/${id}/edit`;
+  } else if (mt.includes("vnd.google-apps.drawing")) {
+    builtUrl = `https://docs.google.com/drawings/d/${id}/edit`;
+  } else {
+    // Default to Drive file view for PDFs, images, etc.
+    builtUrl = `https://drive.google.com/file/d/${id}/view`;
+  }
+  
+  console.log("KnowledgeBase: Built URL from drive_id:", builtUrl);
+  return builtUrl;
 };
 
 const KnowledgeBase = () => {
