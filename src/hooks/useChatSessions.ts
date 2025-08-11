@@ -25,9 +25,11 @@ export const useChatSessions = () => {
         }));
         setSessions(sessionsWithDates);
         
-        // Set the most recent session as active if none is set
-        if (sessionsWithDates.length > 0 && !activeSessionId) {
-          setActiveSessionId(sessionsWithDates[0].id);
+        // Don't automatically set active session - let user choose
+        // Only set active if there's a stored preference
+        const lastActiveSession = localStorage.getItem('lastActiveSession');
+        if (lastActiveSession && sessionsWithDates.find(s => s.id === lastActiveSession)) {
+          setActiveSessionId(lastActiveSession);
         }
       }
     } catch (error) {
@@ -188,12 +190,12 @@ export const useChatSessions = () => {
     }
   }, [activeSessionId, updateSession]);
 
-  // Initialize with a session if none exist
+  // Save active session to localStorage when it changes
   useEffect(() => {
-    if (sessions.length === 0) {
-      createNewSession();
+    if (activeSessionId) {
+      localStorage.setItem('lastActiveSession', activeSessionId);
     }
-  }, [sessions.length, createNewSession]);
+  }, [activeSessionId]);
 
   return {
     sessions,
