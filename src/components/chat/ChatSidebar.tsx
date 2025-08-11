@@ -203,14 +203,14 @@ export const ChatSidebar = ({
                       )}
                     </div>
                     
-                     {/* Action buttons - always visible on hover for better UX */}
+                     {/* Action buttons - always visible for better accessibility */}
                      {editingSessionId !== session.id && (
                        <div className="flex items-center gap-1">
-                         {/* Direct delete button */}
+                         {/* Direct delete button - always visible with subtle styling */}
                          <Button
                            variant="ghost"
                            size="sm"
-                           className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/20 hover:text-destructive shrink-0"
+                           className="h-7 w-7 p-0 opacity-50 hover:opacity-100 transition-opacity hover:bg-destructive/20 hover:text-destructive shrink-0"
                            onClick={(e) => {
                              e.stopPropagation();
                              if (window.confirm('Delete this chat session?')) {
@@ -222,13 +222,13 @@ export const ChatSidebar = ({
                            <Trash2 className="h-3 w-3" />
                          </Button>
                          
-                         {/* Dropdown menu as alternative */}
+                         {/* More options button */}
                          <DropdownMenu>
                            <DropdownMenuTrigger asChild>
                              <Button
                                variant="ghost"
                                size="sm"
-                               className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent shrink-0"
+                               className="h-7 w-7 p-0 opacity-50 hover:opacity-100 transition-opacity hover:bg-accent shrink-0"
                                onClick={(e) => e.stopPropagation()}
                                title="More options"
                              >
