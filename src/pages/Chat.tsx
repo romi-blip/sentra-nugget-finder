@@ -92,28 +92,31 @@ const Chat = () => {
       try {
         data = JSON.parse(responseText);
         console.log('Chat: Parsed JSON data:', data);
+        
+        // Extract the message from N8N response format
+        const assistantResponse = (() => {
+          // Handle N8N array response format: [{ "output": "message" }]
+          if (Array.isArray(data) && data.length > 0 && data[0].output) {
+            return data[0].output;
+          }
+          // Handle direct object formats
+          return data.response || data.message || data.content || "I received your message but couldn't generate a proper response.";
+        })();
+
+        // Remove typing indicator and add real response
+        setMessages((m) => m.filter(msg => msg.id !== typingId));
+        const reply: Message = {
+          id: `${Date.now()}a`,
+          role: 'assistant',
+          content: assistantResponse,
+        };
+        setMessages((m) => [...m, reply]);
+        return; // Successfully processed, exit the function
+
       } catch (parseError) {
         console.error('Chat: JSON parse error:', parseError);
         throw new Error(`Invalid JSON response from webhook: ${responseText.substring(0, 100)}...`);
       }
-
-      const assistantResponse = (() => {
-        // Handle N8N array response format: [{ "output": "message" }]
-        if (Array.isArray(data) && data.length > 0 && data[0].output) {
-          return data[0].output;
-        }
-        // Handle direct object formats
-        return data.response || data.message || data.content || "I received your message but couldn't generate a proper response.";
-      })();
-
-      // Remove typing indicator and add real response
-      setMessages((m) => m.filter(msg => msg.id !== typingId));
-      const reply: Message = {
-        id: `${Date.now()}a`,
-        role: 'assistant',
-        content: assistantResponse,
-      };
-      setMessages((m) => [...m, reply]);
 
     } catch (error) {
       console.error('Chat: Full error details:', error);
