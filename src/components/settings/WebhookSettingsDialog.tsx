@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageSquare, Upload, HardDrive, Check, X, Loader2 } from "lucide-react";
+import { MessageSquare, Upload, FolderOpen, Check, X, Loader2 } from "lucide-react";
 import { useWebhooks } from "@/hooks/useWebhooks";
 import { WebhookConfig, WebhookType } from "@/types/webhook";
 import { toast } from "@/hooks/use-toast";
@@ -13,7 +13,7 @@ import { toast } from "@/hooks/use-toast";
 const WEBHOOK_ICONS = {
   chat: MessageSquare,
   file_upload: Upload,
-  google_drive: HardDrive,
+  google_drive: FolderOpen,
 };
 
 const WEBHOOK_DESCRIPTIONS = {
