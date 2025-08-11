@@ -154,14 +154,12 @@ export const ChatSidebar = ({
             </div>
           ) : (
             <div className="space-y-1">
-              {sessions.map((session) => {
-                console.log('Rendering session:', session.id, 'editingSessionId:', editingSessionId);
-                return (
-                  <div
-                    key={session.id}
-                    className={`group relative rounded-lg p-3 cursor-pointer transition-colors hover:bg-muted/50 border-2 border-yellow-400 ${
-                      activeSessionId === session.id ? "bg-muted" : ""
-                    }`}
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={`group relative rounded-lg p-3 cursor-pointer transition-colors hover:bg-muted/50 ${
+                    activeSessionId === session.id ? "bg-muted" : ""
+                  }`}
                     onClick={() => onSessionSelect(session.id)}
                   >
                     <div className="flex items-start justify-between">
@@ -205,49 +203,48 @@ export const ChatSidebar = ({
                         )}
                       </div>
                       
-                      {/* DEBUG: Show session info and button state */}
-                      <div className="text-xs text-green-500 mr-2 bg-black p-1">
-                        Session: {session.id.slice(0, 8)}<br/>
-                        Editing: {editingSessionId ? editingSessionId.slice(0, 8) : 'none'}<br/>
-                        Show buttons: {editingSessionId !== session.id ? 'YES' : 'NO'}
-                      </div>
-
-                      {/* Action buttons - EXTREME DEBUG VERSION */}
+                      {/* Action buttons */}
                       {editingSessionId !== session.id && (
-                        <div 
-                          className="fixed top-0 right-0 z-[9999] bg-red-600 text-white p-4 border-8 border-yellow-300"
-                          style={{ minWidth: '200px', minHeight: '100px' }}
-                        >
-                          <div className="text-xl font-bold mb-2">BUTTONS SHOULD BE HERE!</div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              console.log('FIXED POSITION Delete button clicked for session:', session.id);
-                              if (window.confirm('Delete this chat session?')) {
-                                onDeleteSession(session.id);
-                              }
-                            }}
-                            className="block w-full h-12 bg-red-800 text-white text-lg font-bold mb-2"
-                          >
-                            DELETE SESSION
-                          </button>
-                          
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              console.log('FIXED POSITION Rename button clicked for session:', session.id);
-                              handleRename(session.id, session.title);
-                            }}
-                            className="block w-full h-12 bg-blue-800 text-white text-lg font-bold"
-                          >
-                            RENAME SESSION
-                          </button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-background border shadow-md">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRename(session.id, session.title);
+                              }}
+                            >
+                              <Edit3 className="h-4 w-4 mr-2" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm('Delete this chat session?')) {
+                                  onDeleteSession(session.id);
+                                }
+                              }}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </div>
-                );
-              })}
+                )
+              )}
             </div>
           )}
         </div>
