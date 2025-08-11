@@ -1,28 +1,38 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import SEO from "@/components/SEO";
 import { toast } from "@/hooks/use-toast";
-import ReactMarkdown from "react-markdown";
-
-interface Message { id: string; role: "user" | "assistant"; content: string; }
+import { useChatSessions } from "@/hooks/useChatSessions";
+import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import { ChatMessageList } from "@/components/chat/ChatMessageList";
+import { ChatInput } from "@/components/chat/ChatInput";
+import { Trash2 } from "lucide-react";
 
 const Chat = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: "w", role: "assistant", content: "Hi! Ask about content to share with your prospect. I'll search your knowledge base once connected." },
-  ]);
-  const [input, setInput] = useState("");
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const {
+    sessions,
+    activeSessionId,
+    activeSession,
+    setActiveSessionId,
+    createNewSession,
+    addMessage,
+    removeMessage,
+    deleteSession,
+    renameSession,
+    clearActiveSession,
+  } = useChatSessions();
 
-  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' }); }, [messages.length]);
+  const handleSendMessage = async (text: string) => {
+    if (!activeSessionId) return;
 
-  const onSend = async () => {
-    const text = input.trim();
-    if (!text) return;
-    const userMsg: Message = { id: `${Date.now()}u`, role: 'user', content: text };
-    setMessages((m) => [...m, userMsg]);
-    setInput("");
+    // Add user message
+    const userMessage = {
+      id: `${Date.now()}u`,
+      role: "user" as const,
+      content: text,
+    };
+    addMessage(activeSessionId, userMessage);
 
     // Get chat webhook from new webhook system
     const webhookData = localStorage.getItem("n8n_webhook_configs");
@@ -44,20 +54,24 @@ const Chat = () => {
     }
 
     if (!chatWebhookUrl) {
-      const reply: Message = {
+      const reply = {
         id: `${Date.now()}a`,
-        role: 'assistant',
+        role: "assistant" as const,
         content: "To enable AI answers using your knowledge base, configure your chat webhook in Settings. For now, here's a generic tip: share a 1-pager with a crisp value prop and 3 proof points, then a case study based on prospect industry.",
       };
-      setMessages((m) => [...m, reply]);
+      addMessage(activeSessionId, reply);
       toast({ title: "Configure Webhook", description: "Add your chat webhook in Settings to enable AI responses." });
       return;
     }
 
     // Add typing indicator
     const typingId = `${Date.now()}typing`;
-    const typingMsg: Message = { id: typingId, role: 'assistant', content: '⚡ AI is thinking...' };
-    setMessages((m) => [...m, typingMsg]);
+    const typingMessage = {
+      id: typingId,
+      role: "assistant" as const,
+      content: "⚡ AI is thinking...",
+    };
+    addMessage(activeSessionId, typingMessage);
 
     try {
       console.log('Chat: Sending request to webhook:', chatWebhookUrl);
@@ -123,28 +137,28 @@ const Chat = () => {
       }
 
       // Remove typing indicator and add real response
-      setMessages((m) => m.filter(msg => msg.id !== typingId));
-      const reply: Message = {
+      removeMessage(activeSessionId, typingId);
+      const reply = {
         id: `${Date.now()}a`,
-        role: 'assistant',
+        role: "assistant" as const,
         content: assistantResponse,
       };
-      setMessages((m) => [...m, reply]);
+      addMessage(activeSessionId, reply);
       return; // Successfully processed
 
     } catch (error) {
       console.error('Chat: Full error details:', error);
       
       // Remove typing indicator
-      setMessages((m) => m.filter(msg => msg.id !== typingId));
+      removeMessage(activeSessionId, typingId);
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      const reply: Message = {
+      const reply = {
         id: `${Date.now()}a`,
-        role: 'assistant',
+        role: "assistant" as const,
         content: `Sorry, I encountered an error: ${errorMessage}. Please check your webhook configuration in Settings.`,
       };
-      setMessages((m) => [...m, reply]);
+      addMessage(activeSessionId, reply);
       
       toast({
         title: "Connection Failed",
@@ -155,62 +169,69 @@ const Chat = () => {
   };
 
   return (
-    <main className="min-h-screen">
+    <div className="min-h-screen flex w-full">
       <SEO title="Sentra AI Chat" description="Chat with an assistant grounded in your knowledge base to get content and messaging suggestions." canonicalPath="/chat" />
 
-      <section className="bg-hero">
-        <div className="mx-auto max-w-5xl px-4 py-10">
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">AI Sales Copilot</h1>
-          <p className="text-muted-foreground">Ask for what to share next and get suggested snippets for email, LinkedIn or talk tracks.</p>
-        </div>
-      </section>
+      {/* Sidebar */}
+      <ChatSidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSessionSelect={setActiveSessionId}
+        onNewSession={createNewSession}
+        onDeleteSession={deleteSession}
+        onRenameSession={renameSession}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
 
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <Card className="glass-card">
-          <CardContent className="p-0">
-            <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-4 space-y-4">
-              {messages.map((m) => (
-                <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`rounded-lg px-4 py-3 max-w-[80%] ${m.role === 'user' ? 'bg-secondary' : 'bg-card'} shadow-elevated`}>
-                    {m.role === 'assistant' ? (
-                      <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-a:text-primary prose-a:underline hover:prose-a:text-primary/80">
-                        <ReactMarkdown
-                          components={{
-                            a: ({ href, children }) => (
-                              <a
-                                href={href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary underline hover:text-primary/80 transition-colors"
-                              >
-                                {children}
-                              </a>
-                            ),
-                          }}
-                        >
-                          {m.content}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      <p className="text-sm whitespace-pre-wrap">{m.content}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">AI Sales Copilot</h1>
+                <p className="text-sm text-muted-foreground">
+                  {activeSession?.title || "New Chat"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearActiveSession}
+                  disabled={!activeSession}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Chat
+                </Button>
+              </div>
             </div>
-            <div className="p-4 border-t flex items-center gap-2">
-              <Input
-                placeholder="Ask for content ideas or draft a message..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onSend()}
-              />
-              <Button variant="hero" onClick={onSend}>Send</Button>
+          </div>
+        </header>
+
+        {/* Chat Content */}
+        <div className="flex-1 flex flex-col">
+          {activeSession ? (
+            <>
+              <ChatMessageList messages={activeSession.messages} />
+              <ChatInput onSend={handleSendMessage} />
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <h2 className="text-xl font-semibold mb-2">No chat session selected</h2>
+                <p className="text-muted-foreground mb-4">
+                  Create a new chat session to start conversing with the AI
+                </p>
+                <Button onClick={createNewSession}>Start New Chat</Button>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
-    </main>
+    </div>
   );
 };
 

@@ -44,6 +44,16 @@
     /* Glass effect */
     --glass-bg: 0 0% 100% / 0.8;
     --glass-border: 214.3 31.8% 91.4% / 0.5;
+    
+    /* Sidebar colors */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222.2 84% 4.9%;
+    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
   }
 
   .dark {
@@ -80,6 +90,16 @@
     /* Glass effect for dark mode */
     --glass-bg: 222.2 84% 4.9% / 0.8;
     --glass-border: 217.2 32.6% 17.5% / 0.5;
+    
+    /* Sidebar colors for dark mode */
+    --sidebar-background: 217.2 32.6% 15.5%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217.2 91.2% 59.8%;
+    --sidebar-primary-foreground: 222.2 84% 4.9%;
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 224.3 76.3% 94.1%;
   }
 }
 
