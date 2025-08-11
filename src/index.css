@@ -2,10 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
+/* Sentra design system (HSL tokens only) */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -39,28 +36,21 @@ All colors MUST be HSL.
     --radius: 0.5rem;
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Sentra brand tokens */
-    --brand: 260 69% 56%; /* primary purple */
-    --brand-2: 34 100% 55%; /* orange accent */
+    /* Brand */
+    --brand: 260 69% 56%;
+    --brand-2: 34 100% 55%;
     --brand-foreground: 0 0% 100%;
     --brand-muted: 258 44% 96%;
 
-    /* Shadows & motion */
+    /* Elevation & motion */
     --shadow-elevated: 0 24px 72px -24px hsl(var(--brand) / 0.35);
     --transition-smooth: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -103,28 +93,11 @@ All colors MUST be HSL.
     --brand-muted: 252 34% 12%;
   }
 
-  * {
+  *, ::before, ::after {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
-  }
-}
-
-
-/* Utilities built on top of tokens */
-@layer utilities {
-  .bg-hero {
-    background:
-      radial-gradient(600px 600px at var(--cursor-x, 50%) var(--cursor-y, 40%), hsl(var(--brand) / 0.14), transparent 60%),
-      linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(var(--brand-2)) 100%);
-  }
-  .glass-card {
-    background-color: hsl(var(--card) / 0.65);
-    @apply backdrop-blur-md border;
-    box-shadow: var(--shadow-elevated);
-  }
-  .shadow-elevated {
-    box-shadow: var(--shadow-elevated);
   }
 }
