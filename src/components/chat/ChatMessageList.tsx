@@ -5,6 +5,7 @@ import { Copy, RotateCcw } from "lucide-react";
 import { Message } from "@/types/chatSession";
 import { toast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface ChatMessageListProps {
   messages: Message[];
@@ -47,6 +48,7 @@ export const ChatMessageList = ({ messages, onRegenerateMessage }: ChatMessageLi
               {message.role === "assistant" ? (
                 <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-a:text-primary prose-a:underline hover:prose-a:text-primary/80">
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     components={{
                       a: ({ href, children }) => (
                         <a
@@ -66,13 +68,14 @@ export const ChatMessageList = ({ messages, onRegenerateMessage }: ChatMessageLi
               ) : (
                 <div className="text-sm whitespace-pre-wrap">
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     components={{
                       a: ({ href, children }) => (
                         <a
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-primary underline hover:text-primary/80 transition-colors"
+                          className="text-primary-foreground underline hover:text-primary-foreground/80 transition-colors"
                         >
                           {children}
                         </a>
