@@ -154,90 +154,101 @@ export const ChatSidebar = ({
             </div>
           ) : (
             <div className="space-y-1">
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={`group relative rounded-lg p-3 cursor-pointer transition-colors hover:bg-muted/50 ${
-                    activeSessionId === session.id ? "bg-muted" : ""
-                  }`}
-                  onClick={() => onSessionSelect(session.id)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      {editingSessionId === session.id ? (
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Input
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveRename();
-                              if (e.key === "Escape") cancelRename();
-                            }}
-                            className="h-6 text-xs"
-                            autoFocus
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={saveRename}
-                            className="h-6 w-6"
-                          >
-                            <Check className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={cancelRename}
-                            className="h-6 w-6"
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="font-medium text-sm truncate">{session.title}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatDate(session.updatedAt)} • {session.messages.length} messages
+              {sessions.map((session) => {
+                console.log('Rendering session:', session.id, 'editingSessionId:', editingSessionId);
+                return (
+                  <div
+                    key={session.id}
+                    className={`group relative rounded-lg p-3 cursor-pointer transition-colors hover:bg-muted/50 border-2 border-yellow-400 ${
+                      activeSessionId === session.id ? "bg-muted" : ""
+                    }`}
+                    onClick={() => onSessionSelect(session.id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        {editingSessionId === session.id ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") saveRename();
+                                if (e.key === "Escape") cancelRename();
+                              }}
+                              className="h-6 text-xs"
+                              autoFocus
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={saveRename}
+                              className="h-6 w-6"
+                            >
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={cancelRename}
+                              className="h-6 w-6"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
                           </div>
-                        </>
+                        ) : (
+                          <>
+                            <div className="font-medium text-sm truncate">{session.title}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatDate(session.updatedAt)} • {session.messages.length} messages
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      
+                      {/* DEBUG: Show session info and button state */}
+                      <div className="text-xs text-green-500 mr-2">
+                        Session: {session.id.slice(0, 8)}<br/>
+                        Editing: {editingSessionId ? editingSessionId.slice(0, 8) : 'none'}<br/>
+                        Show buttons: {editingSessionId !== session.id ? 'YES' : 'NO'}
+                      </div>
+
+                      {/* Action buttons - DEBUG VERSION with bright colors */}
+                      {editingSessionId !== session.id && (
+                        <div className="flex items-center gap-2 ml-2 border-4 border-purple-500 p-1">
+                          <div className="text-xs text-purple-500">BUTTONS CONTAINER</div>
+                          {/* Direct delete button - BRIGHT RED for debugging */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('Delete button clicked for session:', session.id);
+                              if (window.confirm('Delete this chat session?')) {
+                                onDeleteSession(session.id);
+                              }
+                            }}
+                            className="h-10 w-10 bg-red-500 text-white rounded-md flex items-center justify-center hover:bg-red-600 shrink-0"
+                            title="Delete this chat"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                          
+                          {/* Rename button - BRIGHT BLUE for debugging */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('Rename button clicked for session:', session.id);
+                              handleRename(session.id, session.title);
+                            }}
+                            className="h-10 w-10 bg-blue-500 text-white rounded-md flex items-center justify-center hover:bg-blue-600 shrink-0"
+                            title="Rename this chat"
+                          >
+                            <Edit3 className="h-5 w-5" />
+                          </button>
+                        </div>
                       )}
                     </div>
-                    
-                     {/* Action buttons - DEBUG VERSION with bright colors */}
-                     {editingSessionId !== session.id && (
-                       <div className="flex items-center gap-2 ml-2">
-                         {/* Direct delete button - BRIGHT RED for debugging */}
-                         <button
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             console.log('Delete button clicked for session:', session.id);
-                             if (window.confirm('Delete this chat session?')) {
-                               onDeleteSession(session.id);
-                             }
-                           }}
-                           className="h-10 w-10 bg-red-500 text-white rounded-md flex items-center justify-center hover:bg-red-600 shrink-0"
-                           title="Delete this chat"
-                         >
-                           <Trash2 className="h-5 w-5" />
-                         </button>
-                         
-                         {/* Rename button - BRIGHT BLUE for debugging */}
-                         <button
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             console.log('Rename button clicked for session:', session.id);
-                             handleRename(session.id, session.title);
-                           }}
-                           className="h-10 w-10 bg-blue-500 text-white rounded-md flex items-center justify-center hover:bg-blue-600 shrink-0"
-                           title="Rename this chat"
-                         >
-                           <Edit3 className="h-5 w-5" />
-                         </button>
-                       </div>
-                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
