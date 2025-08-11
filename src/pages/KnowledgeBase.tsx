@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
 import { File as FileIcon, FileText, FileSpreadsheet, FileImage, FileCode, FileAudio, FileVideo, FileArchive, Folder } from "lucide-react";
 interface KBItem {
   id: string;
@@ -50,7 +50,7 @@ const KnowledgeBase = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales_enablement_assets")
-        .select("id, file_name, drive_url, mime_type, file_updated_date, created_at, updated_at, external, version")
+        .select("id, file_name, drive_url, drive_id, mime_type, file_updated_date, created_at, updated_at, external, version")
         .order("file_updated_date", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -59,21 +59,52 @@ const KnowledgeBase = () => {
 
   // Map assets into displayable KB items
   const assetItems: KBItem[] = useMemo(() => {
-    return (assets || []).map((a: any) => ({
-      id: `asset-${a.id}`,
-      name: a.file_name,
-      type: "asset",
-      sourceUrl: a.drive_url,
-      mimeType: a.mime_type || undefined,
-      status: "ready",
-      createdAt: a.file_updated_date || a.updated_at || a.created_at || new Date().toISOString(),
-    }));
+    return (assets || []).map((a: any) => {
+      const mt = (a.mime_type || "").toLowerCase();
+      const url =
+        a.drive_url ||
+        (a.drive_id
+          ? mt.includes("folder")
+            ? `https://drive.google.com/drive/folders/${a.drive_id}`
+            : mt.includes("document")
+            ? `https://docs.google.com/document/d/${a.drive_id}`
+            : mt.includes("spreadsheet")
+            ? `https://docs.google.com/spreadsheets/d/${a.drive_id}`
+            : mt.includes("presentation")
+            ? `https://docs.google.com/presentation/d/${a.drive_id}`
+            : `https://drive.google.com/file/d/${a.drive_id}/view`
+          : undefined);
+
+      return {
+        id: `asset-${a.id}`,
+        name: a.file_name,
+        type: "asset",
+        sourceUrl: url,
+        mimeType: a.mime_type || undefined,
+        status: "ready",
+        createdAt: a.file_updated_date || a.updated_at || a.created_at || new Date().toISOString(),
+      } as KBItem;
+    });
   }, [assets]);
 
   // Combine Supabase assets with local items for display only
   const displayItems = useMemo(() => [...assetItems, ...items], [assetItems, items]);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(displayItems.length / PAGE_SIZE)), [displayItems.length]);
+  const visiblePages = useMemo(() => {
+    const pages: (number | "ellipsis")[] = [];
+    const delta = 1; // number of pages around current
+    const left = Math.max(2, page - delta);
+    const right = Math.min(totalPages - 1, page + delta);
+
+    pages.push(1);
+    if (left > 2) pages.push("ellipsis");
+    for (let p = left; p <= right; p++) pages.push(p);
+    if (right < totalPages - 1) pages.push("ellipsis");
+    if (totalPages > 1) pages.push(totalPages);
+
+    return pages;
+  }, [page, totalPages]);
   const paginatedItems = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return displayItems.slice(start, start + PAGE_SIZE);
@@ -162,6 +193,7 @@ const KnowledgeBase = () => {
     if (mt.startsWith("image/")) return <FileImage className="h-4 w-4 text-muted-foreground" aria-hidden />;
     if (mt.startsWith("video/")) return <FileVideo className="h-4 w-4 text-muted-foreground" aria-hidden />;
     if (mt.startsWith("audio/")) return <FileAudio className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    if (mt.includes("folder")) return <Folder className="h-4 w-4 text-muted-foreground" aria-hidden />;
     if (mt.includes("pdf")) return <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />;
     if (mt.includes("zip") || mt.includes("compressed") || mt.includes("tar")) return <FileArchive className="h-4 w-4 text-muted-foreground" aria-hidden />;
     if (mt.includes("spreadsheet") || mt.includes("excel")) return <FileSpreadsheet className="h-4 w-4 text-muted-foreground" aria-hidden />;
@@ -275,23 +307,26 @@ const KnowledgeBase = () => {
                       }}
                     />
                   </PaginationItem>
-                  {Array.from({ length: totalPages }, (_, idx) => {
-                    const pg = idx + 1;
-                    return (
+                  {visiblePages.map((pg, idx) =>
+                    pg === "ellipsis" ? (
+                      <PaginationItem key={`ellipsis-${idx}`}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    ) : (
                       <PaginationItem key={pg}>
                         <PaginationLink
                           href="#"
                           isActive={pg === page}
                           onClick={(e) => {
                             e.preventDefault();
-                            setPage(pg);
+                            setPage(pg as number);
                           }}
                         >
                           {pg}
                         </PaginationLink>
                       </PaginationItem>
-                    );
-                  })}
+                    )
+                  )}
                   <PaginationItem>
                     <PaginationNext
                       href="#"
