@@ -203,38 +203,36 @@ export const ChatSidebar = ({
                       )}
                     </div>
                     
-                     {/* Action buttons - highly visible for accessibility */}
+                     {/* Action buttons - DEBUG VERSION with bright colors */}
                      {editingSessionId !== session.id && (
-                       <div className="flex items-center gap-1">
-                         {/* Direct delete button - large, always visible */}
-                         <Button
-                           variant="ghost"
-                           size="sm"
-                           className="h-8 w-8 p-0 opacity-70 hover:opacity-100 transition-all duration-200 hover:bg-destructive/20 hover:text-destructive shrink-0 bg-muted/30 border border-border/50"
+                       <div className="flex items-center gap-2 ml-2">
+                         {/* Direct delete button - BRIGHT RED for debugging */}
+                         <button
                            onClick={(e) => {
                              e.stopPropagation();
+                             console.log('Delete button clicked for session:', session.id);
                              if (window.confirm('Delete this chat session?')) {
                                onDeleteSession(session.id);
                              }
                            }}
+                           className="h-10 w-10 bg-red-500 text-white rounded-md flex items-center justify-center hover:bg-red-600 shrink-0"
                            title="Delete this chat"
                          >
-                           <Trash2 className="h-4 w-4 text-destructive" />
-                         </Button>
+                           <Trash2 className="h-5 w-5" />
+                         </button>
                          
-                         {/* Rename button - simplified from dropdown */}
-                         <Button
-                           variant="ghost"
-                           size="sm"
-                           className="h-8 w-8 p-0 opacity-70 hover:opacity-100 transition-all duration-200 hover:bg-accent shrink-0 bg-muted/30 border border-border/50"
+                         {/* Rename button - BRIGHT BLUE for debugging */}
+                         <button
                            onClick={(e) => {
                              e.stopPropagation();
+                             console.log('Rename button clicked for session:', session.id);
                              handleRename(session.id, session.title);
                            }}
+                           className="h-10 w-10 bg-blue-500 text-white rounded-md flex items-center justify-center hover:bg-blue-600 shrink-0"
                            title="Rename this chat"
                          >
-                           <Edit3 className="h-4 w-4" />
-                         </Button>
+                           <Edit3 className="h-5 w-5" />
+                         </button>
                        </div>
                      )}
                   </div>
