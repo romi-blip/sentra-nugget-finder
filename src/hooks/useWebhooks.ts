@@ -82,9 +82,8 @@ export const useWebhooks = () => {
     }
   }, []);
 
-  // Test webhook connection
-  const testWebhook = useCallback(async (webhookId: string): Promise<boolean> => {
-    const webhook = webhooks.find(w => w.id === webhookId);
+  // Test webhook connection with a specific webhook object
+  const testWebhookWithUrl = useCallback(async (webhook: WebhookConfig): Promise<boolean> => {
     if (!webhook || !webhook.url) {
       toast({
         title: 'Test Failed',
@@ -113,7 +112,7 @@ export const useWebhooks = () => {
       if (response.ok) {
         // Update last tested timestamp
         const updatedWebhooks = webhooks.map(w =>
-          w.id === webhookId ? { ...w, lastTested: new Date() } : w
+          w.id === webhook.id ? { ...w, lastTested: new Date() } : w
         );
         saveWebhooks(updatedWebhooks);
         
@@ -135,6 +134,13 @@ export const useWebhooks = () => {
       return false;
     }
   }, [webhooks, saveWebhooks]);
+
+  // Test webhook connection (legacy method)
+  const testWebhook = useCallback(async (webhookId: string): Promise<boolean> => {
+    const webhook = webhooks.find(w => w.id === webhookId);
+    if (!webhook) return false;
+    return testWebhookWithUrl(webhook);
+  }, [webhooks, testWebhookWithUrl]);
 
   // Get webhook by type
   const getWebhookByType = useCallback((type: WebhookType): WebhookConfig | undefined => {
@@ -165,7 +171,7 @@ export const useWebhooks = () => {
     webhooks,
     isLoading,
     saveWebhooks,
-    testWebhook,
+    testWebhookWithUrl,
     getWebhookByType,
     updateWebhook,
     markWebhookAsUsed,

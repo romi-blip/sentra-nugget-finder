@@ -29,7 +29,7 @@ export const WebhookSettingsDialog = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
-  const { webhooks, isLoading, updateWebhook, testWebhook, saveWebhooks } = useWebhooks();
+  const { webhooks, isLoading, updateWebhook, testWebhookWithUrl, saveWebhooks } = useWebhooks();
   const [editingWebhooks, setEditingWebhooks] = useState<Record<string, string>>({});
   const [testingWebhooks, setTestingWebhooks] = useState<Set<string>>(new Set());
 
@@ -50,8 +50,25 @@ export const WebhookSettingsDialog = ({
   };
 
   const handleTest = async (webhookId: string) => {
+    // Get the URL from either editing state or saved webhook
+    const webhook = webhooks.find(w => w.id === webhookId);
+    const urlToTest = editingWebhooks[webhookId] ?? webhook?.url;
+    
+    if (!urlToTest?.trim()) {
+      toast({
+        title: 'Test Failed',
+        description: 'Webhook URL is required for testing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setTestingWebhooks(prev => new Set([...prev, webhookId]));
-    await testWebhook(webhookId);
+    
+    // Create a temporary webhook object with the URL to test
+    const tempWebhook = { ...webhook!, url: urlToTest.trim() };
+    await testWebhookWithUrl(tempWebhook);
+    
     setTestingWebhooks(prev => {
       const newSet = new Set(prev);
       newSet.delete(webhookId);
