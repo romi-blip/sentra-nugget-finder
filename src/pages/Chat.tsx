@@ -173,8 +173,23 @@ const Chat = () => {
                 <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`rounded-lg px-4 py-3 max-w-[80%] ${m.role === 'user' ? 'bg-secondary' : 'bg-card'} shadow-elevated`}>
                     {m.role === 'assistant' ? (
-                      <div className="text-sm prose prose-sm max-w-none dark:prose-invert">
-                        <ReactMarkdown>{m.content}</ReactMarkdown>
+                      <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-a:text-primary prose-a:underline hover:prose-a:text-primary/80">
+                        <ReactMarkdown
+                          components={{
+                            a: ({ href, children }) => (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary underline hover:text-primary/80 transition-colors"
+                              >
+                                {children}
+                              </a>
+                            ),
+                          }}
+                        >
+                          {m.content}
+                        </ReactMarkdown>
                       </div>
                     ) : (
                       <p className="text-sm whitespace-pre-wrap">{m.content}</p>
