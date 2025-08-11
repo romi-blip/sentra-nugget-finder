@@ -97,7 +97,14 @@ const Chat = () => {
         throw new Error(`Invalid JSON response from webhook: ${responseText.substring(0, 100)}...`);
       }
 
-      const assistantResponse = data.response || data.message || data.content || "I received your message but couldn't generate a proper response.";
+      const assistantResponse = (() => {
+        // Handle N8N array response format: [{ "output": "message" }]
+        if (Array.isArray(data) && data.length > 0 && data[0].output) {
+          return data[0].output;
+        }
+        // Handle direct object formats
+        return data.response || data.message || data.content || "I received your message but couldn't generate a proper response.";
+      })();
 
       // Remove typing indicator and add real response
       setMessages((m) => m.filter(msg => msg.id !== typingId));
