@@ -8,12 +8,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { File as FileIcon, FileText, FileSpreadsheet, FileImage, FileCode, FileAudio, FileVideo, FileArchive, Folder } from "lucide-react";
 interface KBItem {
   id: string;
   name: string;
   type: "file" | "drive" | "asset";
   sourceUrl?: string;
   size?: number;
+  mimeType?: string;
   status: "pending" | "processing" | "ready" | "error";
   createdAt: string;
 }
@@ -37,8 +40,10 @@ const KnowledgeBase = () => {
 
   useEffect(() => saveItems(items), [items]);
 
-  const webhookUrl = useMemo(() => localStorage.getItem("n8nWebhookUrl") || "", []);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
+  const webhookUrl = useMemo(() => localStorage.getItem("n8nWebhookUrl") || "", []);
   // Fetch Sales Enablement Assets from Supabase
   const { data: assets, isLoading: assetsLoading, error: assetsError } = useQuery({
     queryKey: ["sales_enablement_assets"],
@@ -59,6 +64,7 @@ const KnowledgeBase = () => {
       name: a.file_name,
       type: "asset",
       sourceUrl: a.drive_url,
+      mimeType: a.mime_type || undefined,
       status: "ready",
       createdAt: a.file_updated_date || a.updated_at || a.created_at || new Date().toISOString(),
     }));
@@ -67,6 +73,15 @@ const KnowledgeBase = () => {
   // Combine Supabase assets with local items for display only
   const displayItems = useMemo(() => [...assetItems, ...items], [assetItems, items]);
 
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(displayItems.length / PAGE_SIZE)), [displayItems.length]);
+  const paginatedItems = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return displayItems.slice(start, start + PAGE_SIZE);
+  }, [displayItems, page]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [displayItems.length, totalPages]);
   const triggerWebhook = async (payload: FormData | object) => {
     const url = localStorage.getItem("n8nWebhookUrl") || "";
     if (!url) {
@@ -97,7 +112,15 @@ const KnowledgeBase = () => {
     const toAdd: KBItem[] = [];
     for (const file of Array.from(files)) {
       const id = `${Date.now()}-${file.name}`;
-      toAdd.push({ id, name: file.name, type: "file", size: file.size, status: "processing", createdAt: new Date().toISOString() });
+      toAdd.push({
+        id,
+        name: file.name,
+        type: "file",
+        size: file.size,
+        mimeType: file.type || undefined,
+        status: "processing",
+        createdAt: new Date().toISOString(),
+      });
 
       const fd = new FormData();
       fd.append("file", file);
@@ -131,6 +154,19 @@ const KnowledgeBase = () => {
       name: asset.name,
     });
     toast({ title: "Indexing triggered", description: `${asset.name} sent to n8n for indexing` });
+  };
+
+  const renderIcon = (item: KBItem) => {
+    if (item.type === "drive") return <Folder className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    const mt = (item.mimeType || "").toLowerCase();
+    if (mt.startsWith("image/")) return <FileImage className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    if (mt.startsWith("video/")) return <FileVideo className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    if (mt.startsWith("audio/")) return <FileAudio className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    if (mt.includes("pdf")) return <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    if (mt.includes("zip") || mt.includes("compressed") || mt.includes("tar")) return <FileArchive className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    if (mt.includes("spreadsheet") || mt.includes("excel")) return <FileSpreadsheet className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    if (mt.includes("json") || mt.includes("xml") || mt.includes("javascript") || mt.includes("typescript") || mt.includes("html") || mt.includes("css")) return <FileCode className="h-4 w-4 text-muted-foreground" aria-hidden />;
+    return <FileIcon className="h-4 w-4 text-muted-foreground" aria-hidden />;
   };
 
   return (
@@ -194,9 +230,14 @@ const KnowledgeBase = () => {
                     <TableCell colSpan={5} className="text-center text-muted-foreground">No items yet. Upload files or connect a Drive folder.</TableCell>
                   </TableRow>
                 ) : (
-                  displayItems.map((i) => (
+                  paginatedItems.map((i) => (
                     <TableRow key={i.id}>
-                      <TableCell className="max-w-[280px] truncate" title={i.name}>{i.name}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 max-w-[280px]">
+                          {renderIcon(i)}
+                          <span className="truncate" title={i.name}>{i.name}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="capitalize">{i.type}</TableCell>
                       <TableCell className="capitalize">{i.status}</TableCell>
                       <TableCell>{new Date(i.createdAt).toLocaleString()}</TableCell>
@@ -222,6 +263,47 @@ const KnowledgeBase = () => {
                 )}
               </TableBody>
             </Table>
+            <div className="mt-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setPage((p) => Math.max(1, p - 1));
+                      }}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, idx) => {
+                    const pg = idx + 1;
+                    return (
+                      <PaginationItem key={pg}>
+                        <PaginationLink
+                          href="#"
+                          isActive={pg === page}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setPage(pg);
+                          }}
+                        >
+                          {pg}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setPage((p) => Math.min(totalPages, p + 1));
+                      }}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           </CardContent>
         </Card>
       </div>
