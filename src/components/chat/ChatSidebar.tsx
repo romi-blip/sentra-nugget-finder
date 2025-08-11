@@ -203,67 +203,38 @@ export const ChatSidebar = ({
                       )}
                     </div>
                     
-                     {/* Action buttons - always visible for better accessibility */}
+                     {/* Action buttons - highly visible for accessibility */}
                      {editingSessionId !== session.id && (
                        <div className="flex items-center gap-1">
-                         {/* Direct delete button - always visible with subtle styling */}
+                         {/* Direct delete button - large, always visible */}
                          <Button
                            variant="ghost"
                            size="sm"
-                           className="h-7 w-7 p-0 opacity-50 hover:opacity-100 transition-opacity hover:bg-destructive/20 hover:text-destructive shrink-0"
+                           className="h-8 w-8 p-0 opacity-70 hover:opacity-100 transition-all duration-200 hover:bg-destructive/20 hover:text-destructive shrink-0 bg-muted/30 border border-border/50"
                            onClick={(e) => {
                              e.stopPropagation();
                              if (window.confirm('Delete this chat session?')) {
                                onDeleteSession(session.id);
                              }
                            }}
-                           title="Delete chat"
+                           title="Delete this chat"
                          >
-                           <Trash2 className="h-3 w-3" />
+                           <Trash2 className="h-4 w-4 text-destructive" />
                          </Button>
                          
-                         {/* More options button */}
-                         <DropdownMenu>
-                           <DropdownMenuTrigger asChild>
-                             <Button
-                               variant="ghost"
-                               size="sm"
-                               className="h-7 w-7 p-0 opacity-50 hover:opacity-100 transition-opacity hover:bg-accent shrink-0"
-                               onClick={(e) => e.stopPropagation()}
-                               title="More options"
-                             >
-                               <MoreVertical className="h-3 w-3" />
-                             </Button>
-                           </DropdownMenuTrigger>
-                           <DropdownMenuContent 
-                             align="end" 
-                             className="bg-popover border shadow-xl z-[999] min-w-[140px]"
-                             sideOffset={8}
-                           >
-                             <DropdownMenuItem
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 handleRename(session.id, session.title);
-                               }}
-                               className="hover:bg-accent focus:bg-accent cursor-pointer"
-                             >
-                               <Edit3 className="h-4 w-4 mr-2" />
-                               Rename
-                             </DropdownMenuItem>
-                             <DropdownMenuItem
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (window.confirm('Delete this chat session?')) {
-                                   onDeleteSession(session.id);
-                                 }
-                               }}
-                               className="text-destructive hover:bg-destructive/10 focus:bg-destructive/10 cursor-pointer"
-                             >
-                               <Trash2 className="h-4 w-4 mr-2" />
-                               Delete
-                             </DropdownMenuItem>
-                           </DropdownMenuContent>
-                         </DropdownMenu>
+                         {/* Rename button - simplified from dropdown */}
+                         <Button
+                           variant="ghost"
+                           size="sm"
+                           className="h-8 w-8 p-0 opacity-70 hover:opacity-100 transition-all duration-200 hover:bg-accent shrink-0 bg-muted/30 border border-border/50"
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             handleRename(session.id, session.title);
+                           }}
+                           title="Rename this chat"
+                         >
+                           <Edit3 className="h-4 w-4" />
+                         </Button>
                        </div>
                      )}
                   </div>
