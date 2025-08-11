@@ -64,7 +64,25 @@ export const ChatMessageList = ({ messages, onRegenerateMessage }: ChatMessageLi
                   </ReactMarkdown>
                 </div>
               ) : (
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <div className="text-sm whitespace-pre-wrap">
+                  <ReactMarkdown
+                    components={{
+                      a: ({ href, children }) => (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline hover:text-primary/80 transition-colors"
+                        >
+                          {children}
+                        </a>
+                      ),
+                      p: ({ children }) => <span>{children}</span>,
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
               )}
 
               {/* Message actions */}
