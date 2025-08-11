@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import SEO from "@/components/SEO";
 import { toast } from "@/hooks/use-toast";
+import ReactMarkdown from "react-markdown";
 
 interface Message { id: string; role: "user" | "assistant"; content: string; }
 
@@ -171,7 +172,13 @@ const Chat = () => {
               {messages.map((m) => (
                 <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`rounded-lg px-4 py-3 max-w-[80%] ${m.role === 'user' ? 'bg-secondary' : 'bg-card'} shadow-elevated`}>
-                    <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                    {m.role === 'assistant' ? (
+                      <div className="text-sm prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown>{m.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                    )}
                   </div>
                 </div>
               ))}
