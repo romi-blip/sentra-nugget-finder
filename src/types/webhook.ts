@@ -25,7 +25,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: Omit<WebhookConfig, 'id' | 'url'>[] = [
     name: 'Chat Assistant',
     type: 'chat',
     enabled: true,
-    timeout: 60000,
+    timeout: 120000,
     retryAttempts: 2,
   },
   {
