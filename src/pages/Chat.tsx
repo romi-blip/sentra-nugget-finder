@@ -145,9 +145,25 @@ const Chat = () => {
         // Plain text/markdown response
         console.log("Chat: Detected plain text/markdown format response");
 
-        // Strip markdown code block markers if present
+        // Extract markdown when response is wrapped in an iframe srcdoc
         let cleanedResponse = responseText.trim();
+        if (/^<iframe[\s\S]*srcdoc=/i.test(cleanedResponse)) {
+          try {
+            const srcdocMatch = cleanedResponse.match(/srcdoc=(?:"([^"]*)"|'([^']*)')/i);
+            if (srcdocMatch) {
+              let srcdoc = (srcdocMatch[1] ?? srcdocMatch[2] ?? "");
+              // Preserve HTML line breaks
+              srcdoc = srcdoc.replace(/<br\s*\/?\s*>/gi, "\n");
+              const doc = new DOMParser().parseFromString(srcdoc, "text/html");
+              const decoded = doc.documentElement.textContent || "";
+              cleanedResponse = decoded;
+            }
+          } catch (e) {
+            console.warn("Chat: Failed to parse iframe srcdoc, falling back to raw text.", e);
+          }
+        }
 
+        // Strip markdown code block markers if present
         // Handle ```markdown blocks
         if (cleanedResponse.startsWith("```markdown\n") && cleanedResponse.endsWith("\n```")) {
           cleanedResponse = cleanedResponse.slice(12, -4); // Remove ```markdown\n from start and \n``` from end
