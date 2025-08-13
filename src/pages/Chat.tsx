@@ -145,21 +145,53 @@ const Chat = () => {
         // Plain text/markdown response
         console.log("Chat: Detected plain text/markdown format response");
 
-        // Extract markdown when response is wrapped in an iframe srcdoc
+        // Robust HTML parsing to extract content from iframe responses
         let cleanedResponse = responseText.trim();
-        if (/^<iframe[\s\S]*srcdoc=/i.test(cleanedResponse)) {
+        
+        // Check if response contains iframe with srcdoc
+        if (cleanedResponse.includes('<iframe') && cleanedResponse.includes('srcdoc=')) {
           try {
-            const srcdocMatch = cleanedResponse.match(/srcdoc=(?:"([^"]*)"|'([^']*)')/i);
-            if (srcdocMatch) {
-              let srcdoc = (srcdocMatch[1] ?? srcdocMatch[2] ?? "");
-              // Preserve HTML line breaks
-              srcdoc = srcdoc.replace(/<br\s*\/?\s*>/gi, "\n");
-              const doc = new DOMParser().parseFromString(srcdoc, "text/html");
-              const decoded = doc.documentElement.textContent || "";
-              cleanedResponse = decoded;
+            // Parse the full HTML response
+            const doc = new DOMParser().parseFromString(cleanedResponse, 'text/html');
+            const iframe = doc.querySelector('iframe');
+            
+            if (iframe) {
+              let srcdoc = iframe.getAttribute('srcdoc');
+              if (srcdoc) {
+                // Decode HTML entities and normalize content
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = srcdoc;
+                
+                // Extract text content and preserve line breaks
+                let content = tempDiv.textContent || tempDiv.innerText || '';
+                
+                // Clean up common HTML artifacts
+                content = content
+                  .replace(/&amp;/g, '&')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .replace(/&quot;/g, '"')
+                  .replace(/&#39;/g, "'");
+                
+                // Remove code fence markers if present
+                if (content.includes('```markdown')) {
+                  content = content.replace(/```markdown\s*\n?/g, '').replace(/\n?```\s*$/g, '');
+                }
+                
+                cleanedResponse = content.trim();
+                console.log("Chat: Successfully extracted content from iframe srcdoc");
+              }
             }
           } catch (e) {
-            console.warn("Chat: Failed to parse iframe srcdoc, falling back to raw text.", e);
+            console.warn("Chat: Failed to parse iframe content, using fallback cleanup", e);
+            // Fallback: try to strip iframe wrapper manually
+            cleanedResponse = cleanedResponse
+              .replace(/<iframe[^>]*>/gi, '')
+              .replace(/<\/iframe>/gi, '')
+              .replace(/srcdoc="[^"]*"/gi, '')
+              .replace(/sandbox="[^"]*"/gi, '')
+              .replace(/style="[^"]*"/gi, '')
+              .replace(/allowtransparency="[^"]*"/gi, '');
           }
         }
 
