@@ -132,14 +132,22 @@ const Chat = () => {
         console.log('Chat: Detected plain text/markdown format response');
         
         // Strip markdown code block markers if present
-        let cleanedResponse = responseText;
+        let cleanedResponse = responseText.trim();
+        
+        // Handle ```markdown blocks
         if (cleanedResponse.startsWith('```markdown\n') && cleanedResponse.endsWith('\n```')) {
           cleanedResponse = cleanedResponse.slice(12, -4); // Remove ```markdown\n from start and \n``` from end
-        } else if (cleanedResponse.startsWith('```') && cleanedResponse.endsWith('```')) {
-          // Handle generic code blocks
+        } else if (cleanedResponse.startsWith('```markdown') && cleanedResponse.endsWith('```')) {
+          cleanedResponse = cleanedResponse.slice(11, -3); // Remove ```markdown from start and ``` from end
+        } 
+        // Handle generic code blocks
+        else if (cleanedResponse.startsWith('```') && cleanedResponse.endsWith('```')) {
           const firstNewline = cleanedResponse.indexOf('\n');
           if (firstNewline > 0) {
             cleanedResponse = cleanedResponse.slice(firstNewline + 1, -3);
+          } else {
+            // No newline found, just remove the markers
+            cleanedResponse = cleanedResponse.slice(3, -3);
           }
         }
         
