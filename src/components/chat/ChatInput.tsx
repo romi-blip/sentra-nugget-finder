@@ -40,7 +40,7 @@ export const ChatInput = ({
   };
 
   return (
-    <div className="p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="sticky bottom-0 z-30 p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-end gap-3">
         <div className="flex-1">
           <Textarea

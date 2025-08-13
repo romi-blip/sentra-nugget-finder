@@ -83,7 +83,7 @@ export const ChatSidebar = ({
 
   if (collapsed) {
     return (
-      <div className="w-14 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col">
+      <div className="sticky top-14 h-[calc(100vh-3.5rem)] w-14 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col z-30">
         <div className="p-2">
           <Button
             variant="ghost"
@@ -125,7 +125,7 @@ export const ChatSidebar = ({
   }
 
   return (
-    <div className="w-96 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col">
+    <div className="sticky top-14 h-[calc(100vh-3.5rem)] w-96 border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col z-30">
       <div className="p-4 border-b">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-sm text-muted-foreground">Chat Sessions</h2>

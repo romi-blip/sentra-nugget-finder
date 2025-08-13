@@ -37,7 +37,7 @@ export const ChatMessageList = ({ messages, onRegenerateMessage }: ChatMessageLi
 
   return (
     <ScrollArea ref={scrollRootRef} className="flex-1">
-      <div className="p-4 space-y-1">
+      <div className="p-4 pb-28 space-y-1">
         {messages.map((message, idx) => {
           const isUser = message.role === "user";
           const prev = messages[idx - 1];
