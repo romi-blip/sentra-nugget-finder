@@ -53,7 +53,6 @@ export const ChatInput = ({
             className="min-h-[60px] max-h-[200px] resize-none"
             rows={1}
           />
-          <div className="text-xs text-muted-foreground mt-1">Press Enter to send, Shift+Enter for new line</div>
         </div>
         <Button
           onClick={isLoading && onStop ? onStop : handleSend}
@@ -72,6 +71,7 @@ export const ChatInput = ({
           )}
         </Button>
       </div>
+      <div className="text-xs text-muted-foreground mt-1">Press Enter to send, Shift+Enter for new line</div>
     </div>
   );
 };
