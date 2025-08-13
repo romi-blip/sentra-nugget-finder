@@ -1,16 +1,18 @@
 import { useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Square } from "lucide-react";
 
 interface ChatInputProps {
   onSend: (message: string) => Promise<void>;
+  onStop?: () => void;
   disabled?: boolean;
   placeholder?: string;
 }
 
 export const ChatInput = ({
   onSend,
+  onStop,
   disabled = false,
   placeholder = "Ask for content ideas or draft a message...",
 }: ChatInputProps) => {
@@ -51,19 +53,19 @@ export const ChatInput = ({
             className="min-h-[60px] max-h-[200px] resize-none"
             rows={1}
           />
-          <div className="text-xs text-muted-foreground mt-1">
-            Press Enter to send, Shift+Enter for new line
-          </div>
+          <div className="text-xs text-muted-foreground mt-1">Press Enter to send, Shift+Enter for new line</div>
         </div>
         <Button
-          onClick={handleSend}
-          disabled={!input.trim() || disabled || isLoading}
+          onClick={isLoading && onStop ? onStop : handleSend}
+          disabled={(!input.trim() && !(isLoading && onStop)) || disabled}
           size="sm"
           className="px-4"
-          aria-label="Send message"
-          title="Send message"
+          aria-label={isLoading && onStop ? "Stop generating" : "Send message"}
+          title={isLoading && onStop ? "Stop generating" : "Send message"}
         >
-          {isLoading ? (
+          {isLoading && onStop ? (
+            <Square className="h-4 w-4" />
+          ) : isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Send className="h-4 w-4" />
