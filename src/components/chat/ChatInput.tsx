@@ -42,6 +42,7 @@ export const ChatInput = ({
       <div className="flex items-end gap-3">
         <div className="flex-1">
           <Textarea
+            aria-label="Message"
             placeholder={placeholder}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -59,6 +60,8 @@ export const ChatInput = ({
           disabled={!input.trim() || disabled || isLoading}
           size="sm"
           className="px-4"
+          aria-label="Send message"
+          title="Send message"
         >
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />

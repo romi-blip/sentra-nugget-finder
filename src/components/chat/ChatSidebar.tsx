@@ -216,7 +216,7 @@ export const ChatSidebar = ({
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="bg-background border shadow-md">
+                          <DropdownMenuContent align="end" className="z-50 bg-background border shadow-md">
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
