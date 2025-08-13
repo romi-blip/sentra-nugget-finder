@@ -23,6 +23,7 @@ const Chat = () => {
     getActiveSession,
     removeMessage,
     clearActiveSession,
+    bulkDeleteSessions,
   } = useChatSessions();
 
   // Abort controller to allow stopping a generation
@@ -275,11 +276,12 @@ const Chat = () => {
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSessionSelect={setActiveSessionId}
-        onNewSession={createNewSession}
-        onDeleteSession={deleteSession}
-        onRenameSession={renameSession}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onNewSession={createNewSession}
+          onDeleteSession={deleteSession}
+          onRenameSession={renameSession}
+          onBulkDeleteSessions={bulkDeleteSessions}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* Main Chat Area */}

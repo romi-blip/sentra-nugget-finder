@@ -112,6 +112,61 @@ export class ChatService {
     };
   }
 
+  // User preferences management
+  static async getUserPreferences(): Promise<{ data: any; error: any }> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { data: null, error: { message: "User not authenticated" } };
+    }
+
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    return { data, error };
+  }
+
+  static async setMigrationCompleted(): Promise<{ error: any }> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { error: { message: "User not authenticated" } };
+    }
+
+    const { error } = await supabase
+      .from('user_preferences')
+      .upsert({
+        user_id: user.id,
+        migration_completed: true,
+      });
+
+    return { error };
+  }
+
+  // Bulk operations
+  static async bulkDeleteConversations(conversationIds: string[]): Promise<{ error: any }> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { error: { message: "User not authenticated" } };
+    }
+
+    // Delete messages first
+    await supabase
+      .from('chat_messages')
+      .delete()
+      .in('conversation_id', conversationIds);
+
+    // Delete conversations
+    const { error } = await supabase
+      .from('chat_conversations')
+      .delete()
+      .in('id', conversationIds)
+      .eq('user_id', user.id);
+
+    return { error };
+  }
+
   // Migration helper to move localStorage data to database
   static async migrateLocalStorageData(): Promise<{ success: boolean; error?: any }> {
     try {
@@ -120,17 +175,29 @@ export class ChatService {
         return { success: false, error: { message: "User not authenticated" } };
       }
 
+      // Check if migration was already completed
+      const { data: preferences } = await this.getUserPreferences();
+      if (preferences?.migration_completed) {
+        return { success: true }; // Already migrated
+      }
+
       // Get existing data from localStorage
       const existingSessions = localStorage.getItem('chatSessions');
       if (!existingSessions) {
+        // Mark migration as completed even if there was nothing to migrate
+        await this.setMigrationCompleted();
         return { success: true }; // Nothing to migrate
       }
 
       const sessions: ChatSession[] = JSON.parse(existingSessions);
       
       for (const session of sessions) {
-        // Create conversation
-        const { data: conversation, error: convError } = await this.createConversation(session.title);
+        // Create conversation with better title handling
+        const title = session.title === "New Chat" && session.messages.length > 1 ? 
+          session.messages.find(m => m.role === "user")?.content.split(" ").slice(0, 5).join(" ") + "..." || "New Chat" :
+          session.title;
+          
+        const { data: conversation, error: convError } = await this.createConversation(title);
         if (convError) {
           console.error('Error migrating conversation:', convError);
           continue;
@@ -148,6 +215,9 @@ export class ChatService {
           }
         }
       }
+
+      // Mark migration as completed
+      await this.setMigrationCompleted();
 
       // Clear localStorage after successful migration
       localStorage.removeItem('chatSessions');

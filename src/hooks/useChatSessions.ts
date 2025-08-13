@@ -34,8 +34,11 @@ export function useChatSessions() {
           return;
         }
 
+        // Limit to 50 most recent conversations to prevent UI overflow
+        const limitedConversations = conversations.slice(0, 50);
+
         const sessionsWithMessages = await Promise.all(
-          conversations.map(async (conv) => {
+          limitedConversations.map(async (conv) => {
             const { data: messages } = await ChatService.getMessages(conv.id);
             return ChatService.convertToLocalSession(conv, messages);
           })
@@ -66,13 +69,20 @@ export function useChatSessions() {
           const { success, error } = await ChatService.migrateLocalStorageData();
           if (success) {
             toast({
-              title: "Data Migrated",
+              title: "Data Migrated", 
               description: "Your chat history has been saved to the cloud",
             });
-            // Reload sessions after migration
-            window.location.reload();
+            // Refresh sessions without full page reload
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
           } else {
             console.error("Migration failed:", error);
+            toast({
+              title: "Migration Failed",
+              description: "Failed to migrate your chat history",
+              variant: "destructive",
+            });
           }
         }
         setMigrated(true);
@@ -335,6 +345,48 @@ export function useChatSessions() {
     }
   }, [activeSessionId]);
 
+  const bulkDeleteSessions = useCallback(
+    async (sessionIds: string[]) => {
+      if (!user || sessionIds.length === 0) return;
+
+      try {
+        const { error } = await ChatService.bulkDeleteConversations(sessionIds);
+        if (error) {
+          console.error("Failed to delete conversations:", error);
+          toast({
+            title: "Error",
+            description: "Failed to delete conversations",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setSessions((prev) => {
+          const remainingSessions = prev.filter((session) => !sessionIds.includes(session.id));
+          
+          // If active session was deleted, switch to another one
+          if (activeSessionId && sessionIds.includes(activeSessionId)) {
+            if (remainingSessions.length > 0) {
+              setActiveSessionId(remainingSessions[0].id);
+            } else {
+              setActiveSessionId(null);
+            }
+          }
+          
+          return remainingSessions;
+        });
+
+        toast({
+          title: "Success",
+          description: `Deleted ${sessionIds.length} conversation${sessionIds.length > 1 ? 's' : ''}`,
+        });
+      } catch (error) {
+        console.error("Error deleting sessions:", error);
+      }
+    },
+    [activeSessionId, user, toast]
+  );
+
   return {
     sessions,
     activeSessionId,
@@ -349,5 +401,6 @@ export function useChatSessions() {
     replaceMessage,
     removeMessage,
     clearActiveSession,
+    bulkDeleteSessions,
   };
 }

@@ -17,8 +17,10 @@ import {
   Check,
   X,
   PanelLeft,
+  Settings,
 } from "lucide-react";
 import { ChatSession } from "@/types/chatSession";
+import { ChatCleanup } from "./ChatCleanup";
 
 interface ChatSidebarProps {
   sessions: ChatSession[];
@@ -27,6 +29,7 @@ interface ChatSidebarProps {
   onNewSession: () => void;
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, newTitle: string) => void;
+  onBulkDeleteSessions?: (sessionIds: string[]) => Promise<void>;
   collapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -38,11 +41,13 @@ export const ChatSidebar = ({
   onNewSession,
   onDeleteSession,
   onRenameSession,
+  onBulkDeleteSessions,
   collapsed,
   onToggleCollapse,
 }: ChatSidebarProps) => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [cleanupOpen, setCleanupOpen] = useState(false);
 
   const handleRename = (sessionId: string, currentTitle: string) => {
     setEditingSessionId(sessionId);
@@ -138,10 +143,23 @@ export const ChatSidebar = ({
             <PanelLeft className="h-3 w-3" />
           </Button>
         </div>
-        <Button onClick={onNewSession} className="w-full" size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          New Chat
-        </Button>
+        <div className="space-y-2">
+          <Button onClick={onNewSession} className="w-full" size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            New Chat
+          </Button>
+          {sessions.length > 10 && onBulkDeleteSessions && (
+            <Button 
+              onClick={() => setCleanupOpen(true)} 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Manage ({sessions.length})
+            </Button>
+          )}
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
@@ -249,6 +267,15 @@ export const ChatSidebar = ({
           )}
         </div>
       </ScrollArea>
+      
+      {onBulkDeleteSessions && (
+        <ChatCleanup
+          sessions={sessions}
+          onBulkDelete={onBulkDeleteSessions}
+          open={cleanupOpen}
+          onOpenChange={setCleanupOpen}
+        />
+      )}
     </div>
   );
 };
