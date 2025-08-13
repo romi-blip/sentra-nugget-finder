@@ -1,52 +1,71 @@
-import { Link, useLocation } from "react-router-dom";
+import { Settings, Menu, LogOut, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
-const navItems = [
-  { to: "/", label: "Home" },
-  { to: "/kb", label: "Knowledge Base" },
-  { to: "/chat", label: "Chat" },
-];
+const Navbar = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
+  const { user, signOut } = useAuth();
 
-export const Navbar = ({ onOpenSettings }: { onOpenSettings?: () => void }) => {
-  const { pathname } = useLocation();
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 4);
-    onScroll();
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   return (
-    <header className={`sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-background/80 ${scrolled ? "border-b" : ""}`}>
-      <nav className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 font-semibold">
-          <span className="inline-flex h-6 w-6 rounded-md bg-gradient-to-br from-brand to-brand-2" aria-hidden />
-          <span>Sentra GTM Assistant</span>
-        </Link>
-        <div className="flex items-center gap-6">
-          <ul className="hidden sm:flex items-center gap-1 text-sm">
-            {navItems.map((i) => (
-              <li key={i.to}>
-                <Link
-                  to={i.to}
-                  className={`px-3 py-2 rounded-md transition-colors ${
-                    pathname === i.to
-                      ? "bg-secondary text-secondary-foreground"
-                      : "hover:bg-accent hover:text-accent-foreground"
-                  }`}
-                >
-                  {i.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <Button variant="hero" size="sm" onClick={onOpenSettings}>Settings</Button>
+    <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-14 items-center px-4 lg:px-6">
+        <div className="mr-4 hidden md:flex">
+          <Link className="mr-6 flex items-center space-x-2" to="/">
+            <span className="hidden font-bold sm:inline-block">
+              Sentra GTM Assistant
+            </span>
+          </Link>
         </div>
-      </nav>
-    </header>
+        <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+          <div className="w-full flex-1 md:w-auto md:flex-none">
+            <div className="flex items-center space-x-2">
+              <Link to="/kb">
+                <Button variant="ghost" size="sm">
+                  Knowledge Base
+                </Button>
+              </Link>
+              <Link to="/chat">
+                <Button variant="ghost" size="sm">
+                  AI Chat
+                </Button>
+              </Link>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onOpenSettings}
+              className="mr-2"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
+            </Button>
+            {user ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSignOut}
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="sr-only">Sign Out</span>
+              </Button>
+            ) : (
+              <Link to="/auth">
+                <Button variant="ghost" size="sm">
+                  <LogIn className="h-4 w-4" />
+                  <span className="sr-only">Sign In</span>
+                </Button>
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
   );
 };
 

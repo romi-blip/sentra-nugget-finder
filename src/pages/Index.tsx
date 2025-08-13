@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import SEO from "@/components/SEO";
 import { Link } from "react-router-dom";
 import { useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 const PointerGlow = () => {
   useEffect(() => {
@@ -17,6 +18,8 @@ const PointerGlow = () => {
 };
 
 const Index = () => {
+  const { user } = useAuth();
+
   return (
     <div className="min-h-screen bg-background">
       <SEO
@@ -36,7 +39,11 @@ const Index = () => {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/kb"><Button variant="hero" className="animate-float">Manage Knowledge Base</Button></Link>
-            <Link to="/chat"><Button variant="secondary">Open AI Chat</Button></Link>
+            {user ? (
+              <Link to="/chat"><Button variant="secondary">Open AI Chat</Button></Link>
+            ) : (
+              <Link to="/auth"><Button variant="secondary">Sign In to Chat</Button></Link>
+            )}
           </div>
         </div>
       </header>

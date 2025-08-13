@@ -14,13 +14,14 @@ const Chat = () => {
   const {
     sessions,
     activeSessionId,
-    activeSession,
+    loading,
     setActiveSessionId,
     createNewSession,
     addMessage,
-    removeMessage,
     deleteSession,
     renameSession,
+    getActiveSession,
+    removeMessage,
     clearActiveSession,
   } = useChatSessions();
 
@@ -289,10 +290,10 @@ const Chat = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold">AI Sales Copilot</h1>
-                <p className="text-sm text-muted-foreground">{activeSession?.title || "New Chat"}</p>
+                <p className="text-sm text-muted-foreground">{getActiveSession()?.title || "New Chat"}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={clearActiveSession} disabled={!activeSession}>
+                <Button variant="outline" size="sm" onClick={clearActiveSession} disabled={!getActiveSession()}>
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear Chat
                 </Button>
@@ -303,14 +304,14 @@ const Chat = () => {
 
         {/* Chat Content */}
         <div className="flex-1 min-h-0 flex flex-col">
-          {activeSession ? (
+          {getActiveSession() ? (
             <>
-              {activeSession.messages.length === 0 ? (
+              {getActiveSession()?.messages.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center p-6">
                   <ChatSuggestions onPick={(text) => handleSendMessage(text)} />
                 </div>
               ) : (
-                <ChatMessageList messages={activeSession.messages} />
+                <ChatMessageList messages={getActiveSession()?.messages || []} />
               )}
               <ChatInput onSend={handleSendMessage} onStop={() => abortRef.current?.abort()} />
             </>

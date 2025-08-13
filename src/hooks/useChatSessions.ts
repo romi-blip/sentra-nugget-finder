@@ -1,214 +1,353 @@
 import { useState, useEffect, useCallback } from "react";
-import { ChatSession, Message } from "@/types/chatSession";
+import { useAuth } from "@/hooks/useAuth";
+import { ChatService } from "@/services/chatService";
+import type { ChatSession, Message, ChatSessionsState } from "@/types/chatSession";
+import { useToast } from "@/hooks/use-toast";
 
-const STORAGE_KEY = "chatSessions";
-const MAX_SESSIONS = 50;
-
-export const useChatSessions = () => {
+export function useChatSessions() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [migrated, setMigrated] = useState(false);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
-  // Load sessions from localStorage on mount
+  // Load sessions from database when user is authenticated
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const sessionsWithDates = parsed.map((session: any) => ({
-          ...session,
-          createdAt: new Date(session.createdAt),
-          updatedAt: new Date(session.updatedAt),
-          messages: session.messages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp),
-          })),
-        }));
-        setSessions(sessionsWithDates);
+    if (!user) {
+      setSessions([]);
+      setActiveSessionId(null);
+      setLoading(false);
+      return;
+    }
+
+    const loadSessions = async () => {
+      try {
+        const { data: conversations, error } = await ChatService.getConversations();
+        if (error) {
+          console.error("Failed to load conversations:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load conversations",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const sessionsWithMessages = await Promise.all(
+          conversations.map(async (conv) => {
+            const { data: messages } = await ChatService.getMessages(conv.id);
+            return ChatService.convertToLocalSession(conv, messages);
+          })
+        );
+
+        setSessions(sessionsWithMessages);
         
-        // Don't automatically set active session - let user choose
-        // Only set active if there's a stored preference
-        const lastActiveSession = localStorage.getItem('lastActiveSession');
-        if (lastActiveSession && sessionsWithDates.find(s => s.id === lastActiveSession)) {
-          setActiveSessionId(lastActiveSession);
+        // Set active session to most recent if none is set
+        if (sessionsWithMessages.length > 0 && !activeSessionId) {
+          setActiveSessionId(sessionsWithMessages[0].id);
         }
+      } catch (error) {
+        console.error("Error loading sessions:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to load chat sessions:", error);
-    }
-  }, []);
+    };
 
-  // Save sessions to localStorage whenever sessions change
+    loadSessions();
+  }, [user, activeSessionId, toast]);
+
+  // Migration effect - only run once when user first authenticates
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-    } catch (error) {
-      console.error("Failed to save chat sessions:", error);
-    }
-  }, [sessions]);
-
-  const createNewSession = useCallback(() => {
-    const newSession: ChatSession = {
-      id: `session_${Date.now()}`,
-      title: "New Chat",
-      messages: [
-        {
-          id: "welcome",
-          role: "assistant",
-          content: "Hi! Ask about content to share with your prospect. I'll search your knowledge base once connected.",
-          timestamp: new Date(),
-        },
-      ],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    setSessions((prev) => {
-      const updated = [newSession, ...prev];
-      // Keep only the most recent sessions
-      return updated.slice(0, MAX_SESSIONS);
-    });
-    setActiveSessionId(newSession.id);
-    return newSession.id;
-  }, []);
-
-  const updateSession = useCallback((sessionId: string, updates: Partial<ChatSession>) => {
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === sessionId
-          ? { ...session, ...updates, updatedAt: new Date() }
-          : session
-      )
-    );
-  }, []);
-
-  const addMessage = useCallback((sessionId: string, message: Omit<Message, "timestamp">) => {
-    const messageWithTimestamp: Message = {
-      ...message,
-      timestamp: new Date(),
-    };
-
-    setSessions((prev) =>
-      prev.map((session) => {
-        if (session.id === sessionId) {
-          const updatedMessages = [...session.messages, messageWithTimestamp];
-          let title = session.title;
-          
-          // Auto-generate title from first user message
-          if (title === "New Chat" && message.role === "user") {
-            title = message.content.length > 50 
-              ? message.content.substring(0, 50) + "..."
-              : message.content;
+    if (user && !migrated) {
+      const migrateData = async () => {
+        const hasLocalData = localStorage.getItem("chatSessions");
+        if (hasLocalData) {
+          const { success, error } = await ChatService.migrateLocalStorageData();
+          if (success) {
+            toast({
+              title: "Data Migrated",
+              description: "Your chat history has been saved to the cloud",
+            });
+            // Reload sessions after migration
+            window.location.reload();
+          } else {
+            console.error("Migration failed:", error);
           }
-
-          return {
-            ...session,
-            title,
-            messages: updatedMessages,
-            updatedAt: new Date(),
-          };
         }
-        return session;
-      })
-    );
-  }, []);
+        setMigrated(true);
+      };
 
-  const deleteSession = useCallback((sessionId: string) => {
-    setSessions((prev) => prev.filter((session) => session.id !== sessionId));
-    
-    // If we deleted the active session, switch to the next available one
-    if (activeSessionId === sessionId) {
-      setSessions((currentSessions) => {
-        const remaining = currentSessions.filter((session) => session.id !== sessionId);
-        if (remaining.length > 0) {
-          setActiveSessionId(remaining[0].id);
-        } else {
-          // No sessions left, create a new one
-          const newSessionId = createNewSession();
-          setActiveSessionId(newSessionId);
-        }
-        return remaining;
-      });
+      migrateData();
     }
-  }, [activeSessionId, createNewSession]);
+  }, [user, migrated, toast]);
 
-  const renameSession = useCallback((sessionId: string, newTitle: string) => {
-    updateSession(sessionId, { title: newTitle });
-  }, [updateSession]);
+  const createNewSession = useCallback(async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to create a new chat",
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    try {
+      const { data: conversation, error } = await ChatService.createConversation("New Chat");
+      if (error) {
+        console.error("Failed to create conversation:", error);
+        toast({
+          title: "Error",
+          description: "Failed to create new chat",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      // Add welcome message
+      const welcomeMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant" as const,
+        content: "Hello! How can I help you today?",
+      };
+
+      const { error: messageError } = await ChatService.addMessage(conversation.id, welcomeMessage);
+      if (messageError) {
+        console.error("Failed to add welcome message:", messageError);
+      }
+
+      const newSession: ChatSession = {
+        id: conversation.id,
+        title: conversation.title,
+        messages: [
+          {
+            ...welcomeMessage,
+            timestamp: new Date(),
+          },
+        ],
+        createdAt: new Date(conversation.created_at),
+        updatedAt: new Date(conversation.updated_at),
+      };
+
+      setSessions((prev) => [newSession, ...prev]);
+      setActiveSessionId(newSession.id);
+      return newSession.id;
+    } catch (error) {
+      console.error("Error creating session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create new chat",
+        variant: "destructive",
+      });
+      return null;
+    }
+  }, [user, toast]);
+
+  const updateSession = useCallback(
+    async (sessionId: string, updates: Partial<ChatSession>) => {
+      if (!user) return;
+
+      try {
+        // Update in database
+        const { error } = await ChatService.updateConversation(sessionId, {
+          title: updates.title,
+        });
+
+        if (error) {
+          console.error("Failed to update conversation:", error);
+          return;
+        }
+
+        // Update local state
+        setSessions((prev) =>
+          prev.map((session) =>
+            session.id === sessionId
+              ? { ...session, ...updates, updatedAt: new Date() }
+              : session
+          )
+        );
+      } catch (error) {
+        console.error("Error updating session:", error);
+      }
+    },
+    [user]
+  );
+
+  const addMessage = useCallback(
+    async (sessionId: string, message: Omit<Message, "timestamp">) => {
+      if (!user) return;
+
+      try {
+        // Add to database
+        const { data: newMessage, error } = await ChatService.addMessage(sessionId, message);
+        if (error) {
+          console.error("Failed to add message:", error);
+          return;
+        }
+
+        const messageWithTimestamp: Message = {
+          ...message,
+          timestamp: new Date(),
+        };
+
+        setSessions((prev) =>
+          prev.map((session) => {
+            if (session.id === sessionId) {
+              const updatedSession = {
+                ...session,
+                messages: [...session.messages, messageWithTimestamp],
+                updatedAt: new Date(),
+              };
+              
+              // Auto-generate title if this is the first user message (after welcome)
+              if (
+                message.role === "user" &&
+                session.messages.length === 1 &&
+                session.title === "New Chat"
+              ) {
+                // Extract first few words as title
+                const words = message.content.split(" ").slice(0, 5);
+                const newTitle = words.join(" ") + (message.content.split(" ").length > 5 ? "..." : "");
+                updatedSession.title = newTitle;
+                
+                // Update title in database
+                ChatService.updateConversation(sessionId, { title: newTitle });
+              }
+              
+              return updatedSession;
+            }
+            return session;
+          })
+        );
+      } catch (error) {
+        console.error("Error adding message:", error);
+      }
+    },
+    [user]
+  );
+
+  const deleteSession = useCallback(
+    async (sessionId: string) => {
+      if (!user) return;
+
+      try {
+        // Delete from database
+        const { error } = await ChatService.deleteConversation(sessionId);
+        if (error) {
+          console.error("Failed to delete conversation:", error);
+          return;
+        }
+
+        setSessions((prev) => {
+          const remainingSessions = prev.filter((session) => session.id !== sessionId);
+          
+          // If we're deleting the active session, switch to another one
+          if (activeSessionId === sessionId) {
+            if (remainingSessions.length > 0) {
+              setActiveSessionId(remainingSessions[0].id);
+            } else {
+              setActiveSessionId(null);
+            }
+          }
+          
+          return remainingSessions;
+        });
+      } catch (error) {
+        console.error("Error deleting session:", error);
+      }
+    },
+    [activeSessionId, user]
+  );
+
+  const renameSession = useCallback(
+    async (sessionId: string, newTitle: string) => {
+      await updateSession(sessionId, { title: newTitle });
+    },
+    [updateSession]
+  );
 
   const getActiveSession = useCallback(() => {
     return sessions.find((session) => session.id === activeSessionId) || null;
   }, [sessions, activeSessionId]);
 
-  const replaceMessage = useCallback((sessionId: string, oldMessageId: string, newMessage: Omit<Message, "timestamp">) => {
-    const messageWithTimestamp: Message = {
-      ...newMessage,
-      timestamp: new Date(),
-    };
+  const replaceMessage = useCallback(
+    async (sessionId: string, oldMessageId: string, newMessage: Omit<Message, "timestamp">) => {
+      const messageWithTimestamp: Message = {
+        ...newMessage,
+        timestamp: new Date(),
+      };
 
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === sessionId
-          ? {
-              ...session,
-              messages: session.messages.map((msg) =>
-                msg.id === oldMessageId ? messageWithTimestamp : msg
-              ),
-              updatedAt: new Date(),
-            }
-          : session
-      )
-    );
-  }, []);
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                messages: session.messages.map((msg) =>
+                  msg.id === oldMessageId ? messageWithTimestamp : msg
+                ),
+                updatedAt: new Date(),
+              }
+            : session
+        )
+      );
+    },
+    []
+  );
 
-  const removeMessage = useCallback((sessionId: string, messageId: string) => {
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === sessionId
-          ? {
-              ...session,
-              messages: session.messages.filter((msg) => msg.id !== messageId),
-              updatedAt: new Date(),
-            }
-          : session
-      )
-    );
-  }, []);
+  const removeMessage = useCallback(
+    async (sessionId: string, messageId: string) => {
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                messages: session.messages.filter((msg) => msg.id !== messageId),
+                updatedAt: new Date(),
+              }
+            : session
+        )
+      );
+    },
+    []
+  );
 
-  const clearActiveSession = useCallback(() => {
+  const clearActiveSession = useCallback(async () => {
     if (activeSessionId) {
-      updateSession(activeSessionId, {
-        messages: [
-          {
-            id: "welcome",
-            role: "assistant",
-            content: "Hi! Ask about content to share with your prospect. I'll search your knowledge base once connected.",
-            timestamp: new Date(),
-          },
-        ],
-        title: "New Chat",
-      });
-    }
-  }, [activeSessionId, updateSession]);
-
-  // Save active session to localStorage when it changes
-  useEffect(() => {
-    if (activeSessionId) {
-      localStorage.setItem('lastActiveSession', activeSessionId);
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === activeSessionId
+            ? {
+                ...session,
+                messages: [
+                  {
+                    id: crypto.randomUUID(),
+                    role: "assistant",
+                    content: "Hello! How can I help you today?",
+                    timestamp: new Date(),
+                  },
+                ],
+                title: "New Chat",
+                updatedAt: new Date(),
+              }
+            : session
+        )
+      );
     }
   }, [activeSessionId]);
 
   return {
     sessions,
     activeSessionId,
-    activeSession: getActiveSession(),
+    loading,
     setActiveSessionId,
     createNewSession,
     updateSession,
     addMessage,
-    replaceMessage,
-    removeMessage,
     deleteSession,
     renameSession,
+    getActiveSession,
+    replaceMessage,
+    removeMessage,
     clearActiveSession,
   };
-};
+}

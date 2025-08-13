@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import Chat from "./pages/Chat";
+import Auth from "./pages/Auth";
 import Navbar from "@/components/layout/Navbar";
 import WebhookSettingsDialog from "@/components/settings/WebhookSettingsDialog";
 
@@ -27,6 +28,7 @@ const App = () => {
             <Route path="/" element={<Index />} />
             <Route path="/kb" element={<KnowledgeBase />} />
             <Route path="/chat" element={<Chat />} />
+            <Route path="/auth" element={<Auth />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
