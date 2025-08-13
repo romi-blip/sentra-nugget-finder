@@ -15,16 +15,18 @@ interface ChatMessageListProps {
 
 export const ChatMessageList = ({ messages, onRegenerateMessage }: ChatMessageListProps) => {
   const scrollRootRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const root = scrollRootRef.current;
-    const viewport = root?.querySelector('[data-radix-scroll-area-viewport]') as HTMLDivElement | null;
-    if (viewport) {
-      requestAnimationFrame(() => {
-        viewport.scrollTop = viewport.scrollHeight;
-      });
-    }
-  }, [messages]);
+useEffect(() => {
+  const root = scrollRootRef.current;
+  const viewport = root?.querySelector('[data-radix-scroll-area-viewport]') as HTMLDivElement | null;
+  if (!viewport) return;
+  requestAnimationFrame(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+    // Fallback in case scrollIntoView doesn't work in some contexts
+    viewport.scrollTop = viewport.scrollHeight;
+  });
+}, [messages]);
 
   const copyToClipboard = (content: string) => {
     navigator.clipboard.writeText(content);
@@ -163,6 +165,7 @@ export const ChatMessageList = ({ messages, onRegenerateMessage }: ChatMessageLi
             </div>
           );
         })}
+        <div ref={endRef} aria-hidden="true" />
       </div>
     </ScrollArea>
   );
