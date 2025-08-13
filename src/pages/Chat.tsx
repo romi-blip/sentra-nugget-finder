@@ -84,7 +84,8 @@ const Chat = () => {
         body: JSON.stringify({
           message: text,
           timestamp: new Date().toISOString(),
-          sessionId: `session_${Date.now()}`,
+          sessionId: activeSessionId,
+          messageId: `msg_${Date.now()}`,
         }),
       });
 
