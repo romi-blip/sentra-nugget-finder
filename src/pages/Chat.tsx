@@ -130,7 +130,20 @@ const Chat = () => {
       } else {
         // Plain text/markdown response
         console.log('Chat: Detected plain text/markdown format response');
-        assistantResponse = responseText;
+        
+        // Strip markdown code block markers if present
+        let cleanedResponse = responseText;
+        if (cleanedResponse.startsWith('```markdown\n') && cleanedResponse.endsWith('\n```')) {
+          cleanedResponse = cleanedResponse.slice(12, -4); // Remove ```markdown\n from start and \n``` from end
+        } else if (cleanedResponse.startsWith('```') && cleanedResponse.endsWith('```')) {
+          // Handle generic code blocks
+          const firstNewline = cleanedResponse.indexOf('\n');
+          if (firstNewline > 0) {
+            cleanedResponse = cleanedResponse.slice(firstNewline + 1, -3);
+          }
+        }
+        
+        assistantResponse = cleanedResponse.trim();
         
         // Log a warning about inconsistent webhook format
         console.warn('Chat: Webhook returned plain text instead of expected JSON format. Consider configuring your N8N workflow to return consistent JSON: [{"output": "your message"}]');
