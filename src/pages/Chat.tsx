@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import SEO from "@/components/SEO";
 import { toast } from "@/hooks/use-toast";
@@ -7,6 +7,7 @@ import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { Trash2 } from "lucide-react";
+import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -23,6 +24,9 @@ const Chat = () => {
     clearActiveSession,
   } = useChatSessions();
 
+  // Abort controller to allow stopping a generation
+  const abortRef = useRef<AbortController | null>(null);
+
   const handleSendMessage = async (text: string) => {
     if (!activeSessionId) return;
 
@@ -37,14 +41,14 @@ const Chat = () => {
     // Get chat webhook from new webhook system
     const webhookData = localStorage.getItem("n8n_webhook_configs");
     let chatWebhookUrl: string | null = null;
-    
+
     if (webhookData) {
       try {
         const { webhooks } = JSON.parse(webhookData);
-        const chatWebhook = webhooks.find((w: any) => w.type === 'chat' && w.enabled && w.url);
+        const chatWebhook = webhooks.find((w: any) => w.type === "chat" && w.enabled && w.url);
         chatWebhookUrl = chatWebhook?.url || null;
       } catch (e) {
-        console.error('Failed to parse webhook config:', e);
+        console.error("Failed to parse webhook config:", e);
       }
     }
 
@@ -57,10 +61,14 @@ const Chat = () => {
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
-        content: "To enable AI answers using your knowledge base, configure your chat webhook in Settings. For now, here's a generic tip: share a 1-pager with a crisp value prop and 3 proof points, then a case study based on prospect industry.",
+        content:
+          "To enable AI answers using your knowledge base, configure your chat webhook in Settings. For now, here's a generic tip: share a 1-pager with a crisp value prop and 3 proof points, then a case study based on prospect industry.",
       };
       addMessage(activeSessionId, reply);
-      toast({ title: "Configure Webhook", description: "Add your chat webhook in Settings to enable AI responses." });
+      toast({
+        title: "Configure Webhook",
+        description: "Add your chat webhook in Settings to enable AI responses.",
+      });
       return;
     }
 
@@ -74,23 +82,26 @@ const Chat = () => {
     addMessage(activeSessionId, typingMessage);
 
     try {
-      console.log('Chat: Sending request to webhook:', chatWebhookUrl);
-      
+      console.log("Chat: Sending request to webhook:", chatWebhookUrl);
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       const response = await fetch(chatWebhookUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({
           message: text,
           timestamp: new Date().toISOString(),
-          sessionId: activeSessionId,
+          sessionId: activeSessionId, // keep same session for context
           messageId: `msg_${Date.now()}`,
         }),
       });
 
-      console.log('Chat: Response status:', response.status);
-      console.log('Chat: Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log("Chat: Response status:", response.status);
+      console.log("Chat: Response headers:", Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -98,52 +109,54 @@ const Chat = () => {
 
       // Get response as text first to check format
       const responseText = await response.text();
-      console.log('Chat: Raw response text:', responseText);
+      console.log("Chat: Raw response text:", responseText);
 
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Webhook returned empty response');
+      if (!responseText || responseText.trim() === "") {
+        throw new Error("Webhook returned empty response");
       }
 
       let assistantResponse: string;
 
       // Detect response format and handle accordingly
       const trimmedResponse = responseText.trim();
-      
-      if (trimmedResponse.startsWith('[') || trimmedResponse.startsWith('{')) {
+
+      if (trimmedResponse.startsWith("[") || trimmedResponse.startsWith("{")) {
         // Looks like JSON, try to parse it
-        console.log('Chat: Detected JSON format response');
+        console.log("Chat: Detected JSON format response");
         try {
           const data = JSON.parse(responseText);
-          console.log('Chat: Successfully parsed JSON:', data);
-          
+          console.log("Chat: Successfully parsed JSON:", data);
+
           // Extract the message from N8N response format
-          if (Array.isArray(data) && data.length > 0 && data[0].output) {
-            assistantResponse = data[0].output;
-          } else if (data.response || data.message || data.content) {
-            assistantResponse = data.response || data.message || data.content;
+          if (Array.isArray(data) && data.length > 0 && (data[0] as any).output) {
+            assistantResponse = (data[0] as any).output as string;
+          } else if ((data as any).response || (data as any).message || (data as any).content) {
+            assistantResponse = (data as any).response || (data as any).message || (data as any).content;
           } else {
             assistantResponse = "I received your message but couldn't extract a proper response from the JSON.";
           }
         } catch (parseError) {
-          console.error('Chat: JSON parse error:', parseError);
-          throw new Error(`Invalid JSON format from webhook. Expected JSON but got malformed data: ${responseText.substring(0, 100)}...`);
+          console.error("Chat: JSON parse error:", parseError);
+          throw new Error(
+            `Invalid JSON format from webhook. Expected JSON but got malformed data: ${responseText.substring(0, 100)}...`
+          );
         }
       } else {
         // Plain text/markdown response
-        console.log('Chat: Detected plain text/markdown format response');
-        
+        console.log("Chat: Detected plain text/markdown format response");
+
         // Strip markdown code block markers if present
         let cleanedResponse = responseText.trim();
-        
+
         // Handle ```markdown blocks
-        if (cleanedResponse.startsWith('```markdown\n') && cleanedResponse.endsWith('\n```')) {
+        if (cleanedResponse.startsWith("```markdown\n") && cleanedResponse.endsWith("\n```")) {
           cleanedResponse = cleanedResponse.slice(12, -4); // Remove ```markdown\n from start and \n``` from end
-        } else if (cleanedResponse.startsWith('```markdown') && cleanedResponse.endsWith('```')) {
+        } else if (cleanedResponse.startsWith("```markdown") && cleanedResponse.endsWith("```")) {
           cleanedResponse = cleanedResponse.slice(11, -3); // Remove ```markdown from start and ``` from end
-        } 
+        }
         // Handle generic code blocks
-        else if (cleanedResponse.startsWith('```') && cleanedResponse.endsWith('```')) {
-          const firstNewline = cleanedResponse.indexOf('\n');
+        else if (cleanedResponse.startsWith("```") && cleanedResponse.endsWith("```")) {
+          const firstNewline = cleanedResponse.indexOf("\n");
           if (firstNewline > 0) {
             cleanedResponse = cleanedResponse.slice(firstNewline + 1, -3);
           } else {
@@ -151,11 +164,13 @@ const Chat = () => {
             cleanedResponse = cleanedResponse.slice(3, -3);
           }
         }
-        
+
         assistantResponse = cleanedResponse.trim();
-        
+
         // Log a warning about inconsistent webhook format
-        console.warn('Chat: Webhook returned plain text instead of expected JSON format. Consider configuring your N8N workflow to return consistent JSON: [{"output": "your message"}]');
+        console.warn(
+          "Chat: Webhook returned plain text instead of expected JSON format. Consider configuring your N8N workflow to return consistent JSON: [{\"output\": \"your message\"}]"
+        );
       }
 
       // Remove typing indicator and add real response
@@ -166,33 +181,45 @@ const Chat = () => {
         content: assistantResponse,
       };
       addMessage(activeSessionId, reply);
+      abortRef.current = null;
       return; // Successfully processed
-
     } catch (error) {
-      console.error('Chat: Full error details:', error);
-      
+      console.error("Chat: Full error details:", error);
+
       // Remove typing indicator
       removeMessage(activeSessionId, typingId);
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      // Handle user-initiated aborts gracefully
+      if (error instanceof DOMException && error.name === "AbortError") {
+        abortRef.current = null;
+        toast({ title: "Generation stopped" });
+        return;
+      }
+
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
         content: `Sorry, I encountered an error: ${errorMessage}. Please check your webhook configuration in Settings.`,
       };
       addMessage(activeSessionId, reply);
-      
+
       toast({
         title: "Connection Failed",
         description: "Failed to reach the chat webhook. Please check your configuration.",
         variant: "destructive",
       });
+      abortRef.current = null;
     }
   };
 
   return (
     <div className="min-h-screen flex w-full">
-      <SEO title="Sentra AI Chat" description="Chat with an assistant grounded in your knowledge base to get content and messaging suggestions." canonicalPath="/chat" />
+      <SEO
+        title="Sentra AI Chat"
+        description="Chat with an assistant grounded in your knowledge base to get content and messaging suggestions."
+        canonicalPath="/chat"
+      />
 
       {/* Sidebar */}
       <ChatSidebar
@@ -214,17 +241,10 @@ const Chat = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold">AI Sales Copilot</h1>
-                <p className="text-sm text-muted-foreground">
-                  {activeSession?.title || "New Chat"}
-                </p>
+                <p className="text-sm text-muted-foreground">{activeSession?.title || "New Chat"}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearActiveSession}
-                  disabled={!activeSession}
-                >
+                <Button variant="outline" size="sm" onClick={clearActiveSession} disabled={!activeSession}>
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear Chat
                 </Button>
@@ -237,16 +257,20 @@ const Chat = () => {
         <div className="flex-1 flex flex-col">
           {activeSession ? (
             <>
-              <ChatMessageList messages={activeSession.messages} />
-              <ChatInput onSend={handleSendMessage} />
+              {activeSession.messages.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center p-6">
+                  <ChatSuggestions onPick={(text) => handleSendMessage(text)} />
+                </div>
+              ) : (
+                <ChatMessageList messages={activeSession.messages} />
+              )}
+              <ChatInput onSend={handleSendMessage} onStop={() => abortRef.current?.abort()} />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <h2 className="text-xl font-semibold mb-2">No chat session selected</h2>
-                <p className="text-muted-foreground mb-4">
-                  Create a new chat session to start conversing with the AI
-                </p>
+                <p className="text-muted-foreground mb-4">Create a new chat session to start conversing with the AI</p>
                 <Button onClick={createNewSession}>Start New Chat</Button>
               </div>
             </div>
