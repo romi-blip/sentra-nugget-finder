@@ -170,6 +170,18 @@ export function ChatCleanup({ sessions, onBulkDelete, open, onOpenChange }: Chat
             Cancel
           </Button>
           <Button
+            variant="outline"
+            onClick={() => {
+              // Clear localStorage and reload page
+              localStorage.removeItem("chatSessions");
+              localStorage.removeItem("activeSessionId");
+              window.location.reload();
+            }}
+            className="text-orange-600 hover:text-orange-700"
+          >
+            Clear All Data & Reload
+          </Button>
+          <Button
             variant="destructive"
             onClick={handleBulkDelete}
             disabled={selectedSessions.length === 0 || deleting}

@@ -66,8 +66,13 @@ export function useChatSessions() {
       const migrateData = async () => {
         const hasLocalData = localStorage.getItem("chatSessions");
         if (hasLocalData) {
+          console.log("Found localStorage data, checking migration status...");
           const { success, error } = await ChatService.migrateLocalStorageData();
           if (success) {
+            console.log("Migration completed, clearing localStorage...");
+            // Force clear localStorage to prevent re-migration
+            localStorage.removeItem("chatSessions");
+            localStorage.removeItem("activeSessionId");
             toast({
               title: "Data Migrated", 
               description: "Your chat history has been saved to the cloud",
@@ -84,6 +89,8 @@ export function useChatSessions() {
               variant: "destructive",
             });
           }
+        } else {
+          console.log("No localStorage data to migrate");
         }
         setMigrated(true);
       };

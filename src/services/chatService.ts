@@ -178,6 +178,10 @@ export class ChatService {
       // Check if migration was already completed
       const { data: preferences } = await this.getUserPreferences();
       if (preferences?.migration_completed) {
+        console.log("Migration already completed, clearing localStorage...");
+        // Clear localStorage even if migration was already completed
+        localStorage.removeItem('chatSessions');
+        localStorage.removeItem('activeSessionId');
         return { success: true }; // Already migrated
       }
 
