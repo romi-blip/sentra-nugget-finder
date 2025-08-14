@@ -65,16 +65,31 @@ export function useChatSessions() {
     if (user && !migrated) {
       const migrateData = async () => {
         console.log("Starting migration check...");
+        
+        // First check if migration is already completed
+        const { data: preferences } = await ChatService.getUserPreferences();
+        if (preferences?.migration_completed) {
+          console.log("Migration already completed, running cleanup only");
+          await ChatService.cleanupGenericSessions();
+          setMigrated(true);
+          return;
+        }
+        
         const { success, error } = await ChatService.migrateLocalStorageData();
         if (success) {
           console.log("Migration process completed successfully");
-          // Always clear localStorage after migration attempt
+          
+          // Always clear ALL localStorage chat data after migration
           localStorage.removeItem("chatSessions");
           localStorage.removeItem("activeSessionId");
+          localStorage.removeItem("chat-sessions");
+          
+          // Run cleanup to remove any generic sessions
+          await ChatService.cleanupGenericSessions();
           
           toast({
             title: "Data Cleaned", 
-            description: "Removed any duplicate chat sessions",
+            description: "Chat data synchronized with your account",
           });
           
           // Reload sessions without auto-refresh
