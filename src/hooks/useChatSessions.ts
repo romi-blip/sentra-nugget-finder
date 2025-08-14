@@ -64,33 +64,45 @@ export function useChatSessions() {
   useEffect(() => {
     if (user && !migrated) {
       const migrateData = async () => {
-        const hasLocalData = localStorage.getItem("chatSessions");
-        if (hasLocalData) {
-          console.log("Found localStorage data, checking migration status...");
-          const { success, error } = await ChatService.migrateLocalStorageData();
-          if (success) {
-            console.log("Migration completed, clearing localStorage...");
-            // Force clear localStorage to prevent re-migration
-            localStorage.removeItem("chatSessions");
-            localStorage.removeItem("activeSessionId");
-            toast({
-              title: "Data Migrated", 
-              description: "Your chat history has been saved to the cloud",
-            });
-            // Refresh sessions without full page reload
-            setTimeout(() => {
-              window.location.reload();
-            }, 1000);
-          } else {
-            console.error("Migration failed:", error);
-            toast({
-              title: "Migration Failed",
-              description: "Failed to migrate your chat history",
-              variant: "destructive",
-            });
-          }
+        console.log("Starting migration check...");
+        const { success, error } = await ChatService.migrateLocalStorageData();
+        if (success) {
+          console.log("Migration process completed successfully");
+          // Always clear localStorage after migration attempt
+          localStorage.removeItem("chatSessions");
+          localStorage.removeItem("activeSessionId");
+          
+          toast({
+            title: "Data Cleaned", 
+            description: "Removed any duplicate chat sessions",
+          });
+          
+          // Reload sessions without auto-refresh
+          const loadSessions = async () => {
+            try {
+              const { data: conversations, error } = await ChatService.getConversations();
+              if (!error) {
+                const limitedConversations = conversations.slice(0, 50);
+                const sessionsWithMessages = await Promise.all(
+                  limitedConversations.map(async (conv) => {
+                    const { data: messages } = await ChatService.getMessages(conv.id);
+                    return ChatService.convertToLocalSession(conv, messages);
+                  })
+                );
+                setSessions(sessionsWithMessages);
+              }
+            } catch (error) {
+              console.error("Error reloading sessions:", error);
+            }
+          };
+          loadSessions();
         } else {
-          console.log("No localStorage data to migrate");
+          console.error("Migration failed:", error);
+          toast({
+            title: "Migration Failed", 
+            description: error || "Failed to clean up chat history", 
+            variant: "destructive",
+          });
         }
         setMigrated(true);
       };

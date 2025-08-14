@@ -175,6 +175,9 @@ export class ChatService {
         return { success: false, error: { message: "User not authenticated" } };
       }
 
+      // First, clean up any existing "Knowledge Chat Session" entries
+      await this.cleanupGenericSessions();
+
       // Check if migration was already completed
       const { data: preferences } = await this.getUserPreferences();
       if (preferences?.migration_completed) {
@@ -231,6 +234,29 @@ export class ChatService {
     } catch (error) {
       console.error('Migration error:', error);
       return { success: false, error };
+    }
+  }
+
+  // Clean up generic "Knowledge Chat Session" entries
+  static async cleanupGenericSessions() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Delete conversations with generic titles
+      const { error } = await supabase
+        .from('chat_conversations')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('title', 'Knowledge Chat Session');
+
+      if (error) {
+        console.error('Error cleaning up generic sessions:', error);
+      } else {
+        console.log('Cleaned up generic chat sessions');
+      }
+    } catch (error) {
+      console.error('Error in cleanupGenericSessions:', error);
     }
   }
 

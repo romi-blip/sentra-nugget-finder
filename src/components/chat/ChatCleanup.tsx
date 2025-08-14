@@ -41,6 +41,11 @@ export function ChatCleanup({ sessions, onBulkDelete, open, onOpenChange }: Chat
     try {
       await onBulkDelete(selectedSessions);
       setSelectedSessions([]);
+      
+      // Clear localStorage to prevent re-migration
+      localStorage.removeItem("chatSessions");
+      localStorage.removeItem("activeSessionId");
+      
       onOpenChange(false);
     } catch (error) {
       console.error("Error during bulk delete:", error);
