@@ -318,11 +318,20 @@ const Chat = () => {
               <ChatInput onSend={handleSendMessage} onStop={() => abortRef.current?.abort()} />
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <h2 className="text-xl font-semibold mb-2">No chat session selected</h2>
-                <p className="text-muted-foreground mb-4">Create a new chat session to start conversing with the AI</p>
-                <Button onClick={createNewSession}>Start New Chat</Button>
+            <div className="flex-1 flex items-center justify-center p-6">
+              <div className="text-center space-y-6">
+                <div>
+                  <h2 className="text-xl font-semibold mb-2">Welcome to AI Sales Copilot</h2>
+                  <p className="text-muted-foreground mb-4">Get started with one of these suggestions or create a new chat</p>
+                </div>
+                <ChatSuggestions onPick={(text) => {
+                  createNewSession();
+                  // Small delay to ensure session is created before sending message
+                  setTimeout(() => handleSendMessage(text), 100);
+                }} />
+                <Button onClick={createNewSession} variant="outline">
+                  Start New Chat
+                </Button>
               </div>
             </div>
           )}
