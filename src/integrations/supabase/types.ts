@@ -420,6 +420,27 @@ export type Database = {
         }
         Relationships: []
       }
+      documents_website: {
+        Row: {
+          content: string | null
+          embedding: string | null
+          id: number
+          metadata: Json | null
+        }
+        Insert: {
+          content?: string | null
+          embedding?: string | null
+          id?: number
+          metadata?: Json | null
+        }
+        Update: {
+          content?: string | null
+          embedding?: string | null
+          id?: number
+          metadata?: Json | null
+        }
+        Relationships: []
+      }
       knowledge_files: {
         Row: {
           created_at: string
@@ -640,6 +661,48 @@ export type Database = {
         }
         Relationships: []
       }
+      website_pages: {
+        Row: {
+          character_count: number | null
+          content: string | null
+          created_at: string
+          description: string | null
+          id: string
+          original_content: string | null
+          processed_at: string | null
+          title: string | null
+          updated_at: string
+          url: string
+          word_count: number | null
+        }
+        Insert: {
+          character_count?: number | null
+          content?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          original_content?: string | null
+          processed_at?: string | null
+          title?: string | null
+          updated_at?: string
+          url: string
+          word_count?: number | null
+        }
+        Update: {
+          character_count?: number | null
+          content?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          original_content?: string | null
+          processed_at?: string | null
+          title?: string | null
+          updated_at?: string
+          url?: string
+          word_count?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       breach_summary: {
@@ -782,6 +845,15 @@ export type Database = {
         }[]
       }
       match_documents_sentra: {
+        Args: { filter?: Json; match_count?: number; query_embedding: string }
+        Returns: {
+          content: string
+          id: number
+          metadata: Json
+          similarity: number
+        }[]
+      }
+      match_documents_website: {
         Args: { filter?: Json; match_count?: number; query_embedding: string }
         Returns: {
           content: string

@@ -5,13 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
 import { supabase } from "@/integrations/supabase/client";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { File as FileIcon, FileText, FileSpreadsheet, FileImage, FileCode, FileAudio, FileVideo, FileArchive, Folder } from "lucide-react";
+import { File as FileIcon, FileText, FileSpreadsheet, FileImage, FileCode, FileAudio, FileVideo, FileArchive, Folder, Globe, ExternalLink } from "lucide-react";
 interface KBItem {
   id: string;
   name: string;
@@ -21,6 +22,19 @@ interface KBItem {
   mimeType?: string;
   status: "pending" | "processing" | "ready" | "error";
   createdAt: string;
+}
+
+interface WebsitePage {
+  id: string;
+  url: string;
+  title?: string;
+  description?: string;
+  content?: string;
+  word_count?: number;
+  character_count?: number;
+  processed_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 const STORAGE_KEY = "kbItems";
@@ -196,6 +210,20 @@ const KnowledgeBase = () => {
         .order("file_updated_date", { ascending: false });
       if (error) throw error;
       return data ?? [];
+    },
+  });
+
+  // Fetch website pages
+  const { data: websitePages = [], isLoading: websiteLoading, error: websiteError } = useQuery({
+    queryKey: ["website_pages"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("website_pages")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
     },
   });
 
@@ -440,94 +468,99 @@ const KnowledgeBase = () => {
       </section>
 
       <div className="mx-auto max-w-7xl px-4 -mt-12 mb-16">
-        <div className="grid gap-8 md:grid-cols-2">
-          <Card className="glass-card hover:shadow-lg transition-shadow duration-300">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
-                  <FileText className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">Upload Files</CardTitle>
-                  <CardDescription>Supported: PDF, DOCX, PPTX, TXT, Markdown</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-3">
-                <Input 
-                  ref={fileInputRef} 
-                  type="file" 
-                  multiple 
-                  onChange={(e) => onUpload(e.target.files)}
-                  className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                />
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                  Files are sent directly to your n8n webhook for processing
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="files" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="files">Files & Documents</TabsTrigger>
+            <TabsTrigger value="website">Website Pages</TabsTrigger>
+          </TabsList>
 
-          <Card className="glass-card hover:shadow-lg transition-shadow duration-300">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-2/10">
-                  <Folder className="h-5 w-5 text-brand-2" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">Connect Google Drive</CardTitle>
-                  <CardDescription>Paste a shared link with viewer access</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="drive" className="text-sm font-medium">Folder URL</Label>
-                  <div className="flex gap-3">
+          <TabsContent value="files" className="space-y-8">
+            <div className="grid gap-8 md:grid-cols-2">
+              <Card className="glass-card hover:shadow-lg transition-shadow duration-300">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
+                      <FileText className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl">Upload Files</CardTitle>
+                      <CardDescription>Supported: PDF, DOCX, PPTX, TXT, Markdown</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
                     <Input 
-                      id="drive" 
-                      placeholder="https://drive.google.com/drive/folders/..." 
-                      value={driveUrl} 
-                      onChange={(e) => setDriveUrl(e.target.value)}
-                      className="flex-1"
+                      ref={fileInputRef} 
+                      type="file" 
+                      multiple 
+                      onChange={(e) => onUpload(e.target.files)}
+                      className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                     />
-                    <Button 
-                      variant="default" 
-                      onClick={addDriveFolder}
-                      disabled={!driveUrl.trim()}
-                      className="shrink-0"
-                    >
-                      Connect
-                    </Button>
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      Files are sent directly to your n8n webhook for processing
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="glass-card hover:shadow-lg transition-shadow duration-300">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-2/10">
+                      <Folder className="h-5 w-5 text-brand-2" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl">Connect Google Drive</CardTitle>
+                      <CardDescription>Paste a shared link with viewer access</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="drive" className="text-sm font-medium">Folder URL</Label>
+                      <div className="flex gap-3">
+                        <Input 
+                          id="drive" 
+                          placeholder="https://drive.google.com/drive/folders/..." 
+                          value={driveUrl} 
+                          onChange={(e) => setDriveUrl(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button 
+                          variant="default" 
+                          onClick={addDriveFolder}
+                          disabled={!driveUrl.trim()}
+                          className="shrink-0"
+                        >
+                          Connect
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                      Folder contents will be indexed automatically
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="shadow-lg">
+              <CardHeader className="border-b bg-gradient-to-r from-card to-muted/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-2xl">Content Sources</CardTitle>
+                    <CardDescription className="mt-1">Manage your indexed files and folders</CardDescription>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {displayItems.length} {displayItems.length === 1 ? 'item' : 'items'} total
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                  Folder contents will be indexed automatically
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-7xl px-4 pb-16">
-        <Card className="shadow-lg">
-          <CardHeader className="border-b bg-gradient-to-r from-card to-muted/20">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-2xl">Content Sources</CardTitle>
-                <CardDescription className="mt-1">Manage your indexed files and folders</CardDescription>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {displayItems.length} {displayItems.length === 1 ? 'item' : 'items'} total
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
+              </CardHeader>
+              <CardContent className="p-0">
             {assetsLoading ? (
               <div className="p-6 space-y-4">
                 {[...Array(3)].map((_, i) => (
@@ -643,53 +676,164 @@ const KnowledgeBase = () => {
                   )}
                 </TableBody>
               </Table>
-            )}
-            <div className="mt-4">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setPage((p) => Math.max(1, p - 1));
-                      }}
-                    />
-                  </PaginationItem>
-                  {visiblePages.map((pg, idx) =>
-                    pg === "ellipsis" ? (
-                      <PaginationItem key={`ellipsis-${idx}`}>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    ) : (
-                      <PaginationItem key={pg}>
-                        <PaginationLink
-                          href="#"
-                          isActive={pg === page}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setPage(pg as number);
-                          }}
-                        >
-                          {pg}
-                        </PaginationLink>
-                      </PaginationItem>
-                    )
-                  )}
-                  <PaginationItem>
-                    <PaginationNext
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setPage((p) => Math.min(totalPages, p + 1));
-                      }}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          </CardContent>
-        </Card>
+              )}
+              <div className="mt-4">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setPage((p) => Math.max(1, p - 1));
+                        }}
+                      />
+                    </PaginationItem>
+                    {visiblePages.map((pg, idx) =>
+                      pg === "ellipsis" ? (
+                        <PaginationItem key={`ellipsis-${idx}`}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      ) : (
+                        <PaginationItem key={pg}>
+                          <PaginationLink
+                            href="#"
+                            isActive={pg === page}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setPage(pg as number);
+                            }}
+                          >
+                            {pg}
+                          </PaginationLink>
+                        </PaginationItem>
+                      )
+                    )}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setPage((p) => Math.min(totalPages, p + 1));
+                        }}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            </CardContent>
+          </Card>
+          </TabsContent>
+
+          <TabsContent value="website" className="space-y-8">
+            <Card className="shadow-lg">
+              <CardHeader className="border-b bg-gradient-to-r from-card to-muted/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-2xl flex items-center gap-2">
+                      <Globe className="h-6 w-6" />
+                      Website Pages
+                    </CardTitle>
+                    <CardDescription className="mt-1">Website pages crawled and indexed for knowledge base</CardDescription>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {websitePages.length} {websitePages.length === 1 ? 'page' : 'pages'} total
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {websiteLoading ? (
+                  <div className="p-6 space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-4">
+                        <Skeleton className="w-8 h-8 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </div>
+                        <Skeleton className="h-8 w-20" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent border-b bg-muted/30">
+                        <TableHead className="py-4 font-semibold">URL</TableHead>
+                        <TableHead className="py-4 font-semibold">Title</TableHead>
+                        <TableHead className="py-4 font-semibold">Word Count</TableHead>
+                        <TableHead className="py-4 font-semibold">Processed</TableHead>
+                        <TableHead className="py-4 font-semibold text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {websitePages.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="py-12 text-center">
+                            <div className="flex flex-col items-center gap-3">
+                              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                                <Globe className="h-6 w-6 text-muted-foreground" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-muted-foreground">No website pages found</p>
+                                <p className="text-sm text-muted-foreground">Use your n8n workflow to crawl and index website content</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        websitePages.map((page: WebsitePage) => (
+                          <TableRow key={page.id} className="hover:bg-muted/30 transition-colors">
+                            <TableCell className="py-4">
+                              <div className="flex items-center gap-3 max-w-[300px]">
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-2/10">
+                                  <Globe className="h-4 w-4 text-brand-2" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium truncate" title={page.url}>{page.url}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {new URL(page.url).hostname}
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4 max-w-[250px]">
+                              <span className="truncate block" title={page.title || 'Untitled'}>
+                                {page.title || 'Untitled'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="py-4 text-sm text-muted-foreground">
+                              {page.word_count ? page.word_count.toLocaleString() : '-'}
+                            </TableCell>
+                            <TableCell className="py-4 text-sm text-muted-foreground">
+                              {page.processed_at ? new Date(page.processed_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              }) : '-'}
+                            </TableCell>
+                            <TableCell className="py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => window.open(page.url, '_blank')}
+                                  className="hover:bg-brand-2 hover:text-white hover:border-brand-2 transition-colors"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </main>
   );
