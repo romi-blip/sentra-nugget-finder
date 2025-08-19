@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -33,7 +33,7 @@ export function useUserRoles() {
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       setCurrentUserRole(currentRole?.role || null);
 
@@ -59,13 +59,13 @@ export function useUserRoles() {
     }
   };
 
-  const hasRole = (role: AppRole): boolean => {
+  const hasRole = useCallback((role: AppRole): boolean => {
     return currentUserRole === role;
-  };
+  }, [currentUserRole]);
 
-  const hasAnyRole = (roles: AppRole[]): boolean => {
+  const hasAnyRole = useCallback((roles: AppRole[]): boolean => {
     return currentUserRole ? roles.includes(currentUserRole) : false;
-  };
+  }, [currentUserRole]);
 
   const canAccessKnowledgeBase = (): boolean => {
     return hasAnyRole(['admin', 'super_admin']);

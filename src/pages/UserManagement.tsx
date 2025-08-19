@@ -18,7 +18,7 @@ type AppRole = Database['public']['Enums']['app_role'];
 
 const UserManagement = () => {
   const { user } = useAuth();
-  const { hasRole } = useUserRoles();
+  const { currentUserRole, isLoading: rolesLoading } = useUserRoles();
   const {
     users,
     isLoading,
@@ -32,10 +32,10 @@ const UserManagement = () => {
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
 
   useEffect(() => {
-    if (hasRole('super_admin')) {
+    if (currentUserRole === 'super_admin') {
       fetchUsers();
     }
-  }, [hasRole, fetchUsers]);
+  }, [currentUserRole, fetchUsers]);
 
   const handleEditStart = (userProfile: UserProfile) => {
     setEditingUser(userProfile.user_id);
@@ -69,7 +69,18 @@ const UserManagement = () => {
     await deleteUser(userId);
   };
 
-  if (!hasRole('super_admin')) {
+  if (rolesLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          <span>Loading user permissions...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentUserRole !== 'super_admin') {
     return (
       <div className="container mx-auto p-6">
         <Card>
