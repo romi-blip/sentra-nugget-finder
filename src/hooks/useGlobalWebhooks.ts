@@ -14,6 +14,25 @@ export const useGlobalWebhooks = () => {
   // Load webhooks from database
   const loadWebhooks = useCallback(async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setWebhooks([]);
+        return;
+      }
+
+      // Check if user has super_admin role
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'super_admin')
+        .maybeSingle();
+
+      if (!userRole) {
+        setWebhooks([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('global_webhooks')
         .select('*')

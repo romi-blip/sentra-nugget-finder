@@ -78,16 +78,28 @@ useEffect(() => {
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          a: ({ href, children }) => (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary underline hover:text-primary/80 transition-colors"
-                            >
-                              {children}
-                            </a>
-                          ),
+                          a: ({ href, children, ...props }) => {
+                            // Security: Only allow safe protocols
+                            const safeProtocols = ['http:', 'https:', 'mailto:'];
+                            const url = href || '';
+                            const protocol = url.split(':')[0] + ':';
+                            
+                            if (!safeProtocols.includes(protocol)) {
+                              return <span>{children}</span>;
+                            }
+                            
+                            return (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary underline hover:text-primary/80 transition-colors"
+                                {...props}
+                              >
+                                {children}
+                              </a>
+                            );
+                          },
                         }}
                       >
                         {message.content}
@@ -99,16 +111,28 @@ useEffect(() => {
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        a: ({ href, children }) => (
-                          <a
-                            href={href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary-foreground underline hover:text-primary-foreground/80 transition-colors"
-                          >
-                            {children}
-                          </a>
-                        ),
+                        a: ({ href, children, ...props }) => {
+                          // Security: Only allow safe protocols
+                          const safeProtocols = ['http:', 'https:', 'mailto:'];
+                          const url = href || '';
+                          const protocol = url.split(':')[0] + ':';
+                          
+                          if (!safeProtocols.includes(protocol)) {
+                            return <span>{children}</span>;
+                          }
+                          
+                          return (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary-foreground underline hover:text-primary-foreground/80 transition-colors"
+                              {...props}
+                            >
+                              {children}
+                            </a>
+                          );
+                        },
                         p: ({ children }) => <span>{children}</span>,
                       }}
                     >
