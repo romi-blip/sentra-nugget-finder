@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import Chat from "./pages/Chat";
 import Auth from "./pages/Auth";
+import UserManagement from "./pages/UserManagement";
 import Navbar from "@/components/layout/Navbar";
 import WebhookSettingsDialog from "@/components/settings/WebhookSettingsDialog";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -40,6 +41,14 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <Chat />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/users" 
+              element={
+                <ProtectedRoute requiredRoles={['super_admin']}>
+                  <UserManagement />
                 </ProtectedRoute>
               } 
             />

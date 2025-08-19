@@ -784,6 +784,19 @@ export type Database = {
         }
         Relationships: []
       }
+      user_profiles_with_role: {
+        Row: {
+          created_at: string | null
+          department: string | null
+          email: string | null
+          first_name: string | null
+          last_name: string | null
+          role: Database["public"]["Enums"]["app_role"] | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       binary_quantize: {
@@ -945,7 +958,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "marketing" | "sales" | "super_admin"
+      app_role: "admin" | "marketing" | "sales" | "super_admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1073,7 +1086,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "marketing", "sales", "super_admin"],
+      app_role: ["admin", "marketing", "sales", "super_admin", "user"],
     },
   },
 } as const
