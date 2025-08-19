@@ -2,9 +2,11 @@ import { Settings, Menu, LogOut, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRoles } from "@/hooks/useUserRoles";
 
 const Navbar = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
   const { user, signOut } = useAuth();
+  const { canAccessKnowledgeBase, canManageWebhooks } = useUserRoles();
 
   const handleSignOut = async () => {
     await signOut();
@@ -23,11 +25,13 @@ const Navbar = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
         <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
           <div className="w-full flex-1 md:w-auto md:flex-none">
             <div className="flex items-center space-x-2">
-              <Link to="/kb">
-                <Button variant="ghost" size="sm">
-                  Knowledge Base
-                </Button>
-              </Link>
+              {canAccessKnowledgeBase() && (
+                <Link to="/kb">
+                  <Button variant="ghost" size="sm">
+                    Knowledge Base
+                  </Button>
+                </Link>
+              )}
               <Link to="/chat">
                 <Button variant="ghost" size="sm">
                   AI Chat
@@ -36,15 +40,17 @@ const Navbar = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onOpenSettings}
-              className="mr-2"
-            >
-              <Settings className="h-4 w-4" />
-              <span className="sr-only">Settings</span>
-            </Button>
+            {canManageWebhooks() && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onOpenSettings}
+                className="mr-2"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="sr-only">Settings</span>
+              </Button>
+            )}
             {user ? (
               <Button
                 variant="ghost"

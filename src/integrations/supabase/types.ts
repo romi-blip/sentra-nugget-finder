@@ -441,6 +441,51 @@ export type Database = {
         }
         Relationships: []
       }
+      global_webhooks: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          headers: Json | null
+          id: string
+          last_tested: string | null
+          last_used: string | null
+          name: string
+          retry_attempts: number
+          timeout: number
+          type: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          headers?: Json | null
+          id?: string
+          last_tested?: string | null
+          last_used?: string | null
+          name: string
+          retry_attempts?: number
+          timeout?: number
+          type: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          headers?: Json | null
+          id?: string
+          last_tested?: string | null
+          last_used?: string | null
+          name?: string
+          retry_attempts?: number
+          timeout?: number
+          type?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
       knowledge_files: {
         Row: {
           created_at: string

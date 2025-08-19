@@ -11,6 +11,7 @@ import Chat from "./pages/Chat";
 import Auth from "./pages/Auth";
 import Navbar from "@/components/layout/Navbar";
 import WebhookSettingsDialog from "@/components/settings/WebhookSettingsDialog";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -26,8 +27,22 @@ const App = () => {
           <Navbar onOpenSettings={() => setSettingsOpen(true)} />
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/kb" element={<KnowledgeBase />} />
-            <Route path="/chat" element={<Chat />} />
+            <Route 
+              path="/kb" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'super_admin']}>
+                  <KnowledgeBase />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chat" 
+              element={
+                <ProtectedRoute>
+                  <Chat />
+                </ProtectedRoute>
+              } 
+            />
             <Route path="/auth" element={<Auth />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

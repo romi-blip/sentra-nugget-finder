@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare, Upload, FolderOpen, Check, X, Loader2 } from "lucide-react";
-import { useWebhooks } from "@/hooks/useWebhooks";
-import { WebhookConfig, WebhookType } from "@/types/webhook";
-import { toast } from "@/hooks/use-toast";
+import { useGlobalWebhooks } from "@/hooks/useGlobalWebhooks";
+import type { Database } from '@/integrations/supabase/types';
+
+type GlobalWebhook = Database['public']['Tables']['global_webhooks']['Row'];
 
 const WEBHOOK_ICONS = {
   chat: MessageSquare,
@@ -29,59 +30,62 @@ export const WebhookSettingsDialog = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
-  const { webhooks, isLoading, updateWebhook, testWebhookWithUrl, saveWebhooks } = useWebhooks();
+  const { webhooks, isLoading, saveWebhook, testWebhook } = useGlobalWebhooks();
   const [editingWebhooks, setEditingWebhooks] = useState<Record<string, string>>({});
   const [testingWebhooks, setTestingWebhooks] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (webhooks.length > 0) {
+      const initialUrls: Record<string, string> = {};
+      webhooks.forEach(webhook => {
+        initialUrls[webhook.id] = webhook.url;
+      });
+      setEditingWebhooks(initialUrls);
+    }
+  }, [webhooks]);
 
   const handleUrlChange = (webhookId: string, url: string) => {
     setEditingWebhooks(prev => ({ ...prev, [webhookId]: url }));
   };
 
-  const handleSave = () => {
-    const updatedWebhooks = webhooks.map(webhook => ({
-      ...webhook,
-      url: editingWebhooks[webhook.id] ?? webhook.url,
-    }));
-    
-    saveWebhooks(updatedWebhooks);
-    setEditingWebhooks({});
-    toast({ title: "Saved", description: "Webhook configuration saved successfully" });
-    onOpenChange(false);
-  };
-
-  const handleTest = async (webhookId: string) => {
-    // Get the URL from either editing state or saved webhook
+  const handleSave = async (webhookId: string) => {
     const webhook = webhooks.find(w => w.id === webhookId);
-    const urlToTest = editingWebhooks[webhookId] ?? webhook?.url;
-    
-    if (!urlToTest?.trim()) {
-      toast({
-        title: 'Test Failed',
-        description: 'Webhook URL is required for testing.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    if (!webhook) return;
 
-    setTestingWebhooks(prev => new Set([...prev, webhookId]));
-    
-    // Create a temporary webhook object with the URL to test
-    const tempWebhook = { ...webhook!, url: urlToTest.trim() };
-    await testWebhookWithUrl(tempWebhook);
-    
-    setTestingWebhooks(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(webhookId);
-      return newSet;
+    await saveWebhook({
+      id: webhookId,
+      url: editingWebhooks[webhookId] || webhook.url,
     });
   };
 
-  const getStatusBadge = (webhook: WebhookConfig) => {
+  const handleTest = async (webhookId: string) => {
+    const webhook = webhooks.find(w => w.id === webhookId);
+    if (!webhook) return;
+
+    const updatedWebhook = {
+      ...webhook,
+      url: editingWebhooks[webhook.id] || webhook.url,
+    };
+
+    setTestingWebhooks(prev => new Set([...prev, webhookId]));
+    
+    try {
+      await testWebhook(updatedWebhook);
+    } finally {
+      setTestingWebhooks(prev => {
+        const next = new Set(prev);
+        next.delete(webhookId);
+        return next;
+      });
+    }
+  };
+
+  const getStatusBadge = (webhook: GlobalWebhook) => {
     const url = editingWebhooks[webhook.id] ?? webhook.url;
     if (!url) return <Badge variant="secondary">Not Configured</Badge>;
     
-    if (webhook.lastTested) {
-      const isRecent = Date.now() - webhook.lastTested.getTime() < 24 * 60 * 60 * 1000;
+    if (webhook.last_tested) {
+      const isRecent = Date.now() - new Date(webhook.last_tested).getTime() < 24 * 60 * 60 * 1000;
       return (
         <Badge variant={isRecent ? "default" : "secondary"} className="gap-1">
           <Check className="h-3 w-3" />
@@ -163,17 +167,25 @@ export const WebhookSettingsDialog = ({
                   </Button>
                 </div>
                 
-                {webhook.lastTested && (
+                {webhook.last_tested && (
                   <p className="text-xs text-muted-foreground">
-                    Last tested: {webhook.lastTested.toLocaleString()}
+                    Last tested: {new Date(webhook.last_tested).toLocaleString()}
                   </p>
                 )}
                 
-                {webhook.lastUsed && (
+                {webhook.last_used && (
                   <p className="text-xs text-muted-foreground">
-                    Last used: {webhook.lastUsed.toLocaleString()}
+                    Last used: {new Date(webhook.last_used).toLocaleString()}
                   </p>
                 )}
+                
+                <Button
+                  onClick={() => handleSave(webhook.id)}
+                  disabled={editingWebhooks[webhook.id] === webhook.url}
+                  size="sm"
+                >
+                  Save Webhook
+                </Button>
               </div>
             </TabsContent>
           ))}
@@ -181,14 +193,11 @@ export const WebhookSettingsDialog = ({
 
         <div className="flex items-center justify-between pt-4">
           <p className="text-xs text-muted-foreground">
-            Webhooks are stored securely in your browser and can be changed anytime.
+            Webhooks are stored centrally and accessible by all users when configured.
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button variant="hero" onClick={handleSave}>
-              Save Configuration
+              Close
             </Button>
           </div>
         </div>
