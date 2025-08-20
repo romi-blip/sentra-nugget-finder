@@ -70,18 +70,30 @@ const Chat = () => {
         // Handle different response formats from n8n
         let responseContent = "I received your message but couldn't extract a proper response.";
         
+        console.log("Chat: Raw webhook response:", JSON.stringify(webhookResponse, null, 2));
+        
         if (typeof webhookResponse.data === 'string') {
-          // n8n returns plain text
+          // n8n returns plain text - preserve all formatting
           responseContent = webhookResponse.data;
         } else if (webhookResponse.data && typeof webhookResponse.data === 'object') {
-          // n8n returns JSON object
-          responseContent = webhookResponse.data.output || webhookResponse.data.message || webhookResponse.data.content || responseContent;
+          // n8n returns JSON object - check multiple possible response fields
+          responseContent = webhookResponse.data.output || 
+                           webhookResponse.data.message || 
+                           webhookResponse.data.content || 
+                           webhookResponse.data.response ||
+                           JSON.stringify(webhookResponse.data, null, 2);
+        } else if (Array.isArray(webhookResponse.data)) {
+          // Handle array responses
+          responseContent = webhookResponse.data.join('\n');
         }
         
-        // Clean up potential markdown code fences
-        responseContent = responseContent.replace(/^```[\w]*\n?|```$/g, '').trim();
+        // Only clean up code fences if they wrap the entire content, preserve internal formatting
+        if (responseContent.startsWith('```') && responseContent.endsWith('```')) {
+          responseContent = responseContent.replace(/^```[\w]*\n?|```$/g, '').trim();
+        }
         
         console.log("Chat: Processed response content:", responseContent);
+        console.log("Chat: Content length:", responseContent.length);
         
         const reply = {
           id: `${Date.now()}a`,
