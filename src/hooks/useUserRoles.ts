@@ -16,14 +16,12 @@ export function useUserRoles() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUserRole, setCurrentUserRole] = useState<AppRole | null>(null);
 
-  useEffect(() => {
-    fetchUserRoles();
-  }, []);
-
-  const fetchUserRoles = async () => {
+  const fetchUserRoles = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        setCurrentUserRole(null);
+        setUserRoles([]);
         setIsLoading(false);
         return;
       }
@@ -57,7 +55,30 @@ export function useUserRoles() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          // Defer role fetching to prevent race conditions
+          setTimeout(() => {
+            fetchUserRoles();
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
+          setCurrentUserRole(null);
+          setUserRoles([]);
+          setIsLoading(false);
+        }
+      }
+    );
+
+    // Initial fetch
+    fetchUserRoles();
+
+    return () => subscription.unsubscribe();
+  }, [fetchUserRoles]);
 
   const hasRole = useCallback((role: AppRole): boolean => {
     return currentUserRole === role;
