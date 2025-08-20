@@ -51,12 +51,20 @@ const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
                   </Link>
                 )}
                 {hasRole('super_admin') && (
-                  <Link 
-                    to="/admin/users" 
-                    className="text-sm font-medium transition-colors hover:text-primary"
-                  >
-                    User Management
-                  </Link>
+                  <>
+                    <Link 
+                      to="/admin/users" 
+                      className="text-sm font-medium transition-colors hover:text-primary"
+                    >
+                      User Management
+                    </Link>
+                    <Link 
+                      to="/admin/settings" 
+                      className="text-sm font-medium transition-colors hover:text-primary"
+                    >
+                      Settings
+                    </Link>
+                  </>
                 )}
               </div>
             )}

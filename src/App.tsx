@@ -13,6 +13,7 @@ import UserManagement from "./pages/UserManagement";
 import Navbar from "@/components/layout/Navbar";
 import WebhookSettingsDialog from "@/components/settings/WebhookSettingsDialog";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import AdminSettings from "./pages/AdminSettings";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,14 @@ const App = () => {
               element={
                 <ProtectedRoute requiredRoles={['super_admin']}>
                   <UserManagement />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/settings" 
+              element={
+                <ProtectedRoute requiredRoles={['super_admin']}>
+                  <AdminSettings />
                 </ProtectedRoute>
               } 
             />

@@ -95,7 +95,7 @@ serve(async (req) => {
           .upsert({
             user_id: newUser.user.id,
             role: role
-          })
+          }, { onConflict: 'user_id' })
 
         if (roleAssignError) {
           console.error('Error assigning role:', roleAssignError)
