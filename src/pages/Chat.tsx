@@ -8,6 +8,7 @@ import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { Trash2 } from "lucide-react";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
+import { webhookService } from "@/services/webhookService";
 
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -40,7 +41,45 @@ const Chat = () => {
     };
     addMessage(activeSessionId, userMessage);
 
-    // Get chat webhook from new webhook system
+    // Add typing indicator
+    const typingId = `${Date.now()}typing`;
+    const typingMessage = {
+      id: typingId,
+      role: "assistant" as const,
+      content: "⚡ AI is thinking...",
+    };
+    addMessage(activeSessionId, typingMessage);
+
+    // Try global webhook system first
+    try {
+      console.log("Chat: Attempting to use global webhook system");
+      
+      const webhookResponse = await webhookService.chat({
+        message: text,
+        timestamp: new Date().toISOString(),
+        sessionId: activeSessionId,
+        messageId: `msg_${Date.now()}`,
+      });
+
+      if (webhookResponse.success) {
+        console.log("Chat: Global webhook succeeded:", webhookResponse);
+        
+        // Remove typing indicator and add response
+        removeMessage(activeSessionId, typingId);
+        const reply = {
+          id: `${Date.now()}a`,
+          role: "assistant" as const,
+          content: webhookResponse.data?.output || webhookResponse.data?.message || webhookResponse.data?.content || "I received your message but couldn't extract a proper response.",
+        };
+        addMessage(activeSessionId, reply);
+        abortRef.current = null;
+        return;
+      }
+    } catch (globalWebhookError) {
+      console.log("Chat: Global webhook failed, trying legacy fallback:", globalWebhookError);
+    }
+
+    // Fallback to legacy localStorage webhook system
     const webhookData = localStorage.getItem("n8n_webhook_configs");
     let chatWebhookUrl: string | null = null;
 
@@ -54,12 +93,14 @@ const Chat = () => {
       }
     }
 
-    // Fallback to legacy webhook
+    // Additional legacy fallback
     if (!chatWebhookUrl) {
       chatWebhookUrl = localStorage.getItem("n8nWebhookUrl");
     }
 
     if (!chatWebhookUrl) {
+      console.log("Chat: No webhook configured in either global or legacy system");
+      removeMessage(activeSessionId, typingId);
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
@@ -74,17 +115,8 @@ const Chat = () => {
       return;
     }
 
-    // Add typing indicator
-    const typingId = `${Date.now()}typing`;
-    const typingMessage = {
-      id: typingId,
-      role: "assistant" as const,
-      content: "⚡ AI is thinking...",
-    };
-    addMessage(activeSessionId, typingMessage);
-
     try {
-      console.log("Chat: Sending request to webhook:", chatWebhookUrl);
+      console.log("Chat: Sending request to legacy webhook:", chatWebhookUrl);
       const controller = new AbortController();
       abortRef.current = controller;
 
