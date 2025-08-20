@@ -78,16 +78,21 @@ export const useUserManagement = () => {
 
   const updateUserProfile = useCallback(async (userId: string, updates: Partial<UserProfile>) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update({
           first_name: updates.first_name,
           last_name: updates.last_name,
           department: updates.department,
         })
-        .eq('id', userId);
+        .eq('id', userId)
+        .select();
 
       if (error) throw error;
+
+      if (!data || data.length === 0) {
+        throw new Error('No profile found to update. The profile may not exist.');
+      }
 
       toast({
         title: 'Success',
@@ -99,7 +104,7 @@ export const useUserManagement = () => {
       console.error('Error updating profile:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update profile',
+        description: error.message || 'Failed to update profile',
         variant: 'destructive',
       });
       throw error;

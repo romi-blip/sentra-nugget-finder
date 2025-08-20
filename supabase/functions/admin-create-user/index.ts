@@ -71,19 +71,36 @@ serve(async (req) => {
 
     console.log('User created successfully:', newUser.user?.id)
 
-    // The profile will be created automatically by the trigger
-    // But we need to set the role manually
-    if (role && newUser.user) {
-      const { error: roleAssignError } = await supabaseClient
-        .from('user_roles')
+    // Create profile explicitly (don't rely on trigger)
+    if (newUser.user) {
+      const { error: profileError } = await supabaseClient
+        .from('profiles')
         .upsert({
-          user_id: newUser.user.id,
-          role: role
+          id: newUser.user.id,
+          email: email,
+          first_name: firstName || null,
+          last_name: lastName || null,
+          department: department || null
         })
 
-      if (roleAssignError) {
-        console.error('Error assigning role:', roleAssignError)
-        // Don't throw here as the user is already created
+      if (profileError) {
+        console.error('Error creating profile:', profileError)
+        // Continue - user is created, profile can be fixed later
+      }
+
+      // Set the role
+      if (role) {
+        const { error: roleAssignError } = await supabaseClient
+          .from('user_roles')
+          .upsert({
+            user_id: newUser.user.id,
+            role: role
+          })
+
+        if (roleAssignError) {
+          console.error('Error assigning role:', roleAssignError)
+          // Don't throw here as the user is already created
+        }
       }
     }
 

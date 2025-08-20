@@ -11,7 +11,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Edit2, Save, X, Users, Shield, UserPlus, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
+import { Trash2, Edit2, Save, X, Users, Shield, UserPlus, Loader2, RefreshCw } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -30,6 +32,7 @@ const UserManagement = () => {
 
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
+  const [isBackfilling, setIsBackfilling] = useState(false);
 
   useEffect(() => {
     if (currentUserRole === 'super_admin') {
@@ -67,6 +70,33 @@ const UserManagement = () => {
 
   const handleDeleteUser = async (userId: string) => {
     await deleteUser(userId);
+  };
+
+  const handleBackfillProfiles = async () => {
+    setIsBackfilling(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-backfill-profiles');
+
+      if (error) {
+        throw new Error(error.message || 'Failed to backfill profiles');
+      }
+
+      toast({
+        title: 'Success',
+        description: `Backfill complete: ${data.profilesCreated} profiles and ${data.rolesCreated} roles created`,
+      });
+
+      await fetchUsers(); // Refresh the list
+    } catch (error) {
+      console.error('Error backfilling profiles:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to backfill profiles',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsBackfilling(false);
+    }
   };
 
   if (rolesLoading) {
@@ -108,7 +138,26 @@ const UserManagement = () => {
             Manage user accounts, roles, and permissions
           </p>
         </div>
-        <CreateUserDialog />
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleBackfillProfiles}
+            disabled={isBackfilling}
+          >
+            {isBackfilling ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Backfilling...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Backfill Profiles
+              </>
+            )}
+          </Button>
+          <CreateUserDialog />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
