@@ -34,9 +34,7 @@ export const useUserManagement = () => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
-        .from('user_profiles_with_role')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .rpc('get_user_profiles_with_roles');
 
       if (error) throw error;
       setUsers(data || []);

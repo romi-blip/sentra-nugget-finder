@@ -86,13 +86,6 @@ export type Database = {
             referencedRelation: "breach_articles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "campaigns_breach_article_id_fkey"
-            columns: ["breach_article_id"]
-            isOneToOne: false
-            referencedRelation: "breach_summary"
-            referencedColumns: ["id"]
-          },
         ]
       }
       chat_conversations: {
@@ -224,25 +217,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "companies_breach_article_id_fkey"
-            columns: ["breach_article_id"]
-            isOneToOne: false
-            referencedRelation: "breach_summary"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "companies_impacted_company_id_fkey"
             columns: ["impacted_company_id"]
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "companies_impacted_company_id_fkey"
-            columns: ["impacted_company_id"]
-            isOneToOne: false
-            referencedRelation: "high_priority_prospects"
-            referencedColumns: ["company_id"]
           },
         ]
       }
@@ -326,13 +305,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contacts_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "high_priority_prospects"
-            referencedColumns: ["company_id"]
           },
         ]
       }
@@ -577,13 +549,6 @@ export type Database = {
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "outreach_sequences_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: false
-            referencedRelation: "high_priority_prospects"
-            referencedColumns: ["contact_id"]
-          },
         ]
       }
       profiles: {
@@ -750,53 +715,7 @@ export type Database = {
       }
     }
     Views: {
-      breach_summary: {
-        Row: {
-          avg_icp_score: number | null
-          breach_date: string | null
-          breach_summary: string | null
-          competitor_companies: number | null
-          id: string | null
-          impacted_companies: number | null
-          title: string | null
-          total_contacts: number | null
-          url: string | null
-        }
-        Relationships: []
-      }
-      high_priority_prospects: {
-        Row: {
-          annual_revenue: string | null
-          breach_article_url: string | null
-          breach_title: string | null
-          company_id: string | null
-          company_name: string | null
-          company_type: string | null
-          contact_id: string | null
-          contact_priority: number | null
-          employee_count: number | null
-          full_name: string | null
-          icp_score: number | null
-          impacted_company_name: string | null
-          industry: string | null
-          outreach_status: string | null
-          title: string | null
-        }
-        Relationships: []
-      }
-      user_profiles_with_role: {
-        Row: {
-          created_at: string | null
-          department: string | null
-          email: string | null
-          first_name: string | null
-          last_name: string | null
-          role: Database["public"]["Enums"]["app_role"] | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       binary_quantize: {
@@ -815,6 +734,53 @@ export type Database = {
       generate_chat_title: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      get_breach_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          avg_icp_score: number
+          breach_date: string
+          breach_summary: string
+          competitor_companies: number
+          id: string
+          impacted_companies: number
+          title: string
+          total_contacts: number
+          url: string
+        }[]
+      }
+      get_high_priority_prospects: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          annual_revenue: string
+          breach_article_url: string
+          breach_title: string
+          company_id: string
+          company_name: string
+          company_type: string
+          contact_id: string
+          contact_priority: number
+          employee_count: number
+          full_name: string
+          icp_score: number
+          impacted_company_name: string
+          industry: string
+          outreach_status: string
+          title: string
+        }[]
+      }
+      get_user_profiles_with_roles: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          created_at: string
+          department: string
+          email: string
+          first_name: string
+          last_name: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+          user_id: string
+        }[]
       }
       halfvec_avg: {
         Args: { "": number[] }
