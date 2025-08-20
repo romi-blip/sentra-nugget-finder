@@ -118,6 +118,8 @@ export const useUserManagement = () => {
         .upsert({
           user_id: userId,
           role: role
+        }, {
+          onConflict: 'user_id'
         });
 
       if (error) throw error;
