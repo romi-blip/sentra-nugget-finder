@@ -66,10 +66,27 @@ const Chat = () => {
         
         // Remove typing indicator and add response
         removeMessage(activeSessionId, typingId);
+        
+        // Handle different response formats from n8n
+        let responseContent = "I received your message but couldn't extract a proper response.";
+        
+        if (typeof webhookResponse.data === 'string') {
+          // n8n returns plain text
+          responseContent = webhookResponse.data;
+        } else if (webhookResponse.data && typeof webhookResponse.data === 'object') {
+          // n8n returns JSON object
+          responseContent = webhookResponse.data.output || webhookResponse.data.message || webhookResponse.data.content || responseContent;
+        }
+        
+        // Clean up potential markdown code fences
+        responseContent = responseContent.replace(/^```[\w]*\n?|```$/g, '').trim();
+        
+        console.log("Chat: Processed response content:", responseContent);
+        
         const reply = {
           id: `${Date.now()}a`,
           role: "assistant" as const,
-          content: webhookResponse.data?.output || webhookResponse.data?.message || webhookResponse.data?.content || "I received your message but couldn't extract a proper response.",
+          content: responseContent,
         };
         addMessage(activeSessionId, reply);
         abortRef.current = null;
