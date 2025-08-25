@@ -10,6 +10,73 @@ import { Trash2 } from "lucide-react";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 import { webhookService } from "@/services/webhookService";
 
+// Helper function to normalize n8n responses that contain iframe content
+const normalizeN8NResponse = (content: string): string => {
+  let cleanedContent = content;
+
+  // Step 1: Extract content from iframe srcdoc if present
+  if (cleanedContent.includes('<iframe') && cleanedContent.includes('srcdoc=')) {
+    try {
+      const doc = new DOMParser().parseFromString(cleanedContent, 'text/html');
+      const iframe = doc.querySelector('iframe');
+      
+      if (iframe) {
+        let srcdoc = iframe.getAttribute('srcdoc');
+        if (srcdoc) {
+          // Decode HTML entities
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = srcdoc;
+          cleanedContent = tempDiv.textContent || tempDiv.innerText || cleanedContent;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to parse iframe content:", e);
+    }
+  }
+
+  // Step 2: Remove any remaining iframe fragments and attributes
+  cleanedContent = cleanedContent
+    .replace(/<iframe[^>]*>/gi, '')
+    .replace(/<\/iframe>/gi, '')
+    .replace(/srcdoc="[^"]*"/gi, '')
+    .replace(/sandbox="[^"]*"/gi, '')
+    .replace(/style="[^"]*"/gi, '')
+    .replace(/allowtransparency="[^"]*"/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+
+  // Step 3: Clean up HTML entities
+  cleanedContent = cleanedContent
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+
+  // Step 4: Remove markdown code block markers if they wrap the entire content
+  if (cleanedContent.startsWith('```markdown\n') && cleanedContent.endsWith('\n```')) {
+    cleanedContent = cleanedContent.slice(12, -4);
+  } else if (cleanedContent.startsWith('```markdown') && cleanedContent.endsWith('```')) {
+    cleanedContent = cleanedContent.slice(11, -3);
+  } else if (cleanedContent.startsWith('```') && cleanedContent.endsWith('```')) {
+    const firstNewline = cleanedContent.indexOf('\n');
+    if (firstNewline > 0) {
+      cleanedContent = cleanedContent.slice(firstNewline + 1, -3);
+    } else {
+      cleanedContent = cleanedContent.slice(3, -3);
+    }
+  }
+
+  // Step 5: Normalize whitespace and collapse multiple blank lines
+  cleanedContent = cleanedContent
+    .replace(/\r\n/g, '\n') // Normalize line endings
+    .replace(/\n{3,}/g, '\n\n') // Collapse multiple blank lines to maximum 2
+    .trim();
+
+  return cleanedContent;
+};
+
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const {
@@ -73,21 +140,22 @@ const Chat = () => {
         console.log("Chat: Raw webhook response:", JSON.stringify(webhookResponse, null, 2));
         
         if (typeof webhookResponse.data === 'string') {
-          // n8n returns plain text - preserve all formatting
-          responseContent = webhookResponse.data;
+          // n8n returns plain text - normalize iframe content and formatting
+          responseContent = normalizeN8NResponse(webhookResponse.data);
         } else if (webhookResponse.data && typeof webhookResponse.data === 'object') {
           // n8n returns JSON object - check multiple possible response fields
-          responseContent = webhookResponse.data.output || 
+          const rawContent = webhookResponse.data.output || 
                            webhookResponse.data.message || 
                            webhookResponse.data.content || 
                            webhookResponse.data.response ||
                            JSON.stringify(webhookResponse.data, null, 2);
+          responseContent = normalizeN8NResponse(rawContent);
         } else if (Array.isArray(webhookResponse.data)) {
           // Handle array responses
-          responseContent = webhookResponse.data.join('\n');
+          responseContent = normalizeN8NResponse(webhookResponse.data.join('\n'));
         }
         
-        // Only clean up code fences if they wrap the entire content, preserve internal formatting
+        // Clean up any remaining code fences if they wrap the entire content
         if (responseContent.startsWith('```') && responseContent.endsWith('```')) {
           responseContent = responseContent.replace(/^```[\w]*\n?|```$/g, '').trim();
         }
@@ -191,13 +259,17 @@ const Chat = () => {
           console.log("Chat: Successfully parsed JSON:", data);
 
           // Extract the message from N8N response format
+          let rawContent = "";
           if (Array.isArray(data) && data.length > 0 && (data[0] as any).output) {
-            assistantResponse = (data[0] as any).output as string;
+            rawContent = (data[0] as any).output as string;
           } else if ((data as any).response || (data as any).message || (data as any).content) {
-            assistantResponse = (data as any).response || (data as any).message || (data as any).content;
+            rawContent = (data as any).response || (data as any).message || (data as any).content;
           } else {
-            assistantResponse = "I received your message but couldn't extract a proper response from the JSON.";
+            rawContent = "I received your message but couldn't extract a proper response from the JSON.";
           }
+          
+          // Normalize the extracted content
+          assistantResponse = normalizeN8NResponse(rawContent);
         } catch (parseError) {
           console.error("Chat: JSON parse error:", parseError);
           throw new Error(
@@ -205,78 +277,9 @@ const Chat = () => {
           );
         }
       } else {
-        // Plain text/markdown response
+        // Plain text/markdown response - normalize using helper function
         console.log("Chat: Detected plain text/markdown format response");
-
-        // Robust HTML parsing to extract content from iframe responses
-        let cleanedResponse = responseText.trim();
-        
-        // Check if response contains iframe with srcdoc
-        if (cleanedResponse.includes('<iframe') && cleanedResponse.includes('srcdoc=')) {
-          try {
-            // Parse the full HTML response
-            const doc = new DOMParser().parseFromString(cleanedResponse, 'text/html');
-            const iframe = doc.querySelector('iframe');
-            
-            if (iframe) {
-              let srcdoc = iframe.getAttribute('srcdoc');
-              if (srcdoc) {
-                // Decode HTML entities and normalize content
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = srcdoc;
-                
-                // Extract text content and preserve line breaks
-                let content = tempDiv.textContent || tempDiv.innerText || '';
-                
-                // Clean up common HTML artifacts
-                content = content
-                  .replace(/&amp;/g, '&')
-                  .replace(/&lt;/g, '<')
-                  .replace(/&gt;/g, '>')
-                  .replace(/&quot;/g, '"')
-                  .replace(/&#39;/g, "'");
-                
-                // Remove code fence markers if present
-                if (content.includes('```markdown')) {
-                  content = content.replace(/```markdown\s*\n?/g, '').replace(/\n?```\s*$/g, '');
-                }
-                
-                cleanedResponse = content.trim();
-                console.log("Chat: Successfully extracted content from iframe srcdoc");
-              }
-            }
-          } catch (e) {
-            console.warn("Chat: Failed to parse iframe content, using fallback cleanup", e);
-            // Fallback: try to strip iframe wrapper manually
-            cleanedResponse = cleanedResponse
-              .replace(/<iframe[^>]*>/gi, '')
-              .replace(/<\/iframe>/gi, '')
-              .replace(/srcdoc="[^"]*"/gi, '')
-              .replace(/sandbox="[^"]*"/gi, '')
-              .replace(/style="[^"]*"/gi, '')
-              .replace(/allowtransparency="[^"]*"/gi, '');
-          }
-        }
-
-        // Strip markdown code block markers if present
-        // Handle ```markdown blocks
-        if (cleanedResponse.startsWith("```markdown\n") && cleanedResponse.endsWith("\n```")) {
-          cleanedResponse = cleanedResponse.slice(12, -4); // Remove ```markdown\n from start and \n``` from end
-        } else if (cleanedResponse.startsWith("```markdown") && cleanedResponse.endsWith("```")) {
-          cleanedResponse = cleanedResponse.slice(11, -3); // Remove ```markdown from start and ``` from end
-        }
-        // Handle generic code blocks
-        else if (cleanedResponse.startsWith("```") && cleanedResponse.endsWith("```")) {
-          const firstNewline = cleanedResponse.indexOf("\n");
-          if (firstNewline > 0) {
-            cleanedResponse = cleanedResponse.slice(firstNewline + 1, -3);
-          } else {
-            // No newline found, just remove the markers
-            cleanedResponse = cleanedResponse.slice(3, -3);
-          }
-        }
-
-        assistantResponse = cleanedResponse.trim();
+        assistantResponse = normalizeN8NResponse(responseText);
 
         // Log a warning about inconsistent webhook format
         console.warn(
