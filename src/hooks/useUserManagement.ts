@@ -166,6 +166,29 @@ export const useUserManagement = () => {
     }
   }, [fetchUsers]);
 
+  const updateUserPassword = useCallback(async (userId: string, password: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-update-user-password', {
+        body: { userId, password }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Password updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating password:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update password',
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  }, []);
+
   return {
     users,
     isLoading,
@@ -174,5 +197,6 @@ export const useUserManagement = () => {
     updateUserProfile,
     updateUserRole,
     deleteUser,
+    updateUserPassword,
   };
 };

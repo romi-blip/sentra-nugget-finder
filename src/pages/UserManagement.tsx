@@ -5,6 +5,7 @@ import { useUserRoles } from '@/hooks/useUserRoles';
 import { useUserManagement, type UserProfile } from '@/hooks/useUserManagement';
 import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
 import { UserRoleSelect } from '@/components/admin/UserRoleSelect';
+import { SetPasswordDialog } from '@/components/admin/SetPasswordDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Trash2, Edit2, Save, X, Users, Shield, UserPlus, Loader2, RefreshCw } from 'lucide-react';
+import { Trash2, Edit2, Save, X, Users, Shield, UserPlus, Loader2, RefreshCw, KeyRound } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -28,11 +29,13 @@ const UserManagement = () => {
     updateUserProfile,
     updateUserRole,
     deleteUser,
+    updateUserPassword,
   } = useUserManagement();
 
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserProfile>>({});
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [passwordDialogUser, setPasswordDialogUser] = useState<{ userId: string; email: string } | null>(null);
 
   useEffect(() => {
     if (currentUserRole === 'super_admin') {
@@ -70,6 +73,10 @@ const UserManagement = () => {
 
   const handleDeleteUser = async (userId: string) => {
     await deleteUser(userId);
+  };
+
+  const handlePasswordUpdate = async (userId: string, password: string) => {
+    await updateUserPassword(userId, password);
   };
 
   const handleBackfillProfiles = async () => {
@@ -309,6 +316,13 @@ const UserManagement = () => {
                             >
                               <Edit2 className="h-4 w-4" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setPasswordDialogUser({ userId: userProfile.user_id, email: userProfile.email })}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
                             {userProfile.user_id !== user?.id && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -346,6 +360,14 @@ const UserManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      <SetPasswordDialog
+        open={passwordDialogUser !== null}
+        onOpenChange={(open) => !open && setPasswordDialogUser(null)}
+        userId={passwordDialogUser?.userId || ''}
+        userEmail={passwordDialogUser?.email}
+        onSuccess={handlePasswordUpdate}
+      />
     </div>
   );
 };
