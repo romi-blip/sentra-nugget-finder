@@ -1,6 +1,34 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+/**
+ * Extract content from various response formats
+ */
+const extractContent = (data: any): string => {
+  if (typeof data === 'string') {
+    return data;
+  }
+  
+  if (data && typeof data === 'object') {
+    // Try multiple possible response fields in order of preference
+    return data.content || 
+           data.output || 
+           data.message || 
+           data.response ||
+           data.text ||
+           JSON.stringify(data, null, 2);
+  }
+  
+  if (Array.isArray(data)) {
+    // Handle array responses
+    if (data.length === 0) return "Empty response received.";
+    if (data.length === 1) return extractContent(data[0]);
+    return data.map(item => extractContent(item)).join('\n');
+  }
+  
+  return "Unable to extract content from response.";
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -103,13 +131,20 @@ serve(async (req) => {
         responseData = responseText
       }
 
-      console.log(`Webhook response: ${response.status}`)
+      // Standardize response shape for consistent client handling
+      const standardizedData = {
+        content: extractContent(responseData),
+        format: "markdown",
+        raw: responseData // for debugging
+      }
+
+      console.log(`Webhook response: ${response.status}, content length: ${standardizedData.content.length}`)
 
       return new Response(
         JSON.stringify({
           success: response.ok,
           status: response.status,
-          data: responseData
+          data: standardizedData
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -9,73 +9,7 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { Trash2 } from "lucide-react";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 import { webhookService } from "@/services/webhookService";
-
-// Helper function to normalize n8n responses that contain iframe content
-const normalizeN8NResponse = (content: string): string => {
-  let cleanedContent = content;
-
-  // Step 1: Extract content from iframe srcdoc if present
-  if (cleanedContent.includes('<iframe') && cleanedContent.includes('srcdoc=')) {
-    try {
-      const doc = new DOMParser().parseFromString(cleanedContent, 'text/html');
-      const iframe = doc.querySelector('iframe');
-      
-      if (iframe) {
-        let srcdoc = iframe.getAttribute('srcdoc');
-        if (srcdoc) {
-          // Decode HTML entities
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = srcdoc;
-          cleanedContent = tempDiv.textContent || tempDiv.innerText || cleanedContent;
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to parse iframe content:", e);
-    }
-  }
-
-  // Step 2: Remove any remaining iframe fragments and attributes
-  cleanedContent = cleanedContent
-    .replace(/<iframe[^>]*>/gi, '')
-    .replace(/<\/iframe>/gi, '')
-    .replace(/srcdoc="[^"]*"/gi, '')
-    .replace(/sandbox="[^"]*"/gi, '')
-    .replace(/style="[^"]*"/gi, '')
-    .replace(/allowtransparency="[^"]*"/gi, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-
-  // Step 3: Clean up HTML entities
-  cleanedContent = cleanedContent
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
-
-  // Step 4: Remove markdown code block markers if they wrap the entire content
-  if (cleanedContent.startsWith('```markdown\n') && cleanedContent.endsWith('\n```')) {
-    cleanedContent = cleanedContent.slice(12, -4);
-  } else if (cleanedContent.startsWith('```markdown') && cleanedContent.endsWith('```')) {
-    cleanedContent = cleanedContent.slice(11, -3);
-  } else if (cleanedContent.startsWith('```') && cleanedContent.endsWith('```')) {
-    const firstNewline = cleanedContent.indexOf('\n');
-    if (firstNewline > 0) {
-      cleanedContent = cleanedContent.slice(firstNewline + 1, -3);
-    } else {
-      cleanedContent = cleanedContent.slice(3, -3);
-    }
-  }
-
-  // Step 5: Normalize whitespace and collapse multiple blank lines
-  cleanedContent = cleanedContent
-    .replace(/\r\n/g, '\n') // Normalize line endings
-    .replace(/\n{3,}/g, '\n\n') // Collapse multiple blank lines to maximum 2
-    .trim();
-
-  return cleanedContent;
-};
+import { normalizeAiContent, extractResponseContent } from "@/lib/normalizeAiContent";
 
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -134,31 +68,11 @@ const Chat = () => {
         // Remove typing indicator and add response
         removeMessage(activeSessionId, typingId);
         
-        // Handle different response formats from n8n
-        let responseContent = "I received your message but couldn't extract a proper response.";
-        
+        // Handle different response formats using robust normalization
         console.log("Chat: Raw webhook response:", JSON.stringify(webhookResponse, null, 2));
         
-        if (typeof webhookResponse.data === 'string') {
-          // n8n returns plain text - normalize iframe content and formatting
-          responseContent = normalizeN8NResponse(webhookResponse.data);
-        } else if (webhookResponse.data && typeof webhookResponse.data === 'object') {
-          // n8n returns JSON object - check multiple possible response fields
-          const rawContent = webhookResponse.data.output || 
-                           webhookResponse.data.message || 
-                           webhookResponse.data.content || 
-                           webhookResponse.data.response ||
-                           JSON.stringify(webhookResponse.data, null, 2);
-          responseContent = normalizeN8NResponse(rawContent);
-        } else if (Array.isArray(webhookResponse.data)) {
-          // Handle array responses
-          responseContent = normalizeN8NResponse(webhookResponse.data.join('\n'));
-        }
-        
-        // Clean up any remaining code fences if they wrap the entire content
-        if (responseContent.startsWith('```') && responseContent.endsWith('```')) {
-          responseContent = responseContent.replace(/^```[\w]*\n?|```$/g, '').trim();
-        }
+        const rawContent = extractResponseContent(webhookResponse.data);
+        const responseContent = normalizeAiContent(rawContent);
         
         console.log("Chat: Processed response content:", responseContent);
         console.log("Chat: Content length:", responseContent.length);
@@ -258,18 +172,9 @@ const Chat = () => {
           const data = JSON.parse(responseText);
           console.log("Chat: Successfully parsed JSON:", data);
 
-          // Extract the message from N8N response format
-          let rawContent = "";
-          if (Array.isArray(data) && data.length > 0 && (data[0] as any).output) {
-            rawContent = (data[0] as any).output as string;
-          } else if ((data as any).response || (data as any).message || (data as any).content) {
-            rawContent = (data as any).response || (data as any).message || (data as any).content;
-          } else {
-            rawContent = "I received your message but couldn't extract a proper response from the JSON.";
-          }
-          
-          // Normalize the extracted content
-          assistantResponse = normalizeN8NResponse(rawContent);
+          // Extract and normalize the response content
+          const rawContent = extractResponseContent(data);
+          assistantResponse = normalizeAiContent(rawContent);
         } catch (parseError) {
           console.error("Chat: JSON parse error:", parseError);
           throw new Error(
@@ -277,9 +182,9 @@ const Chat = () => {
           );
         }
       } else {
-        // Plain text/markdown response - normalize using helper function
+        // Plain text/markdown response - normalize using robust utility
         console.log("Chat: Detected plain text/markdown format response");
-        assistantResponse = normalizeN8NResponse(responseText);
+        assistantResponse = normalizeAiContent(responseText);
 
         // Log a warning about inconsistent webhook format
         console.warn(

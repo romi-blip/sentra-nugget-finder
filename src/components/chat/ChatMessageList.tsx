@@ -7,6 +7,7 @@ import { Message } from "@/types/chatSession";
 import { toast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { normalizeAiContent } from "@/lib/normalizeAiContent";
 
 interface ChatMessageListProps {
   messages: Message[];
@@ -102,7 +103,7 @@ useEffect(() => {
                           },
                         }}
                       >
-                        {message.content}
+                        {normalizeAiContent(message.content)}
                       </ReactMarkdown>
                     </div>
                   )
