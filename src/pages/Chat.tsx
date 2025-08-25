@@ -62,7 +62,9 @@ const Chat = () => {
         messageId: `msg_${Date.now()}`,
       });
 
-      if (webhookResponse.success) {
+      console.log("Chat: Global webhook raw response:", webhookResponse);
+
+      if (webhookResponse && webhookResponse.success) {
         console.log("Chat: Global webhook succeeded:", webhookResponse);
         
         // Remove typing indicator and add response
@@ -85,8 +87,12 @@ const Chat = () => {
         addMessage(activeSessionId, reply);
         abortRef.current = null;
         return;
+      } else {
+        console.log("Chat: Global webhook failed with response:", webhookResponse);
+        throw new Error(`Global webhook failed: ${JSON.stringify(webhookResponse)}`);
       }
     } catch (globalWebhookError) {
+      console.error("Chat: Global webhook error details:", globalWebhookError);
       console.log("Chat: Global webhook failed, trying legacy fallback:", globalWebhookError);
     }
 
