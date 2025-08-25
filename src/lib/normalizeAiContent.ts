@@ -48,7 +48,20 @@ export const normalizeAiContent = (content: string): string => {
     }
   );
 
-  // Step 4: Aggressively remove code fences only when they wrap the entire content
+  // Step 4: Strip markdown-labeled code fences anywhere in the content
+  // This handles cases where AI responses include ```markdown blocks that should be unwrapped
+  cleanedContent = cleanedContent.replace(
+    /```(?:markdown|md|text|plain)?\s*\n?([\s\S]*?)\n?```/gi,
+    (match, content) => content
+  );
+
+  // Also handle ~~~ fences with markdown labels
+  cleanedContent = cleanedContent.replace(
+    /~~~(?:markdown|md|text|plain)?\s*\n?([\s\S]*?)\n?~~~/gi,
+    (match, content) => content
+  );
+
+  // Step 5: Aggressively remove code fences only when they wrap the entire content
   // Handle extra whitespace, language labels, and ~~~ fences
   const fencePattern = /^[\s\u200B\uFEFF]*(?:```|~~~)([^\n]*)\n?([\s\S]*?)\n?(?:```|~~~)[\s\u200B\uFEFF]*$/;
   const fenceMatch = cleanedContent.match(fencePattern);
@@ -61,7 +74,7 @@ export const normalizeAiContent = (content: string): string => {
     }
   }
 
-  // Step 5: Dedent 4-space/tab-indented blocks if they cover most lines
+  // Step 6: Dedent 4-space/tab-indented blocks if they cover most lines
   const lines = cleanedContent.split('\n');
   const nonEmptyLines = lines.filter(line => line.trim().length > 0);
   
@@ -83,7 +96,7 @@ export const normalizeAiContent = (content: string): string => {
     }
   }
 
-  // Step 6: Convert simple HTML to markdown-ish text
+  // Step 7: Convert simple HTML to markdown-ish text
   cleanedContent = cleanedContent
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
@@ -93,7 +106,7 @@ export const normalizeAiContent = (content: string): string => {
     .replace(/<\/li>/gi, '\n')
     .replace(/<[^>]+>/g, ''); // Remove any remaining HTML tags
 
-  // Step 7: Decode HTML entities
+  // Step 8: Decode HTML entities
   cleanedContent = cleanedContent
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -107,12 +120,12 @@ export const normalizeAiContent = (content: string): string => {
     .replace(/&#8211;/g, '–')
     .replace(/&#8212;/g, '—');
 
-  // Step 8: Normalize bullets like • or – to "- "
+  // Step 9: Normalize bullets like • or – to "- "
   cleanedContent = cleanedContent
     .replace(/^[\s]*[•–]/gm, '- ')
     .replace(/\n[\s]*[•–]/g, '\n- ');
 
-  // Step 9: Remove zero-width characters and normalize whitespace
+  // Step 10: Remove zero-width characters and normalize whitespace
   cleanedContent = cleanedContent
     .replace(/[\u200B\uFEFF]/g, '') // Remove zero-width spaces
     .replace(/\r\n/g, '\n') // Normalize line endings
