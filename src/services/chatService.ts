@@ -50,10 +50,14 @@ export class ChatService {
 
   static async deleteConversation(id: string): Promise<{ error: any }> {
     // Delete messages first (cascade should handle this, but being explicit)
-    await supabase
+    const { error: messagesError } = await supabase
       .from('chat_messages')
       .delete()
       .eq('conversation_id', id);
+
+    if (messagesError) {
+      return { error: messagesError };
+    }
 
     const { error } = await supabase
       .from('chat_conversations')
@@ -152,10 +156,14 @@ export class ChatService {
     }
 
     // Delete messages first
-    await supabase
+    const { error: messagesError } = await supabase
       .from('chat_messages')
       .delete()
       .in('conversation_id', conversationIds);
+
+    if (messagesError) {
+      return { error: messagesError };
+    }
 
     // Delete conversations
     const { error } = await supabase

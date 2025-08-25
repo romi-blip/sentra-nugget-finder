@@ -183,8 +183,9 @@ export function ChatCleanup({ sessions, onBulkDelete, open, onOpenChange }: Chat
               window.location.reload();
             }}
             className="text-orange-600 hover:text-orange-700"
+            title="Clears local data only; server conversations remain"
           >
-            Clear All Data & Reload
+            Clear Local Data & Reload
           </Button>
           <Button
             variant="destructive"

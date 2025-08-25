@@ -279,6 +279,11 @@ export function useChatSessions() {
         const { error } = await ChatService.deleteConversation(sessionId);
         if (error) {
           console.error("Failed to delete conversation:", error);
+          toast({
+            title: "Error",
+            description: "Failed to delete conversation",
+            variant: "destructive",
+          });
           return;
         }
 
@@ -296,8 +301,18 @@ export function useChatSessions() {
           
           return remainingSessions;
         });
+
+        toast({
+          title: "Success",
+          description: "Conversation deleted",
+        });
       } catch (error) {
         console.error("Error deleting session:", error);
+        toast({
+          title: "Error",
+          description: "Failed to delete conversation",
+          variant: "destructive",
+        });
       }
     },
     [activeSessionId, user]
