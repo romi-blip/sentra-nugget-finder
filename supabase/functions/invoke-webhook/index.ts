@@ -105,7 +105,8 @@ serve(async (req) => {
 
     // Call the webhook
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), webhook.timeout || 120000)
+    const timeoutMs = webhook.timeout || 180000
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
       const response = await fetch(webhook.url, {

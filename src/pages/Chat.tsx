@@ -51,6 +51,9 @@ const Chat = () => {
     };
     addMessage(activeSessionId, typingMessage);
 
+    // Track any global webhook error for better UX in fallback
+    let lastGlobalError: unknown = null;
+
     // Try global webhook system first
     try {
       console.log("Chat: Attempting to use global webhook system");
@@ -92,6 +95,7 @@ const Chat = () => {
         throw new Error(`Global webhook failed: ${JSON.stringify(webhookResponse)}`);
       }
     } catch (globalWebhookError) {
+      lastGlobalError = globalWebhookError;
       console.error("Chat: Global webhook error details:", globalWebhookError);
       console.log("Chat: Global webhook failed, trying legacy fallback:", globalWebhookError);
     }
@@ -116,18 +120,20 @@ const Chat = () => {
     }
 
     if (!chatWebhookUrl) {
-      console.log("Chat: No webhook configured in either global or legacy system");
+      console.warn("Chat: Global webhook failed; no legacy webhook configured. Showing helpful error message.");
       removeMessage(activeSessionId, typingId);
+      const friendlyReason = lastGlobalError instanceof Error ? lastGlobalError.message : 'Unknown error';
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
         content:
-          "To enable AI answers using your knowledge base, configure your chat webhook in Settings. For now, here's a generic tip: share a 1-pager with a crisp value prop and 3 proof points, then a case study based on prospect industry.",
+          `AI service error: ${friendlyReason}. Please verify your webhook settings in Settings. If this was a timeout, note we now allow up to 180s.`,
       };
       addMessage(activeSessionId, reply);
       toast({
-        title: "Configure Webhook",
-        description: "Add your chat webhook in Settings to enable AI responses.",
+        title: "AI service unavailable",
+        description: `Global webhook failed: ${friendlyReason}`,
+        variant: "destructive",
       });
       return;
     }
