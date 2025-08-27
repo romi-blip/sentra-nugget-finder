@@ -20,18 +20,30 @@ export const useChatJobPolling = ({
   const [isPolling, setIsPolling] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
+  const isFetchingRef = useRef(false);
+  const hasCompletedRef = useRef(false);
 
   useEffect(() => {
     if (!jobId) {
       setIsPolling(false);
       setJob(null);
+      hasCompletedRef.current = false;
       return;
     }
 
+    // Reset completion flag for new job
+    hasCompletedRef.current = false;
     setIsPolling(true);
     startTimeRef.current = Date.now();
 
     const pollJob = async () => {
+      // Prevent concurrent polling
+      if (isFetchingRef.current || hasCompletedRef.current) {
+        return;
+      }
+      
+      isFetchingRef.current = true;
+      
       try {
         const { job: currentJob, error } = await getChatJob(jobId);
 
@@ -48,7 +60,9 @@ export const useChatJobPolling = ({
         const isJobCompleted = currentJob?.status === 'completed' || 
           (currentJob?.completed_at && currentJob?.result);
         
-        if (isJobCompleted) {
+        if (isJobCompleted && !hasCompletedRef.current) {
+          hasCompletedRef.current = true;
+          
           // Parse stringified JSON results if needed
           let result = currentJob?.result;
           if (typeof result === 'string') {
@@ -75,22 +89,32 @@ export const useChatJobPolling = ({
         console.error('Polling error:', error);
         onError?.(error instanceof Error ? error.message : 'Polling failed');
         stopPolling();
+      } finally {
+        isFetchingRef.current = false;
       }
     };
 
     const stopPolling = () => {
       setIsPolling(false);
+      isFetchingRef.current = false;
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     };
 
-    // Start polling immediately
-    pollJob();
+    // Start polling with async wrapper to avoid race conditions
+    const startPolling = async () => {
+      // First poll immediately and await it
+      await pollJob();
+      
+      // Only set interval if job hasn't already completed
+      if (!hasCompletedRef.current) {
+        intervalRef.current = setInterval(pollJob, pollingInterval);
+      }
+    };
 
-    // Set up interval for continued polling
-    intervalRef.current = setInterval(pollJob, pollingInterval);
+    startPolling();
 
     return stopPolling;
   }, [jobId, onComplete, onError, pollingInterval, maxPollingTime]);

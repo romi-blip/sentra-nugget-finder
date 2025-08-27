@@ -49,6 +49,17 @@ const Chat = () => {
       
       // Process and add the response
       const responseContent = normalizeAiContent(extractResponseContent(result));
+      
+      // Defensive check: prevent duplicate assistant messages
+      const activeSession = getActiveSession();
+      const lastMessage = activeSession?.messages[activeSession.messages.length - 1];
+      if (lastMessage?.role === "assistant" && lastMessage.content === responseContent) {
+        console.log("Chat: Skipping duplicate assistant message");
+        setCurrentJobId(null);
+        abortRef.current = null;
+        return;
+      }
+      
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
