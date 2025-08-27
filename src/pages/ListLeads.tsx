@@ -19,6 +19,7 @@ import { useEvents } from "@/hooks/useEvents";
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
+import LeadProcessingStepper from "@/components/leads/LeadProcessingStepper";
 
 const ListLeads = () => {
   const { eventId } = useParams<{ eventId: string }>();
@@ -125,6 +126,11 @@ const ListLeads = () => {
             {searchTerm ? searchResults.length : totalCount} leads
           </Badge>
         </div>
+      </div>
+
+      {/* Lead Processing Pipeline */}
+      <div className="mb-6">
+        <LeadProcessingStepper eventId={eventId} />
       </div>
 
       {/* Search */}

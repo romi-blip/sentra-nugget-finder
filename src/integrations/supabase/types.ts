@@ -469,6 +469,7 @@ export type Database = {
           created_at: string
           email: string
           email_opt_out: boolean
+          enrichment_status: string | null
           event_id: string
           first_name: string
           id: string
@@ -486,14 +487,28 @@ export type Database = {
           mobile: string | null
           notes: string | null
           phone: string | null
+          salesforce_account_id: string | null
+          salesforce_contact_id: string | null
+          salesforce_owner_id: string | null
+          salesforce_sdr_owner_id: string | null
+          salesforce_status: string | null
+          sync_errors: Json | null
+          sync_status: string | null
           title: string | null
           updated_at: string
+          validation_errors: Json | null
+          validation_status: string | null
+          zoominfo_company_country: string | null
+          zoominfo_company_state: string | null
+          zoominfo_phone_1: string | null
+          zoominfo_phone_2: string | null
         }
         Insert: {
           account_name: string
           created_at?: string
           email: string
           email_opt_out?: boolean
+          enrichment_status?: string | null
           event_id: string
           first_name: string
           id?: string
@@ -511,14 +526,28 @@ export type Database = {
           mobile?: string | null
           notes?: string | null
           phone?: string | null
+          salesforce_account_id?: string | null
+          salesforce_contact_id?: string | null
+          salesforce_owner_id?: string | null
+          salesforce_sdr_owner_id?: string | null
+          salesforce_status?: string | null
+          sync_errors?: Json | null
+          sync_status?: string | null
           title?: string | null
           updated_at?: string
+          validation_errors?: Json | null
+          validation_status?: string | null
+          zoominfo_company_country?: string | null
+          zoominfo_company_state?: string | null
+          zoominfo_phone_1?: string | null
+          zoominfo_phone_2?: string | null
         }
         Update: {
           account_name?: string
           created_at?: string
           email?: string
           email_opt_out?: boolean
+          enrichment_status?: string | null
           event_id?: string
           first_name?: string
           id?: string
@@ -536,8 +565,21 @@ export type Database = {
           mobile?: string | null
           notes?: string | null
           phone?: string | null
+          salesforce_account_id?: string | null
+          salesforce_contact_id?: string | null
+          salesforce_owner_id?: string | null
+          salesforce_sdr_owner_id?: string | null
+          salesforce_status?: string | null
+          sync_errors?: Json | null
+          sync_status?: string | null
           title?: string | null
           updated_at?: string
+          validation_errors?: Json | null
+          validation_status?: string | null
+          zoominfo_company_country?: string | null
+          zoominfo_company_state?: string | null
+          zoominfo_phone_1?: string | null
+          zoominfo_phone_2?: string | null
         }
         Relationships: [
           {
@@ -668,6 +710,59 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      lead_processing_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          event_id: string
+          failed_leads: number
+          id: string
+          processed_leads: number
+          stage: string
+          started_at: string | null
+          status: string
+          total_leads: number
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_id: string
+          failed_leads?: number
+          id?: string
+          processed_leads?: number
+          stage: string
+          started_at?: string | null
+          status?: string
+          total_leads?: number
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_id?: string
+          failed_leads?: number
+          id?: string
+          processed_leads?: number
+          stage?: string
+          started_at?: string | null
+          status?: string
+          total_leads?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_processing_jobs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       outreach_sequences: {
         Row: {
