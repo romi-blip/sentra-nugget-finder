@@ -42,6 +42,14 @@ const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
                 >
                   Chat
                 </Link>
+                {(hasRole('admin') || hasRole('super_admin')) && (
+                  <Link 
+                    to="/events" 
+                    className="text-sm font-medium transition-colors hover:text-primary"
+                  >
+                    Event Management
+                  </Link>
+                )}
                 {canAccessKnowledgeBase() && (
                   <Link 
                     to="/kb" 

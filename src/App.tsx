@@ -10,6 +10,7 @@ import KnowledgeBase from "./pages/KnowledgeBase";
 import Chat from "./pages/Chat";
 import Auth from "./pages/Auth";
 import UserManagement from "./pages/UserManagement";
+import EventManagement from "./pages/EventManagement";
 import Navbar from "@/components/layout/Navbar";
 import WebhookSettingsDialog from "@/components/settings/WebhookSettingsDialog";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -42,6 +43,14 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <Chat />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/events" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'super_admin']}>
+                  <EventManagement />
                 </ProtectedRoute>
               } 
             />

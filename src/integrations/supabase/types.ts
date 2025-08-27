@@ -463,6 +463,125 @@ export type Database = {
         }
         Relationships: []
       }
+      event_leads: {
+        Row: {
+          account_name: string
+          created_at: string
+          email: string
+          email_opt_out: boolean
+          event_id: string
+          first_name: string
+          id: string
+          last_name: string
+          latest_lead_source: string | null
+          latest_lead_source_details: string | null
+          lead_exclusion_field: string | null
+          lead_status: string | null
+          linkedin: string | null
+          mailing_city: string | null
+          mailing_country: string | null
+          mailing_state_province: string | null
+          mailing_street: string | null
+          mailing_zip_postal_code: string | null
+          mobile: string | null
+          notes: string | null
+          phone: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_name: string
+          created_at?: string
+          email: string
+          email_opt_out?: boolean
+          event_id: string
+          first_name: string
+          id?: string
+          last_name: string
+          latest_lead_source?: string | null
+          latest_lead_source_details?: string | null
+          lead_exclusion_field?: string | null
+          lead_status?: string | null
+          linkedin?: string | null
+          mailing_city?: string | null
+          mailing_country?: string | null
+          mailing_state_province?: string | null
+          mailing_street?: string | null
+          mailing_zip_postal_code?: string | null
+          mobile?: string | null
+          notes?: string | null
+          phone?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_name?: string
+          created_at?: string
+          email?: string
+          email_opt_out?: boolean
+          event_id?: string
+          first_name?: string
+          id?: string
+          last_name?: string
+          latest_lead_source?: string | null
+          latest_lead_source_details?: string | null
+          lead_exclusion_field?: string | null
+          lead_status?: string | null
+          linkedin?: string | null
+          mailing_city?: string | null
+          mailing_country?: string | null
+          mailing_state_province?: string | null
+          mailing_street?: string | null
+          mailing_zip_postal_code?: string | null
+          mobile?: string | null
+          notes?: string | null
+          phone?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_leads_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          created_at: string
+          created_by: string
+          details: string | null
+          end_date: string
+          id: string
+          name: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          details?: string | null
+          end_date: string
+          id?: string
+          name: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          details?: string | null
+          end_date?: string
+          id?: string
+          name?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       global_webhooks: {
         Row: {
           created_at: string

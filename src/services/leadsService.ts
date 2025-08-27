@@ -1,0 +1,157 @@
+import { supabase } from "@/integrations/supabase/client";
+
+export interface Lead {
+  id: string;
+  event_id: string;
+  lead_status?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  account_name: string;
+  title?: string;
+  lead_exclusion_field?: string;
+  mailing_street?: string;
+  mailing_city?: string;
+  mailing_state_province?: string;
+  mailing_zip_postal_code?: string;
+  mailing_country?: string;
+  notes?: string;
+  phone?: string;
+  mobile?: string;
+  email_opt_out: boolean;
+  linkedin?: string;
+  latest_lead_source?: string;
+  latest_lead_source_details?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateLeadPayload {
+  event_id: string;
+  lead_status?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  account_name: string;
+  title?: string;
+  lead_exclusion_field?: string;
+  mailing_street?: string;
+  mailing_city?: string;
+  mailing_state_province?: string;
+  mailing_zip_postal_code?: string;
+  mailing_country?: string;
+  notes?: string;
+  phone?: string;
+  mobile?: string;
+  email_opt_out?: boolean;
+  linkedin?: string;
+  latest_lead_source?: string;
+  latest_lead_source_details?: string;
+}
+
+export interface UpdateLeadPayload {
+  lead_status?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  account_name?: string;
+  title?: string;
+  lead_exclusion_field?: string;
+  mailing_street?: string;
+  mailing_city?: string;
+  mailing_state_province?: string;
+  mailing_zip_postal_code?: string;
+  mailing_country?: string;
+  notes?: string;
+  phone?: string;
+  mobile?: string;
+  email_opt_out?: boolean;
+  linkedin?: string;
+  latest_lead_source?: string;
+  latest_lead_source_details?: string;
+}
+
+export class LeadsService {
+  static async getLeads(eventId: string, page = 1, limit = 50): Promise<{ data: Lead[]; error: any; count: number }> {
+    const offset = (page - 1) * limit;
+
+    const { data, error, count } = await supabase
+      .from('event_leads')
+      .select('*', { count: 'exact' })
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    return { data: data || [], error, count: count || 0 };
+  }
+
+  static async createLead(payload: CreateLeadPayload): Promise<{ data: Lead | null; error: any }> {
+    const { data, error } = await supabase
+      .from('event_leads')
+      .insert(payload)
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  static async updateLead(id: string, payload: UpdateLeadPayload): Promise<{ data: Lead | null; error: any }> {
+    const { data, error } = await supabase
+      .from('event_leads')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  static async deleteLead(id: string): Promise<{ error: any }> {
+    const { error } = await supabase
+      .from('event_leads')
+      .delete()
+      .eq('id', id);
+
+    return { error };
+  }
+
+  static async deleteLeads(ids: string[]): Promise<{ error: any }> {
+    const { error } = await supabase
+      .from('event_leads')
+      .delete()
+      .in('id', ids);
+
+    return { error };
+  }
+
+  static async upsertLeads(eventId: string, leads: CreateLeadPayload[]): Promise<{ data: Lead[] | null; error: any }> {
+    // Prepare leads with event_id
+    const leadsWithEventId = leads.map(lead => ({
+      ...lead,
+      event_id: eventId,
+      email_opt_out: lead.email_opt_out ?? false,
+    }));
+
+    // Use upsert with conflict resolution on (event_id, email)
+    const { data, error } = await supabase
+      .from('event_leads')
+      .upsert(leadsWithEventId, { 
+        onConflict: 'event_id,email',
+        ignoreDuplicates: false 
+      })
+      .select();
+
+    return { data, error };
+  }
+
+  static async searchLeads(eventId: string, searchTerm: string): Promise<{ data: Lead[]; error: any }> {
+    const { data, error } = await supabase
+      .from('event_leads')
+      .select('*')
+      .eq('event_id', eventId)
+      .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,account_name.ilike.%${searchTerm}%`)
+      .order('created_at', { ascending: false });
+
+    return { data: data || [], error };
+  }
+}
