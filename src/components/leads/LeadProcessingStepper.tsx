@@ -165,7 +165,7 @@ export default function LeadProcessingStepper({ eventId, onStageComplete }: Step
         <CardTitle>Lead Processing Pipeline</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4 overflow-x-auto">
           {stages.map((stage, index) => {
             const status = getStageStatus(stage.key)
             const job = jobs[stage.key]
@@ -173,60 +173,80 @@ export default function LeadProcessingStepper({ eventId, onStageComplete }: Step
             const enabled = isStageEnabled(index)
 
             return (
-              <div
-                key={stage.key}
-                className={`p-4 border rounded-lg ${
-                  enabled ? 'border-border' : 'border-gray-200 bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    {getStatusIcon(status, isRunning)}
-                    <div>
-                      <h3 className={`font-medium ${enabled ? 'text-foreground' : 'text-gray-400'}`}>
-                        {stage.title}
-                      </h3>
-                      <p className={`text-sm ${enabled ? 'text-muted-foreground' : 'text-gray-400'}`}>
-                        {stage.description}
-                      </p>
+              <div key={stage.key} className="flex items-center">
+                <div
+                  className={`flex-1 min-w-[280px] p-4 border rounded-lg ${
+                    enabled ? 'border-border' : 'border-gray-200 bg-gray-50'
+                  }`}
+                >
+                  <div className="flex flex-col space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {getStatusIcon(status, isRunning)}
+                        <div className="flex-1">
+                          <h3 className={`font-medium text-sm ${enabled ? 'text-foreground' : 'text-gray-400'}`}>
+                            {stage.title}
+                          </h3>
+                          <p className={`text-xs ${enabled ? 'text-muted-foreground' : 'text-gray-400'}`}>
+                            {stage.description}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={getStatusColor(status)}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </Badge>
-                    <Button
-                      size="sm"
-                      onClick={() => startStage(stage.key)}
-                      disabled={!enabled || status === 'processing' || isRunning}
-                    >
-                      {isRunning ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <Play className="h-4 w-4 mr-2" />
+                    
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge className={`text-xs ${getStatusColor(status)}`}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          onClick={() => startStage(stage.key)}
+                          disabled={!enabled || status === 'processing' || isRunning}
+                          className="text-xs px-2 py-1 h-7"
+                        >
+                          {isRunning ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <Play className="h-3 w-3 mr-1" />
+                          )}
+                          {status === 'completed' ? 'Re-run' : 'Start'}
+                        </Button>
+                      </div>
+
+                      {job && (status === 'processing' || status === 'completed' || status === 'failed') && (
+                        <div className="space-y-2">
+                          <div className="text-xs text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Progress: {job.processed_leads + job.failed_leads} / {job.total_leads}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-green-600">{job.processed_leads} success</span>
+                              <span className="text-red-600">{job.failed_leads} failed</span>
+                            </div>
+                          </div>
+                          {job.total_leads > 0 && (
+                            <Progress 
+                              value={((job.processed_leads + job.failed_leads) / job.total_leads) * 100} 
+                              className="h-1.5"
+                            />
+                          )}
+                          {job.error_message && (
+                            <p className="text-xs text-red-600 truncate" title={job.error_message}>
+                              {job.error_message}
+                            </p>
+                          )}
+                        </div>
                       )}
-                      {status === 'completed' ? 'Re-run' : 'Start'}
-                    </Button>
+                    </div>
                   </div>
                 </div>
 
-                {job && (status === 'processing' || status === 'completed' || status === 'failed') && (
-                  <div className="mt-3 space-y-2">
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Progress: {job.processed_leads + job.failed_leads} / {job.total_leads}</span>
-                      <span>
-                        {job.processed_leads} successful, {job.failed_leads} failed
-                      </span>
-                    </div>
-                    {job.total_leads > 0 && (
-                      <Progress 
-                        value={((job.processed_leads + job.failed_leads) / job.total_leads) * 100} 
-                        className="h-2"
-                      />
-                    )}
-                    {job.error_message && (
-                      <p className="text-sm text-red-600 mt-1">{job.error_message}</p>
-                    )}
+                {/* Arrow connector between stages */}
+                {index < stages.length - 1 && (
+                  <div className="hidden lg:flex items-center px-2">
+                    <div className="w-6 h-0.5 bg-border"></div>
+                    <div className="w-2 h-2 rotate-45 border-r border-t border-border bg-background ml-1"></div>
                   </div>
                 )}
               </div>
