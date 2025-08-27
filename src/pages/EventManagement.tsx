@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, CalendarDays, Edit, Trash2, Upload, Users, Plus, Download } from "lucide-react";
+import { Calendar, CalendarDays, Edit, Trash2, Upload, Users, Plus, Download, Eye } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useEvents } from "@/hooks/useEvents";
 import { useEventLeads } from "@/hooks/useEventLeads";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +40,7 @@ const EventManagement = () => {
   });
 
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { events, isLoading, createEvent, updateEvent, deleteEvent, isCreating, isUpdating, isDeleting } = useEvents();
   const { leads, upsertLeads, isUploadingLeads } = useEventLeads(selectedEvent?.id || "", 1, 1000);
 
@@ -421,18 +423,29 @@ const EventManagement = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedEvent(event);
-                              setUploadDialogOpen(true);
-                            }}
-                            disabled={!event.salesforce_campaign_url}
-                          >
-                            <Upload className="h-4 w-4 mr-1" />
-                            Upload Leads
-                          </Button>
+                          {(event.lead_count && event.lead_count > 0) ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => navigate(`/lists/${event.id}/leads`)}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View Leads
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedEvent(event);
+                                setUploadDialogOpen(true);
+                              }}
+                              disabled={!event.salesforce_campaign_url}
+                            >
+                              <Upload className="h-4 w-4 mr-1" />
+                              Upload Leads
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
