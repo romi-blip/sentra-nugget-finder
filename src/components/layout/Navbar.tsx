@@ -47,7 +47,7 @@ const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
                     to="/events" 
                     className="text-sm font-medium transition-colors hover:text-primary"
                   >
-                    Event Management
+                    List Management
                   </Link>
                 )}
                 {canAccessKnowledgeBase() && (

@@ -264,36 +264,36 @@ const EventManagement = () => {
   return (
     <div className="container mx-auto py-8 px-4">
       <SEO
-        title="Event Management"
-        description="Manage events and upload lead lists for marketing campaigns"
+        title="List Management"
+        description="Manage lists and upload lead lists for marketing campaigns"
         canonicalPath="/events"
       />
 
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Event Management</h1>
-          <p className="text-muted-foreground">Create events and manage lead lists</p>
+          <h1 className="text-3xl font-bold">List Management</h1>
+          <p className="text-muted-foreground">Create lists and manage leads</p>
         </div>
         <Dialog open={createEventOpen} onOpenChange={setCreateEventOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Create Event
+              Create List
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Event</DialogTitle>
-              <DialogDescription>Add a new event to manage leads for</DialogDescription>
+              <DialogTitle>Create New List</DialogTitle>
+              <DialogDescription>Add a new list to manage leads for</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="event-name">Event Name *</Label>
+                <Label htmlFor="event-name">List Name *</Label>
                 <Input
                   id="event-name"
                   value={eventForm.name}
                   onChange={(e) => setEventForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter event name"
+                  placeholder="Enter list name"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -322,7 +322,7 @@ const EventManagement = () => {
                   id="event-details"
                   value={eventForm.details}
                   onChange={(e) => setEventForm(prev => ({ ...prev, details: e.target.value }))}
-                  placeholder="Event description or notes"
+                  placeholder="List description or notes"
                   rows={3}
                 />
               </div>
@@ -332,7 +332,7 @@ const EventManagement = () => {
                 Cancel
               </Button>
               <Button onClick={handleCreateEvent} disabled={isCreating}>
-                {isCreating ? "Creating..." : "Create Event"}
+                {isCreating ? "Creating..." : "Create List"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -341,33 +341,33 @@ const EventManagement = () => {
 
       {isLoading ? (
         <div className="flex justify-center items-center py-12">
-          <div className="text-muted-foreground">Loading events...</div>
+          <div className="text-muted-foreground">Loading lists...</div>
         </div>
       ) : (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CalendarDays className="h-5 w-5" />
-              Events
+              Lists
             </CardTitle>
-            <CardDescription>Manage your events and their associated leads</CardDescription>
+            <CardDescription>Manage your lists and their associated leads</CardDescription>
           </CardHeader>
           <CardContent>
             {events.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No events yet</h3>
-                <p className="text-muted-foreground mb-4">Create your first event to start managing leads</p>
+                <h3 className="text-lg font-semibold mb-2">No lists yet</h3>
+                <p className="text-muted-foreground mb-4">Create your first list to start managing leads</p>
                 <Button onClick={() => setCreateEventOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Event
+                  Create List
                 </Button>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Event Name</TableHead>
+                    <TableHead>List Name</TableHead>
                     <TableHead>Start Date</TableHead>
                     <TableHead>End Date</TableHead>
                     <TableHead>Leads</TableHead>
@@ -414,7 +414,7 @@ const EventManagement = () => {
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                                <AlertDialogTitle>Delete List</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   Are you sure you want to delete "{event.name}"? This will also delete all associated leads. This action cannot be undone.
                                 </AlertDialogDescription>
@@ -445,17 +445,17 @@ const EventManagement = () => {
       <Dialog open={!!editingEvent} onOpenChange={(open) => !open && setEditingEvent(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Event</DialogTitle>
-            <DialogDescription>Update event details</DialogDescription>
+            <DialogTitle>Edit List</DialogTitle>
+            <DialogDescription>Update list details</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="edit-event-name">Event Name *</Label>
+              <Label htmlFor="edit-event-name">List Name *</Label>
               <Input
                 id="edit-event-name"
                 value={eventForm.name}
                 onChange={(e) => setEventForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Enter event name"
+                placeholder="Enter list name"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -479,14 +479,14 @@ const EventManagement = () => {
               </div>
             </div>
             <div>
-              <Label htmlFor="edit-event-details">Details</Label>
-              <Textarea
-                id="edit-event-details"
-                value={eventForm.details}
-                onChange={(e) => setEventForm(prev => ({ ...prev, details: e.target.value }))}
-                placeholder="Event description or notes"
-                rows={3}
-              />
+                <Label htmlFor="edit-event-details">Details</Label>
+                <Textarea
+                  id="edit-event-details"
+                  value={eventForm.details}
+                  onChange={(e) => setEventForm(prev => ({ ...prev, details: e.target.value }))}
+                  placeholder="List description or notes"
+                  rows={3}
+                />
             </div>
           </div>
           <DialogFooter>
@@ -494,7 +494,7 @@ const EventManagement = () => {
               Cancel
             </Button>
             <Button onClick={handleUpdateEvent} disabled={isUpdating}>
-              {isUpdating ? "Updating..." : "Update Event"}
+              {isUpdating ? "Updating..." : "Update List"}
             </Button>
           </DialogFooter>
         </DialogContent>
