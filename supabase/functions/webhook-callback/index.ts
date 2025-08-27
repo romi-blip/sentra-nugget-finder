@@ -2,11 +2,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.54.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-n8n-api-key',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-n8n-api-key, x-job-id',
 }
 
 interface CallbackPayload {
-  jobId: string;
   status: 'completed' | 'failed';
   result?: any;
   error?: string;
@@ -40,15 +39,19 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Get jobId from header
+    const jobId = req.headers.get('x-job-id')
+    
     // Parse request body
     const payload: CallbackPayload = await req.json()
     console.log('Received callback payload:', payload)
+    console.log('JobId from header:', jobId)
 
-    const { jobId, status, result, error } = payload
+    const { status, result, error } = payload
 
     if (!jobId || !status) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: jobId and status' }),
+        JSON.stringify({ error: 'Missing required fields: x-job-id header and status in body' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
