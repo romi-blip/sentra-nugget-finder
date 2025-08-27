@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import Papa from "papaparse";
 import SEO from "@/components/SEO";
+import { FieldMappingDialog } from "@/components/leads/FieldMappingDialog";
 import type { Event } from "@/services/eventsService";
 import type { CreateLeadPayload } from "@/services/leadsService";
 
@@ -25,7 +26,10 @@ const EventManagement = () => {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [fieldMappingOpen, setFieldMappingOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [eventForm, setEventForm] = useState({
     name: "",
     start_date: "",
@@ -116,8 +120,6 @@ const EventManagement = () => {
       return;
     }
 
-    setUploadProgress(0);
-
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -133,87 +135,11 @@ const EventManagement = () => {
           return;
         }
 
-        // Validate required fields
-        const requiredFields = ['First Name', 'Last Name', 'Email', 'Account Name'];
         const headers = Object.keys(data[0]);
-        const missingFields = requiredFields.filter(field => !headers.includes(field));
-
-        if (missingFields.length > 0) {
-          toast({
-            title: "Missing Required Fields",
-            description: `Missing columns: ${missingFields.join(', ')}`,
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Transform data to match our schema
-        const leads: CreateLeadPayload[] = data.map(row => ({
-          event_id: selectedEvent.id,
-          lead_status: row['Lead Status'] || '',
-          first_name: row['First Name']?.trim() || '',
-          last_name: row['Last Name']?.trim() || '',
-          email: row['Email']?.trim() || '',
-          account_name: row['Account Name']?.trim() || '',
-          title: row['Title'] || '',
-          lead_exclusion_field: row['Lead Exclusion Field'] || '',
-          mailing_street: row['Mailing Street'] || '',
-          mailing_city: row['Mailing City'] || '',
-          mailing_state_province: row['Mailing State / Province'] || '',
-          mailing_zip_postal_code: row['Mailing Zip / Postal Code'] || '',
-          mailing_country: row['Mailing Country'] || '',
-          notes: row['Notes'] || '',
-          phone: row['Phone'] || '',
-          mobile: row['Mobile'] || '',
-          email_opt_out: row['Email Opt Out']?.toLowerCase() === 'true' || false,
-          linkedin: row['LinkedIn'] || '',
-          latest_lead_source: row['Latest Lead Source'] || '',
-          latest_lead_source_details: row['Latest Lead Source Details'] || '',
-        }));
-
-        // Filter out invalid rows
-        const validLeads = leads.filter(lead => 
-          lead.first_name && lead.last_name && lead.email && lead.account_name
-        );
-
-        if (validLeads.length === 0) {
-          toast({
-            title: "No Valid Leads",
-            description: "No leads found with all required fields",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        if (validLeads.length !== leads.length) {
-          toast({
-            title: "Some Leads Skipped",
-            description: `${leads.length - validLeads.length} leads were skipped due to missing required fields`,
-            variant: "destructive",
-          });
-        }
-
-        // Upload leads in batches
-        const batchSize = 500;
-        const batches = [];
-        for (let i = 0; i < validLeads.length; i += batchSize) {
-          batches.push(validLeads.slice(i, i + batchSize));
-        }
-
-        let processedBatches = 0;
-        const processBatch = async (batchIndex: number) => {
-          const batch = batches[batchIndex];
-          upsertLeads({ eventId: selectedEvent.id, leads: batch });
-          processedBatches++;
-          setUploadProgress((processedBatches / batches.length) * 100);
-        };
-
-        // Process first batch immediately
-        if (batches.length > 0) {
-          processBatch(0);
-        }
-
+        setCsvData(data);
+        setCsvHeaders(headers);
         setUploadDialogOpen(false);
+        setFieldMappingOpen(true);
         event.target.value = ''; // Reset file input
       },
       error: (error) => {
@@ -223,6 +149,87 @@ const EventManagement = () => {
           variant: "destructive",
         });
       }
+    });
+  };
+
+  const handleMappingComplete = (fieldMappings: Array<{csvColumn: string; systemField: string}>) => {
+    if (!selectedEvent || csvData.length === 0) return;
+
+    setUploadProgress(0);
+
+    // Transform data using field mappings
+    const mappingLookup = Object.fromEntries(
+      fieldMappings.map(m => [m.systemField, m.csvColumn])
+    );
+
+    const leads: CreateLeadPayload[] = csvData.map(row => ({
+      event_id: selectedEvent.id,
+      first_name: row[mappingLookup['first_name']]?.trim() || '',
+      last_name: row[mappingLookup['last_name']]?.trim() || '',
+      email: row[mappingLookup['email']]?.trim() || '',
+      account_name: row[mappingLookup['account_name']]?.trim() || '',
+      title: row[mappingLookup['title']] || '',
+      lead_status: row[mappingLookup['lead_status']] || '',
+      phone: row[mappingLookup['phone']] || '',
+      mobile: row[mappingLookup['mobile']] || '',
+      mailing_street: row[mappingLookup['mailing_street']] || '',
+      mailing_city: row[mappingLookup['mailing_city']] || '',
+      mailing_state_province: row[mappingLookup['mailing_state_province']] || '',
+      mailing_zip_postal_code: row[mappingLookup['mailing_zip_postal_code']] || '',
+      mailing_country: row[mappingLookup['mailing_country']] || '',
+      linkedin: row[mappingLookup['linkedin']] || '',
+      notes: row[mappingLookup['notes']] || '',
+      latest_lead_source: row[mappingLookup['latest_lead_source']] || '',
+      latest_lead_source_details: row[mappingLookup['latest_lead_source_details']] || '',
+      lead_exclusion_field: row[mappingLookup['lead_exclusion_field']] || '',
+      email_opt_out: row[mappingLookup['email_opt_out']]?.toLowerCase() === 'true' || false,
+    }));
+
+    // Filter out invalid rows (must have required fields)
+    const validLeads = leads.filter(lead => 
+      lead.first_name && lead.last_name && lead.email && lead.account_name
+    );
+
+    if (validLeads.length === 0) {
+      toast({
+        title: "No Valid Leads",
+        description: "No leads found with all required fields mapped",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (validLeads.length !== leads.length) {
+      toast({
+        title: "Some Leads Skipped",
+        description: `${leads.length - validLeads.length} leads were skipped due to missing required field values`,
+        variant: "destructive",
+      });
+    }
+
+    // Upload leads in batches
+    const batchSize = 500;
+    const batches = [];
+    for (let i = 0; i < validLeads.length; i += batchSize) {
+      batches.push(validLeads.slice(i, i + batchSize));
+    }
+
+    let processedBatches = 0;
+    const processBatch = async (batchIndex: number) => {
+      const batch = batches[batchIndex];
+      upsertLeads({ eventId: selectedEvent.id, leads: batch });
+      processedBatches++;
+      setUploadProgress((processedBatches / batches.length) * 100);
+    };
+
+    // Process first batch immediately
+    if (batches.length > 0) {
+      processBatch(0);
+    }
+
+    toast({
+      title: "Upload Started",
+      description: `Processing ${validLeads.length} leads in ${batches.length} batches`,
     });
   };
 
@@ -596,6 +603,15 @@ const EventManagement = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FieldMappingDialog
+        open={fieldMappingOpen}
+        onClose={() => setFieldMappingOpen(false)}
+        csvHeaders={csvHeaders}
+        csvData={csvData}
+        onMappingComplete={handleMappingComplete}
+        eventId={selectedEvent?.id || ''}
+      />
     </div>
   );
 };
