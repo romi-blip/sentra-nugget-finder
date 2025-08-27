@@ -44,7 +44,7 @@ const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
                 </Link>
                 {(hasRole('admin') || hasRole('super_admin')) && (
                   <Link 
-                    to="/events" 
+                    to="/lists" 
                     className="text-sm font-medium transition-colors hover:text-primary"
                   >
                     List Management

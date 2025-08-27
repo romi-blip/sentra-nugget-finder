@@ -47,7 +47,7 @@ const App = () => {
               } 
             />
             <Route 
-              path="/events" 
+              path="/lists" 
               element={
                 <ProtectedRoute requiredRoles={['admin', 'super_admin']}>
                   <EventManagement />

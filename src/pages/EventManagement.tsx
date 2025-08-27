@@ -266,7 +266,7 @@ const EventManagement = () => {
       <SEO
         title="List Management"
         description="Manage lists and upload lead lists for marketing campaigns"
-        canonicalPath="/events"
+        canonicalPath="/lists"
       />
 
       <div className="flex justify-between items-center mb-8">
