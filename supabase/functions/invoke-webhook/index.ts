@@ -67,6 +67,45 @@ serve(async (req) => {
 
     console.log(`Invoking webhook of type: ${type} for user: ${user.email}`)
 
+    // Auto-create chat job if missing jobId for chat webhooks
+    let enhancedPayload = payload || {};
+    if (type === 'chat' && !enhancedPayload.jobId) {
+      console.log('Auto-creating chat job for request without jobId')
+      
+      const conversationId = enhancedPayload.sessionId || `temp_${Date.now()}`;
+      const { data: jobData, error: jobError } = await supabaseClient
+        .from('chat_jobs')
+        .insert({
+          user_id: user.id,
+          conversation_id: conversationId,
+          webhook_type: 'chat',
+          payload: enhancedPayload,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (jobError) {
+        console.error('Failed to auto-create chat job:', jobError);
+        throw new Error(`Failed to create chat job: ${jobError.message}`);
+      }
+
+      // Enhance payload with jobId and callbackUrl
+      enhancedPayload = {
+        ...enhancedPayload,
+        jobId: jobData.id,
+        callbackUrl: `https://gmgrlphiopslkyxmuced.supabase.co/functions/v1/webhook-callback`
+      };
+      
+      console.log(`Auto-created chat job with ID: ${jobData.id}`);
+      
+      // Update job status to processing after webhook call
+      await supabaseClient
+        .from('chat_jobs')
+        .update({ status: 'processing' })
+        .eq('id', jobData.id);
+    }
+
     // Get the global webhook configuration
     const { data: webhook, error: webhookError } = await supabaseClient
       .from('global_webhooks')
@@ -92,7 +131,7 @@ serve(async (req) => {
       user_id: user.id,
       user_email: user.email,
       timestamp: new Date().toISOString(),
-      payload: payload || {}
+      payload: enhancedPayload
     }
 
     // Prepare headers

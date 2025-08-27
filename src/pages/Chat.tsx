@@ -11,6 +11,7 @@ import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 import { webhookService, createChatJob } from "@/services/webhookService";
 import { normalizeAiContent, extractResponseContent } from "@/lib/normalizeAiContent";
 import { useChatJobPolling } from "@/hooks/useChatJobPolling";
+import { supabase } from "@/integrations/supabase/client";
 
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -136,7 +137,7 @@ const Chat = () => {
     // Track any global webhook error for better UX in fallback
     let lastGlobalError: unknown = null;
 
-    // Try async job system first
+    // Try async job system first (preferred path)
     try {
       console.log("Chat: Attempting to use async job system");
       
@@ -163,10 +164,49 @@ const Chat = () => {
     } catch (jobError) {
       lastGlobalError = jobError;
       console.error("Chat: Async job error:", jobError);
-      console.log("Chat: Async job failed, trying legacy webhook fallback:", jobError);
+      console.log("Chat: Async job failed, trying direct invoke-webhook fallback:", jobError);
     }
 
-    // Fallback to legacy localStorage webhook system
+    // Fallback to direct invoke-webhook (will auto-create job)
+    try {
+      console.log("Chat: Attempting direct invoke-webhook fallback");
+      
+      const { data, error } = await supabase.functions.invoke('invoke-webhook', {
+        body: {
+          type: 'chat',
+          payload: {
+            message: text,
+            timestamp: new Date().toISOString(),
+            sessionId: activeSessionId,
+            messageId: `msg_${Date.now()}`,
+          }
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to invoke webhook');
+      }
+
+      // If we get a successful response, it means it's not using the job system
+      // Remove typing indicator and add response directly
+      removeMessage(activeSessionId, typingId);
+      const responseContent = normalizeAiContent(extractResponseContent(data));
+      const reply = {
+        id: `${Date.now()}a`,
+        role: "assistant" as const,
+        content: responseContent,
+      };
+      addMessage(activeSessionId, reply);
+      abortRef.current = null;
+      return;
+    } catch (invokeError) {
+      lastGlobalError = invokeError;
+      console.error("Chat: Direct invoke-webhook error:", invokeError);
+      console.log("Chat: Direct invoke-webhook failed, trying legacy localStorage fallback:", invokeError);
+    }
+
+    // Final fallback to legacy localStorage webhook system (deprecated)
+    console.warn("Chat: All modern paths failed, falling back to deprecated localStorage webhook system");
     const webhookData = localStorage.getItem("n8n_webhook_configs");
     let chatWebhookUrl: string | null = null;
 
@@ -186,19 +226,19 @@ const Chat = () => {
     }
 
     if (!chatWebhookUrl) {
-      console.warn("Chat: Global webhook failed; no legacy webhook configured. Showing helpful error message.");
+      console.error("Chat: All webhook methods failed. Showing comprehensive error message.");
       removeMessage(activeSessionId, typingId);
       const friendlyReason = lastGlobalError instanceof Error ? lastGlobalError.message : 'Unknown error';
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
         content:
-          `AI service error: ${friendlyReason}. Please verify your webhook settings in Settings. If this was a timeout, note we now allow up to 180s.`,
+          `AI service error: ${friendlyReason}. Please verify your webhook settings in Settings. All fallback methods have been exhausted.`,
       };
       addMessage(activeSessionId, reply);
       toast({
         title: "AI service unavailable",
-        description: `Global webhook failed: ${friendlyReason}`,
+        description: `All webhook methods failed: ${friendlyReason}`,
         variant: "destructive",
       });
       return;
