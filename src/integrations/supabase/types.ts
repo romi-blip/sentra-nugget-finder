@@ -557,6 +557,7 @@ export type Database = {
           end_date: string
           id: string
           name: string
+          salesforce_campaign_url: string | null
           start_date: string
           updated_at: string
         }
@@ -567,6 +568,7 @@ export type Database = {
           end_date: string
           id?: string
           name: string
+          salesforce_campaign_url?: string | null
           start_date: string
           updated_at?: string
         }
@@ -577,6 +579,7 @@ export type Database = {
           end_date?: string
           id?: string
           name?: string
+          salesforce_campaign_url?: string | null
           start_date?: string
           updated_at?: string
         }

@@ -6,6 +6,7 @@ export interface Event {
   start_date: string;
   end_date: string;
   details?: string;
+  salesforce_campaign_url?: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -17,6 +18,7 @@ export interface CreateEventPayload {
   start_date: string;
   end_date: string;
   details?: string;
+  salesforce_campaign_url?: string;
 }
 
 export interface UpdateEventPayload {
@@ -24,6 +26,7 @@ export interface UpdateEventPayload {
   start_date?: string;
   end_date?: string;
   details?: string;
+  salesforce_campaign_url?: string;
 }
 
 export class EventsService {

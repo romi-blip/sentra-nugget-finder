@@ -31,6 +31,7 @@ const EventManagement = () => {
     start_date: "",
     end_date: "",
     details: "",
+    salesforce_campaign_url: "",
   });
 
   const { toast } = useToast();
@@ -38,10 +39,10 @@ const EventManagement = () => {
   const { leads, upsertLeads, isUploadingLeads } = useEventLeads(selectedEvent?.id || "", 1, 1000);
 
   const handleCreateEvent = () => {
-    if (!eventForm.name || !eventForm.start_date || !eventForm.end_date) {
+    if (!eventForm.name || !eventForm.start_date || !eventForm.end_date || !eventForm.salesforce_campaign_url) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields including Salesforce Campaign URL",
         variant: "destructive",
       });
       return;
@@ -58,7 +59,7 @@ const EventManagement = () => {
 
     createEvent(eventForm);
     setCreateEventOpen(false);
-    setEventForm({ name: "", start_date: "", end_date: "", details: "" });
+    setEventForm({ name: "", start_date: "", end_date: "", details: "", salesforce_campaign_url: "" });
   };
 
   const handleEditEvent = (event: Event) => {
@@ -68,16 +69,17 @@ const EventManagement = () => {
       start_date: event.start_date,
       end_date: event.end_date,
       details: event.details || "",
+      salesforce_campaign_url: event.salesforce_campaign_url || "",
     });
   };
 
   const handleUpdateEvent = () => {
     if (!editingEvent) return;
 
-    if (!eventForm.name || !eventForm.start_date || !eventForm.end_date) {
+    if (!eventForm.name || !eventForm.start_date || !eventForm.end_date || !eventForm.salesforce_campaign_url) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields including Salesforce Campaign URL",
         variant: "destructive",
       });
       return;
@@ -94,7 +96,7 @@ const EventManagement = () => {
 
     updateEvent({ id: editingEvent.id, payload: eventForm });
     setEditingEvent(null);
-    setEventForm({ name: "", start_date: "", end_date: "", details: "" });
+    setEventForm({ name: "", start_date: "", end_date: "", details: "", salesforce_campaign_url: "" });
   };
 
   const handleDeleteEvent = (eventId: string) => {
@@ -296,6 +298,15 @@ const EventManagement = () => {
                   placeholder="Enter list name"
                 />
               </div>
+              <div>
+                <Label htmlFor="salesforce-campaign-url">Salesforce Campaign URL *</Label>
+                <Input
+                  id="salesforce-campaign-url"
+                  value={eventForm.salesforce_campaign_url}
+                  onChange={(e) => setEventForm(prev => ({ ...prev, salesforce_campaign_url: e.target.value }))}
+                  placeholder="Enter Salesforce campaign URL"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="start-date">Start Date *</Label>
@@ -370,6 +381,7 @@ const EventManagement = () => {
                     <TableHead>List Name</TableHead>
                     <TableHead>Start Date</TableHead>
                     <TableHead>End Date</TableHead>
+                    <TableHead>Salesforce Campaign</TableHead>
                     <TableHead>Leads</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -380,6 +392,20 @@ const EventManagement = () => {
                       <TableCell className="font-medium">{event.name}</TableCell>
                       <TableCell>{format(new Date(event.start_date), 'MMM dd, yyyy')}</TableCell>
                       <TableCell>{format(new Date(event.end_date), 'MMM dd, yyyy')}</TableCell>
+                      <TableCell>
+                        {event.salesforce_campaign_url ? (
+                          <a 
+                            href={event.salesforce_campaign_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            View Campaign
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">Not configured</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="secondary">
                           <Users className="h-3 w-3 mr-1" />
@@ -395,6 +421,7 @@ const EventManagement = () => {
                               setSelectedEvent(event);
                               setUploadDialogOpen(true);
                             }}
+                            disabled={!event.salesforce_campaign_url}
                           >
                             <Upload className="h-4 w-4 mr-1" />
                             Upload Leads
@@ -450,13 +477,24 @@ const EventManagement = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="edit-event-name">List Name *</Label>
-              <Input
-                id="edit-event-name"
-                value={eventForm.name}
-                onChange={(e) => setEventForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Enter list name"
-              />
+              <div>
+                <Label htmlFor="edit-event-name">List Name *</Label>
+                <Input
+                  id="edit-event-name"
+                  value={eventForm.name}
+                  onChange={(e) => setEventForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter list name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-salesforce-campaign-url">Salesforce Campaign URL *</Label>
+                <Input
+                  id="edit-salesforce-campaign-url"
+                  value={eventForm.salesforce_campaign_url}
+                  onChange={(e) => setEventForm(prev => ({ ...prev, salesforce_campaign_url: e.target.value }))}
+                  placeholder="Enter Salesforce campaign URL"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
