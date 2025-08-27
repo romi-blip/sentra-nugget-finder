@@ -146,35 +146,6 @@ const ListLeads = () => {
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              variant={validationFilter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('all')}
-              className="text-sm"
-            >
-              <Users className="h-3 w-3 mr-1" />
-              All ({totalCount})
-            </Button>
-            <Button
-              variant={validationFilter === 'valid' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('valid')}
-              className="text-sm"
-            >
-              Valid ({validationCounts?.validCount || 0})
-            </Button>
-            <Button
-              variant={validationFilter === 'invalid' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('invalid')}
-              className="text-sm"
-            >
-              Invalid ({validationCounts?.invalidCount || 0})
-            </Button>
-          </div>
-        </div>
       </div>
 
       {/* Lead Processing Pipeline */}
@@ -225,6 +196,38 @@ const ListLeads = () => {
           <CardDescription>
             {searchTerm ? `Results for "${searchTerm}"` : "Manage and review lead information"}
           </CardDescription>
+          
+          {/* Validation Filter Buttons */}
+          <div className="flex flex-wrap gap-2 mt-2">
+            <Button
+              variant={validationFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleFilterChange('all')}
+              className="text-sm"
+              aria-label="Show all leads"
+            >
+              <Users className="h-3 w-3 mr-1" />
+              All ({totalCount})
+            </Button>
+            <Button
+              variant={validationFilter === 'valid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleFilterChange('valid')}
+              className="text-sm"
+              aria-label="Show valid leads only"
+            >
+              Valid ({validationCounts?.validCount || 0})
+            </Button>
+            <Button
+              variant={validationFilter === 'invalid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleFilterChange('invalid')}
+              className="text-sm"
+              aria-label="Show invalid leads only"
+            >
+              Invalid ({validationCounts?.invalidCount || 0})
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
