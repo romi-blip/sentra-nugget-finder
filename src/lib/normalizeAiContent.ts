@@ -120,12 +120,19 @@ export const normalizeAiContent = (content: string): string => {
     .replace(/&#8211;/g, '–')
     .replace(/&#8212;/g, '—');
 
-  // Step 9: Normalize bullets like • or – to "- "
+  // Step 9: Decode literal escape sequences
+  cleanedContent = cleanedContent
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\r/g, '\r');
+
+  // Step 10: Normalize bullets like • or – to "- "
   cleanedContent = cleanedContent
     .replace(/^[\s]*[•–]/gm, '- ')
     .replace(/\n[\s]*[•–]/g, '\n- ');
 
-  // Step 10: Remove zero-width characters and normalize whitespace
+  // Step 11: Remove zero-width characters and normalize whitespace
   cleanedContent = cleanedContent
     .replace(/[\u200B\uFEFF]/g, '') // Remove zero-width spaces
     .replace(/\r\n/g, '\n') // Normalize line endings
@@ -143,6 +150,14 @@ export const extractResponseContent = (data: any): string => {
     return data;
   }
   
+  // Check for arrays first (before objects, since arrays are also objects)
+  if (Array.isArray(data)) {
+    // Handle array responses - join or take first element
+    if (data.length === 0) return "Empty response received.";
+    if (data.length === 1) return extractResponseContent(data[0]);
+    return data.map(item => extractResponseContent(item)).join('\n');
+  }
+  
   if (data && typeof data === 'object') {
     // Try multiple possible response fields
     return data.content || 
@@ -151,13 +166,6 @@ export const extractResponseContent = (data: any): string => {
            data.response ||
            data.text ||
            JSON.stringify(data, null, 2);
-  }
-  
-  if (Array.isArray(data)) {
-    // Handle array responses - join or take first element
-    if (data.length === 0) return "Empty response received.";
-    if (data.length === 1) return extractResponseContent(data[0]);
-    return data.map(item => extractResponseContent(item)).join('\n');
   }
   
   return "Unable to extract content from response.";
