@@ -39,11 +39,12 @@ Deno.serve(async (req) => {
 
     if (jobError) throw jobError
 
-    // Get enriched leads
+    // Get leads that passed validation and enrichment
     const { data: leads, error: leadsError } = await supabaseClient
       .from('event_leads')
       .select('*')
       .eq('event_id', event_id)
+      .eq('validation_status', 'completed')
       .eq('enrichment_status', 'completed')
 
     if (leadsError) throw leadsError

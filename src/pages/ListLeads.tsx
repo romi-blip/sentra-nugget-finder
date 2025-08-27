@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   Pagination, 
   PaginationContent, 
@@ -202,6 +203,7 @@ const ListLeads = () => {
                     <TableHead>Email</TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Title</TableHead>
+                    <TableHead>Validation</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Phone</TableHead>
@@ -209,7 +211,10 @@ const ListLeads = () => {
                 </TableHeader>
                 <TableBody>
                   {displayedLeads.map((lead) => (
-                    <TableRow key={lead.id}>
+                    <TableRow 
+                      key={lead.id}
+                      className={lead.validation_status === 'failed' ? 'opacity-60' : ''}
+                    >
                       <TableCell className="font-medium">
                         {lead.first_name} {lead.last_name}
                       </TableCell>
@@ -223,6 +228,41 @@ const ListLeads = () => {
                       </TableCell>
                       <TableCell>{lead.account_name}</TableCell>
                       <TableCell>{lead.title || '-'}</TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="cursor-pointer">
+                                {lead.validation_status === 'completed' ? (
+                                  <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-200">
+                                    Valid
+                                  </Badge>
+                                ) : lead.validation_status === 'failed' ? (
+                                  <Badge variant="destructive">
+                                    Invalid
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline">
+                                    Pending
+                                  </Badge>
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            {lead.validation_errors && lead.validation_errors.length > 0 && (
+                              <TooltipContent>
+                                <div className="max-w-sm">
+                                  <p className="font-semibold mb-1">Validation Issues:</p>
+                                  <ul className="text-sm list-disc list-inside space-y-1">
+                                    {lead.validation_errors.map((error, index) => (
+                                      <li key={index}>{error}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
                       <TableCell>
                         {lead.lead_status ? (
                           <Badge variant="outline">{lead.lead_status}</Badge>

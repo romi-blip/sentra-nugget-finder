@@ -61,39 +61,104 @@ Deno.serve(async (req) => {
     let processedCount = 0
     let failedCount = 0
 
-    // Validate each lead
-    for (const lead of leads || []) {
-      const errors = []
+  // Define validation patterns
+  const genericEmailDomains = [
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
+    'icloud.com', 'mail.com', 'protonmail.com', 'yandex.com'
+  ]
+  
+  const disposableEmailDomains = [
+    '10minutemail.com', 'tempmail.org', 'guerrillamail.com', 'mailinator.com',
+    'temp-mail.org', 'throwaway.email', 'maildrop.cc'
+  ]
+  
+  const roleBasedEmails = [
+    'admin', 'administrator', 'info', 'support', 'contact', 'sales', 'marketing',
+    'webmaster', 'noreply', 'no-reply', 'postmaster', 'root', 'mail', 'email'
+  ]
+  
+  const junkNamePatterns = [
+    /test/i, /demo/i, /sample/i, /example/i, /fake/i, /dummy/i,
+    /asdf/i, /qwerty/i, /123/i, /abc/i, /xxx/i
+  ]
 
-      // Email validation
-      if (!lead.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) {
-        errors.push('Invalid email format')
-      }
+  // Validate each lead
+  for (const lead of leads || []) {
+    const errors = []
 
-      // Required fields validation
-      if (!lead.first_name?.trim()) {
-        errors.push('First name is required')
+    // Basic email format validation
+    if (!lead.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email)) {
+      errors.push('Invalid email format')
+    } else {
+      const emailLower = lead.email.toLowerCase()
+      const emailDomain = emailLower.split('@')[1]
+      const emailLocalPart = emailLower.split('@')[0]
+      
+      // Generic email domain check
+      if (genericEmailDomains.includes(emailDomain)) {
+        errors.push('Generic email domain not allowed')
       }
-      if (!lead.last_name?.trim()) {
-        errors.push('Last name is required')
+      
+      // Disposable email domain check
+      if (disposableEmailDomains.includes(emailDomain)) {
+        errors.push('Disposable email domain not allowed')
       }
-      if (!lead.account_name?.trim()) {
-        errors.push('Account name is required')
+      
+      // Role-based email check
+      if (roleBasedEmails.some(role => emailLocalPart.startsWith(role))) {
+        errors.push('Role-based email not allowed')
       }
+    }
 
-      // Check for duplicates within the same event
-      if (lead.email) {
-        const { data: duplicates } = await supabaseClient
-          .from('event_leads')
-          .select('id')
-          .eq('event_id', event_id)
-          .eq('email', lead.email)
-          .neq('id', lead.id)
-
-        if (duplicates && duplicates.length > 0) {
-          errors.push('Duplicate email within event')
-        }
+    // Required fields validation
+    if (!lead.first_name?.trim()) {
+      errors.push('First name is required')
+    } else {
+      // Check for junk names
+      if (junkNamePatterns.some(pattern => pattern.test(lead.first_name))) {
+        errors.push('Invalid first name detected')
       }
+    }
+    
+    if (!lead.last_name?.trim()) {
+      errors.push('Last name is required')
+    } else {
+      // Check for junk names
+      if (junkNamePatterns.some(pattern => pattern.test(lead.last_name))) {
+        errors.push('Invalid last name detected')
+      }
+    }
+    
+    if (!lead.account_name?.trim()) {
+      errors.push('Account name is required')
+    } else {
+      // Check for junk company names
+      if (junkNamePatterns.some(pattern => pattern.test(lead.account_name))) {
+        errors.push('Invalid company name detected')
+      }
+    }
+
+    // Country restriction (US/Canada only)
+    const allowedCountries = ['United States', 'USA', 'US', 'Canada', 'CA']
+    if (lead.mailing_country && !allowedCountries.some(country => 
+      lead.mailing_country.toLowerCase().includes(country.toLowerCase())
+    )) {
+      errors.push('Only US and Canada leads are allowed')
+    }
+
+    // Check for duplicates within the same event
+    if (lead.email) {
+      const { data: duplicates } = await supabaseClient
+        .from('event_leads')
+        .select('id')
+        .eq('event_id', event_id)
+        .eq('email', lead.email)
+        .neq('id', lead.id)
+
+      if (duplicates && duplicates.length > 0) {
+        errors.push('Duplicate email within event')
+      }
+    }
 
       const status = errors.length > 0 ? 'failed' : 'completed'
       if (errors.length > 0) failedCount++
