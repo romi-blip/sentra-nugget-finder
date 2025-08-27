@@ -223,9 +223,15 @@ export function useChatSessions() {
 
       try {
         // Add to database
-        const { data: newMessage, error } = await ChatService.addMessage(sessionId, message);
+        const { data: newMessage, error, duplicate } = await ChatService.addMessage(sessionId, message);
         if (error) {
           console.error("Failed to add message:", error);
+          return;
+        }
+
+        // If it's a duplicate, don't add to local state
+        if (duplicate) {
+          console.log("useChatSessions: Skipping duplicate message in local state");
           return;
         }
 

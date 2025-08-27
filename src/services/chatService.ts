@@ -68,7 +68,7 @@ export class ChatService {
   }
 
   // Messages
-  static async addMessage(conversationId: string, message: Omit<Message, "timestamp">): Promise<{ data: any; error: any }> {
+  static async addMessage(conversationId: string, message: Omit<Message, "timestamp">): Promise<{ data: any; error: any; duplicate?: boolean }> {
     // Check for duplicate message within the last 10 seconds
     const tenSecondsAgo = new Date(Date.now() - 10000).toISOString();
     const { data: existingMessages } = await supabase
@@ -80,10 +80,10 @@ export class ChatService {
       .gte('created_at', tenSecondsAgo)
       .limit(1);
 
-    // If duplicate found, return the existing message instead of creating a new one
+    // If duplicate found, return the existing message with duplicate flag
     if (existingMessages && existingMessages.length > 0) {
       console.log('ChatService: Duplicate message detected, skipping insert');
-      return { data: existingMessages[0], error: null };
+      return { data: existingMessages[0], error: null, duplicate: true };
     }
 
     const { data, error } = await supabase

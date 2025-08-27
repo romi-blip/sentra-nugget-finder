@@ -22,6 +22,19 @@ export const useChatJobPolling = ({
   const startTimeRef = useRef<number | null>(null);
   const isFetchingRef = useRef(false);
   const hasCompletedRef = useRef(false);
+  
+  // Stabilize callbacks to prevent effect re-runs
+  const onCompleteRef = useRef(onComplete);
+  const onErrorRef = useRef(onError);
+  
+  // Update refs when callbacks change
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+  
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
     if (!jobId) {
@@ -31,7 +44,7 @@ export const useChatJobPolling = ({
       return;
     }
 
-    // Reset completion flag for new job
+    // Reset completion flag ONLY when jobId changes
     hasCompletedRef.current = false;
     setIsPolling(true);
     startTimeRef.current = Date.now();
@@ -49,7 +62,7 @@ export const useChatJobPolling = ({
 
         if (error) {
           console.error('Failed to poll job:', error);
-          onError?.(error.message || 'Failed to get job status');
+          onErrorRef.current?.(error.message || 'Failed to get job status');
           stopPolling();
           return;
         }
@@ -72,22 +85,22 @@ export const useChatJobPolling = ({
               // Keep as string if not valid JSON
             }
           }
-          onComplete?.(result);
+          onCompleteRef.current?.(result);
           stopPolling();
         } else if (currentJob?.status === 'failed') {
-          onError?.(currentJob.error || 'Job failed');
+          onErrorRef.current?.(currentJob.error || 'Job failed');
           stopPolling();
         } else {
           // Check if we've exceeded max polling time
           const elapsed = Date.now() - (startTimeRef.current || 0);
           if (elapsed > maxPollingTime) {
-            onError?.('Job timed out');
+            onErrorRef.current?.('Job timed out');
             stopPolling();
           }
         }
       } catch (error) {
         console.error('Polling error:', error);
-        onError?.(error instanceof Error ? error.message : 'Polling failed');
+        onErrorRef.current?.(error instanceof Error ? error.message : 'Polling failed');
         stopPolling();
       } finally {
         isFetchingRef.current = false;
@@ -117,7 +130,7 @@ export const useChatJobPolling = ({
     startPolling();
 
     return stopPolling;
-  }, [jobId, onComplete, onError, pollingInterval, maxPollingTime]);
+  }, [jobId, pollingInterval, maxPollingTime]); // Removed callback dependencies
 
   const stopPolling = () => {
     setIsPolling(false);

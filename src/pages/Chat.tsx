@@ -50,11 +50,24 @@ const Chat = () => {
       // Process and add the response
       const responseContent = normalizeAiContent(extractResponseContent(result));
       
-      // Defensive check: prevent duplicate assistant messages
+      // Robust deduplication: check recent assistant messages for exact content match
       const activeSession = getActiveSession();
-      const lastMessage = activeSession?.messages[activeSession.messages.length - 1];
-      if (lastMessage?.role === "assistant" && lastMessage.content === responseContent) {
-        console.log("Chat: Skipping duplicate assistant message");
+      const recentAssistantMessages = activeSession?.messages
+        .filter(m => m.role === "assistant")
+        .slice(-3) // Check last 3 assistant messages
+        .filter(m => m.content === responseContent);
+        
+      if (recentAssistantMessages && recentAssistantMessages.length > 0) {
+        console.log("Chat: Skipping duplicate assistant message - exact match found in recent messages");
+        setCurrentJobId(null);
+        abortRef.current = null;
+        return;
+      }
+      
+      // Also check if we're about to replace a typing indicator with the same content
+      const remainingTypingMessages = activeSession?.messages.filter(m => m.content === "⚡ AI is thinking...");
+      if (remainingTypingMessages?.length && activeSession?.messages[activeSession.messages.length - 1]?.content === responseContent) {
+        console.log("Chat: Response already exists, skipping duplicate");
         setCurrentJobId(null);
         abortRef.current = null;
         return;
