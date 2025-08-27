@@ -79,11 +79,13 @@ export const createChatJob = async (
       return { jobId: '', error: webhookError };
     }
 
-    // Update status to processing
+    // Update status to processing only if not already completed
+    // (prevents race condition with webhook callback)
     await supabase
       .from('chat_jobs')
       .update({ status: 'processing' })
-      .eq('id', data.id);
+      .eq('id', data.id)
+      .not('status', 'eq', 'completed');
 
     return { jobId: data.id };
   } catch (error) {

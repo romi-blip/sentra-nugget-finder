@@ -44,8 +44,21 @@ export const useChatJobPolling = ({
 
         setJob(currentJob);
 
-        if (currentJob?.status === 'completed') {
-          onComplete?.(currentJob.result);
+        // Check if job is completed (by status OR by having completed_at + result)
+        const isJobCompleted = currentJob?.status === 'completed' || 
+          (currentJob?.completed_at && currentJob?.result);
+        
+        if (isJobCompleted) {
+          // Parse stringified JSON results if needed
+          let result = currentJob?.result;
+          if (typeof result === 'string') {
+            try {
+              result = JSON.parse(result);
+            } catch (e) {
+              // Keep as string if not valid JSON
+            }
+          }
+          onComplete?.(result);
           stopPolling();
         } else if (currentJob?.status === 'failed') {
           onError?.(currentJob.error || 'Job failed');
