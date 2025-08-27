@@ -76,11 +76,23 @@ export const useChatJobPolling = ({
         if (isJobCompleted && !hasCompletedRef.current) {
           hasCompletedRef.current = true;
           
-          // Parse stringified JSON results if needed
+          // Parse stringified JSON results if needed - with double parsing for nested strings
           let result = currentJob?.result;
           if (typeof result === 'string') {
             try {
               result = JSON.parse(result);
+              // Try to parse again if the result is still a JSON string
+              if (typeof result === 'string') {
+                const trimmed = result.trim();
+                if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+                    (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                  try {
+                    result = JSON.parse(result);
+                  } catch (e) {
+                    // Keep the first parsed result if second parse fails
+                  }
+                }
+              }
             } catch (e) {
               // Keep as string if not valid JSON
             }

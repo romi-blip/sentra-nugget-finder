@@ -146,7 +146,20 @@ export const normalizeAiContent = (content: string): string => {
  * Extract content from various response formats
  */
 export const extractResponseContent = (data: any): string => {
+  // Handle string inputs - try to parse as JSON first
   if (typeof data === 'string') {
+    // Try to parse JSON-like strings
+    const trimmed = data.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(data);
+        return extractResponseContent(parsed);
+      } catch (e) {
+        // Not valid JSON, return as-is
+        return data;
+      }
+    }
     return data;
   }
   
@@ -159,13 +172,35 @@ export const extractResponseContent = (data: any): string => {
   }
   
   if (data && typeof data === 'object') {
-    // Try multiple possible response fields
-    return data.content || 
-           data.output || 
-           data.message || 
-           data.response ||
-           data.text ||
-           JSON.stringify(data, null, 2);
+    // Deep search for content fields - handle nested structures like data.data.content
+    const deepExtract = (obj: any, visited = new Set()): string | null => {
+      if (!obj || typeof obj !== 'object' || visited.has(obj)) return null;
+      visited.add(obj);
+      
+      // Check direct content fields first
+      const contentFields = ['content', 'output', 'message', 'response', 'text'];
+      for (const field of contentFields) {
+        if (obj[field] && typeof obj[field] === 'string' && obj[field].trim()) {
+          return obj[field];
+        }
+      }
+      
+      // Recursively search nested objects
+      for (const [key, value] of Object.entries(obj)) {
+        if (value && typeof value === 'object') {
+          const found = deepExtract(value, visited);
+          if (found) return found;
+        }
+      }
+      
+      return null;
+    };
+    
+    const extracted = deepExtract(data);
+    if (extracted) return extracted;
+    
+    // Fallback to stringified JSON if no content found
+    return JSON.stringify(data, null, 2);
   }
   
   return "Unable to extract content from response.";

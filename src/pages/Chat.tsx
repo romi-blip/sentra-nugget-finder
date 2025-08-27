@@ -190,7 +190,14 @@ const Chat = () => {
       // If we get a successful response, it means it's not using the job system
       // Remove typing indicator and add response directly
       removeMessage(activeSessionId, typingId);
-      const responseContent = normalizeAiContent(extractResponseContent(data));
+      
+      // Handle the invoke-webhook response structure properly
+      let extractedData = data;
+      if (data && typeof data === 'object' && data.data) {
+        extractedData = data.data; // Extract from wrapper if present
+      }
+      
+      const responseContent = normalizeAiContent(extractResponseContent(extractedData));
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
