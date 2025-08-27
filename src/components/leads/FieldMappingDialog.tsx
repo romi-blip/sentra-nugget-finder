@@ -227,14 +227,14 @@ export const FieldMappingDialog: React.FC<FieldMappingDialogProps> = ({
                         {field.required && <Badge variant="destructive" className="text-xs">Required</Badge>}
                       </Label>
                       <Select
-                        value={mapping?.csvColumn || ''}
-                        onValueChange={(value) => updateMapping(field.key, value)}
+                        value={mapping?.csvColumn || 'UNMAPPED'}
+                        onValueChange={(value) => updateMapping(field.key, value === 'UNMAPPED' ? '' : value)}
                       >
                         <SelectTrigger className="h-8">
                           <SelectValue placeholder="Select CSV column" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">-- Not mapped --</SelectItem>
+                          <SelectItem value="UNMAPPED">-- Not mapped --</SelectItem>
                           {csvHeaders.map(header => (
                             <SelectItem key={header} value={header}>
                               {header}
