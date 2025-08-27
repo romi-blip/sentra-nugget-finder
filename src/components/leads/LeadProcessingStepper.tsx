@@ -175,7 +175,7 @@ export default function LeadProcessingStepper({ eventId, onStageComplete }: Step
             return (
               <div key={stage.key} className="flex items-center">
                 <div
-                  className={`flex-1 min-w-[280px] p-4 border rounded-lg ${
+                  className={`flex-1 min-w-[200px] max-w-[220px] p-3 border rounded-lg ${
                     enabled ? 'border-border' : 'border-gray-200 bg-gray-50'
                   }`}
                 >
