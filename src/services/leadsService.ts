@@ -72,13 +72,19 @@ export interface UpdateLeadPayload {
 }
 
 export class LeadsService {
-  static async getLeads(eventId: string, page = 1, limit = 50): Promise<{ data: Lead[]; error: any; count: number }> {
+  static async getLeads(eventId: string, page = 1, limit = 50, validationStatus?: 'completed' | 'failed'): Promise<{ data: Lead[]; error: any; count: number }> {
     const offset = (page - 1) * limit;
 
-    const { data, error, count } = await supabase
+    let query = supabase
       .from('event_leads')
       .select('*', { count: 'exact' })
-      .eq('event_id', eventId)
+      .eq('event_id', eventId);
+
+    if (validationStatus) {
+      query = query.eq('validation_status', validationStatus);
+    }
+
+    const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -153,5 +159,33 @@ export class LeadsService {
       .order('created_at', { ascending: false });
 
     return { data: data || [], error };
+  }
+
+  static async getValidationCounts(eventId: string): Promise<{ validCount: number; invalidCount: number; error: any }> {
+    try {
+      const [validResult, invalidResult] = await Promise.all([
+        supabase
+          .from('event_leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', eventId)
+          .eq('validation_status', 'completed'),
+        supabase
+          .from('event_leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', eventId)
+          .eq('validation_status', 'failed')
+      ]);
+
+      if (validResult.error) throw validResult.error;
+      if (invalidResult.error) throw invalidResult.error;
+
+      return {
+        validCount: validResult.count || 0,
+        invalidCount: invalidResult.count || 0,
+        error: null
+      };
+    } catch (error) {
+      return { validCount: 0, invalidCount: 0, error };
+    }
   }
 }

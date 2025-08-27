@@ -2,9 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LeadsService, type Lead, type CreateLeadPayload, type UpdateLeadPayload } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 
-export function useEventLeads(eventId: string, page = 1, limit = 50) {
+export function useEventLeads(eventId: string, page = 1, limit = 50, validationFilter?: 'all' | 'valid' | 'invalid') {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const validationStatus = validationFilter === 'valid' ? 'completed' : validationFilter === 'invalid' ? 'failed' : undefined;
 
   const {
     data,
@@ -12,9 +14,9 @@ export function useEventLeads(eventId: string, page = 1, limit = 50) {
     error,
     refetch
   } = useQuery({
-    queryKey: ['event-leads', eventId, page, limit],
+    queryKey: ['event-leads', eventId, page, limit, validationFilter],
     queryFn: async () => {
-      const result = await LeadsService.getLeads(eventId, page, limit);
+      const result = await LeadsService.getLeads(eventId, page, limit, validationStatus);
       if (result.error) {
         throw new Error(result.error.message || 'Failed to fetch leads');
       }

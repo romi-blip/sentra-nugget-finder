@@ -17,6 +17,7 @@ import {
 import { ArrowLeft, Search, Users, ExternalLink } from "lucide-react";
 import { useEventLeads } from "@/hooks/useEventLeads";
 import { useEvents } from "@/hooks/useEvents";
+import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
@@ -28,12 +29,14 @@ const ListLeads = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [validationFilter, setValidationFilter] = useState<'all' | 'valid' | 'invalid'>('all');
   const { toast } = useToast();
 
   const pageSize = 50;
   
-  const { leads, totalCount, isLoading, error } = useEventLeads(eventId || "", currentPage, pageSize);
+  const { leads, totalCount, isLoading, error, refetch } = useEventLeads(eventId || "", currentPage, pageSize, validationFilter);
   const { events } = useEvents();
+  const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId || "");
   
   const currentEvent = events.find(event => event.id === eventId);
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -69,7 +72,29 @@ const ListLeads = () => {
     setSearchResults([]);
   };
 
-  const displayedLeads = searchTerm ? searchResults : leads;
+  // Apply client-side filtering when searching
+  const getFilteredSearchResults = () => {
+    if (!searchTerm || validationFilter === 'all') return searchResults;
+    return searchResults.filter(lead => {
+      if (validationFilter === 'valid') return lead.validation_status === 'completed';
+      if (validationFilter === 'invalid') return lead.validation_status === 'failed';
+      return true;
+    });
+  };
+
+  const displayedLeads = searchTerm ? getFilteredSearchResults() : leads;
+
+  const handleFilterChange = (filter: 'all' | 'valid' | 'invalid') => {
+    setValidationFilter(filter);
+    setCurrentPage(1); // Reset to first page when filter changes
+  };
+
+  const handleStageComplete = (stage: string) => {
+    if (stage === 'validate') {
+      refetchCounts();
+      refetch();
+    }
+  };
 
   if (!eventId) {
     return (
@@ -122,16 +147,39 @@ const ListLeads = () => {
         </div>
         
         <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-sm">
-            <Users className="h-3 w-3 mr-1" />
-            {searchTerm ? searchResults.length : totalCount} leads
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={validationFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleFilterChange('all')}
+              className="text-sm"
+            >
+              <Users className="h-3 w-3 mr-1" />
+              All ({totalCount})
+            </Button>
+            <Button
+              variant={validationFilter === 'valid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleFilterChange('valid')}
+              className="text-sm"
+            >
+              Valid ({validationCounts?.validCount || 0})
+            </Button>
+            <Button
+              variant={validationFilter === 'invalid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleFilterChange('invalid')}
+              className="text-sm"
+            >
+              Invalid ({validationCounts?.invalidCount || 0})
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Lead Processing Pipeline */}
       <div className="mb-6">
-        <LeadProcessingStepper eventId={eventId} />
+        <LeadProcessingStepper eventId={eventId} onStageComplete={handleStageComplete} />
       </div>
 
       {/* Search */}
@@ -165,7 +213,14 @@ const ListLeads = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            {searchTerm ? `Search Results (${searchResults.length})` : `All Leads (${totalCount})`}
+            {searchTerm 
+              ? `Search Results (${displayedLeads.length})` 
+              : validationFilter === 'all' 
+                ? `All Leads (${totalCount})`
+                : validationFilter === 'valid'
+                  ? `Valid Leads (${validationCounts?.validCount || 0})`
+                  : `Invalid Leads (${validationCounts?.invalidCount || 0})`
+            }
           </CardTitle>
           <CardDescription>
             {searchTerm ? `Results for "${searchTerm}"` : "Manage and review lead information"}

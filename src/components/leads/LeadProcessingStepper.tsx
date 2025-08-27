@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -53,12 +53,13 @@ const stages = [
 export default function LeadProcessingStepper({ eventId, onStageComplete }: StepperProps) {
   const [jobs, setJobs] = useState<Record<string, ProcessingJob>>({})
   const [currentStage, setCurrentStage] = useState<string>('')
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     fetchJobs()
   }, [eventId])
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (): Promise<Record<string, ProcessingJob>> => {
     try {
       const { data, error } = await supabase
         .from('lead_processing_jobs')
@@ -76,14 +77,22 @@ export default function LeadProcessingStepper({ eventId, onStageComplete }: Step
       })
       
       setJobs(jobsMap)
+      return jobsMap
     } catch (error) {
       console.error('Error fetching jobs:', error)
       toast.error('Failed to fetch processing status')
+      return {}
     }
   }
 
   const startStage = async (stage: string) => {
     try {
+      // Clear any existing interval
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+
       setCurrentStage(stage)
       
       const { data, error } = await supabase.functions.invoke(`leads-${stage.replace('_', '-')}`, {
@@ -95,12 +104,15 @@ export default function LeadProcessingStepper({ eventId, onStageComplete }: Step
       toast.success(`${stages.find(s => s.key === stage)?.title} started successfully`)
       
       // Poll for job updates
-      const pollInterval = setInterval(async () => {
-        await fetchJobs()
-        const job = jobs[stage]
+      pollIntervalRef.current = setInterval(async () => {
+        const latestJobs = await fetchJobs()
+        const job = latestJobs[stage]
         
         if (job && (job.status === 'completed' || job.status === 'failed')) {
-          clearInterval(pollInterval)
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current)
+            pollIntervalRef.current = null
+          }
           setCurrentStage('')
           
           if (job.status === 'completed') {
@@ -118,6 +130,16 @@ export default function LeadProcessingStepper({ eventId, onStageComplete }: Step
       setCurrentStage('')
     }
   }
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
+  }, [])
 
   const getStageStatus = (stageKey: string): 'pending' | 'processing' | 'completed' | 'failed' => {
     const job = jobs[stageKey]
