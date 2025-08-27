@@ -6,24 +6,71 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
  */
 const extractContent = (data: any): string => {
   if (typeof data === 'string') {
+    // Try to parse JSON-like strings first
+    const trimmed = data.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(data);
+        return extractContent(parsed);
+      } catch (e) {
+        // Not valid JSON, return as-is
+        return data;
+      }
+    }
     return data;
   }
   
-  if (data && typeof data === 'object') {
-    // Try multiple possible response fields in order of preference
-    return data.content || 
-           data.output || 
-           data.message || 
-           data.response ||
-           data.text ||
-           JSON.stringify(data, null, 2);
+  // Handle arrays first - with deduplication
+  if (Array.isArray(data)) {
+    if (data.length === 0) return "Empty response received.";
+    
+    // Extract content from all array items
+    const contents = data.map(item => extractContent(item)).filter(content => content && content.trim());
+    
+    // Remove duplicates and very similar content
+    const uniqueContents = contents.filter((content, index) => {
+      // Keep if it's the first occurrence or significantly different from previous ones
+      return contents.findIndex(c => c === content || (c.length > 100 && content.length > 100 && c.substring(0, 100) === content.substring(0, 100))) === index;
+    });
+    
+    if (uniqueContents.length === 0) return "No valid content found in array.";
+    if (uniqueContents.length === 1) return uniqueContents[0];
+    
+    // Join multiple unique contents
+    return uniqueContents.join('\n\n---\n\n');
   }
   
-  if (Array.isArray(data)) {
-    // Handle array responses
-    if (data.length === 0) return "Empty response received.";
-    if (data.length === 1) return extractContent(data[0]);
-    return data.map(item => extractContent(item)).join('\n');
+  if (data && typeof data === 'object') {
+    // Deep search for content fields - handle nested structures
+    const deepExtract = (obj: any, visited = new Set()): string | null => {
+      if (!obj || typeof obj !== 'object' || visited.has(obj)) return null;
+      visited.add(obj);
+      
+      // Check direct content fields first
+      const contentFields = ['content', 'output', 'message', 'response', 'text'];
+      for (const field of contentFields) {
+        if (obj[field] && typeof obj[field] === 'string' && obj[field].trim()) {
+          return obj[field];
+        }
+      }
+      
+      // Recursively search nested objects
+      for (const [key, value] of Object.entries(obj)) {
+        if (value && typeof value === 'object') {
+          const found = deepExtract(value, visited);
+          if (found) return found;
+        }
+      }
+      
+      return null;
+    };
+    
+    const extracted = deepExtract(data);
+    if (extracted) return extracted;
+    
+    // Fallback to stringified JSON if no content found
+    return JSON.stringify(data, null, 2);
   }
   
   return "Unable to extract content from response.";

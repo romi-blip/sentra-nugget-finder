@@ -197,7 +197,9 @@ const Chat = () => {
         extractedData = data.data; // Extract from wrapper if present
       }
       
+      console.log('Direct webhook response shape:', JSON.stringify(extractedData, null, 2));
       const responseContent = normalizeAiContent(extractResponseContent(extractedData));
+      console.log('Extracted and normalized content length:', responseContent.length);
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,

@@ -165,10 +165,25 @@ export const extractResponseContent = (data: any): string => {
   
   // Check for arrays first (before objects, since arrays are also objects)
   if (Array.isArray(data)) {
-    // Handle array responses - join or take first element
     if (data.length === 0) return "Empty response received.";
-    if (data.length === 1) return extractResponseContent(data[0]);
-    return data.map(item => extractResponseContent(item)).join('\n');
+    
+    // Extract content from all array items
+    const contents = data.map(item => extractResponseContent(item)).filter(content => content && content.trim());
+    
+    // Remove duplicates and very similar content (likely from n8n dual nodes)
+    const uniqueContents = contents.filter((content, index) => {
+      // Keep if it's the first occurrence or significantly different from previous ones
+      return contents.findIndex(c => 
+        c === content || 
+        (c.length > 100 && content.length > 100 && c.substring(0, 100) === content.substring(0, 100))
+      ) === index;
+    });
+    
+    if (uniqueContents.length === 0) return "No valid content found in array.";
+    if (uniqueContents.length === 1) return uniqueContents[0];
+    
+    // Join multiple unique contents with separator
+    return uniqueContents.join('\n\n---\n\n');
   }
   
   if (data && typeof data === 'object') {

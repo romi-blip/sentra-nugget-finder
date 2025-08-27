@@ -78,6 +78,8 @@ export const useChatJobPolling = ({
           
           // Parse stringified JSON results if needed - with double parsing for nested strings
           let result = currentJob?.result;
+          console.log('Raw job result shape:', JSON.stringify(result, null, 2));
+          
           if (typeof result === 'string') {
             try {
               result = JSON.parse(result);
@@ -97,6 +99,8 @@ export const useChatJobPolling = ({
               // Keep as string if not valid JSON
             }
           }
+          
+          console.log('Parsed job result shape:', JSON.stringify(result, null, 2));
           onCompleteRef.current?.(result);
           stopPolling();
         } else if (currentJob?.status === 'failed') {
