@@ -112,6 +112,56 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_jobs: {
+        Row: {
+          completed_at: string | null
+          conversation_id: string
+          created_at: string
+          error: string | null
+          id: string
+          payload: Json
+          result: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+          webhook_type: string
+        }
+        Insert: {
+          completed_at?: string | null
+          conversation_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          result?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          webhook_type: string
+        }
+        Update: {
+          completed_at?: string | null
+          conversation_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          result?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          webhook_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_jobs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
           content: string

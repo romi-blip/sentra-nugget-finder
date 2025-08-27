@@ -8,8 +8,9 @@ import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { Trash2 } from "lucide-react";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
-import { webhookService } from "@/services/webhookService";
+import { webhookService, createChatJob } from "@/services/webhookService";
 import { normalizeAiContent, extractResponseContent } from "@/lib/normalizeAiContent";
+import { useChatJobPolling } from "@/hooks/useChatJobPolling";
 
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -30,6 +31,63 @@ const Chat = () => {
 
   // Abort controller to allow stopping a generation
   const abortRef = useRef<AbortController | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+
+  // Job polling for async webhook responses
+  const { isPolling, stopPolling } = useChatJobPolling({
+    jobId: currentJobId,
+    onComplete: (result) => {
+      if (!activeSessionId) return;
+      
+      console.log("Chat: Job completed with result:", result);
+      
+      // Remove typing indicator
+      const typingMessages = getActiveSession()?.messages.filter(m => m.content === "⚡ AI is thinking...");
+      if (typingMessages?.length) {
+        removeMessage(activeSessionId, typingMessages[typingMessages.length - 1].id);
+      }
+      
+      // Process and add the response
+      const responseContent = normalizeAiContent(extractResponseContent(result));
+      const reply = {
+        id: `${Date.now()}a`,
+        role: "assistant" as const,
+        content: responseContent,
+      };
+      addMessage(activeSessionId, reply);
+      
+      setCurrentJobId(null);
+      abortRef.current = null;
+    },
+    onError: (error) => {
+      if (!activeSessionId) return;
+      
+      console.error("Chat: Job failed with error:", error);
+      
+      // Remove typing indicator
+      const typingMessages = getActiveSession()?.messages.filter(m => m.content === "⚡ AI is thinking...");
+      if (typingMessages?.length) {
+        removeMessage(activeSessionId, typingMessages[typingMessages.length - 1].id);
+      }
+      
+      // Show error message
+      const reply = {
+        id: `${Date.now()}a`,
+        role: "assistant" as const,
+        content: `Sorry, I encountered an error: ${error}. Please try again or check your webhook configuration.`,
+      };
+      addMessage(activeSessionId, reply);
+      
+      setCurrentJobId(null);
+      abortRef.current = null;
+      
+      toast({
+        title: "AI Processing Failed",
+        description: error,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSendMessage = async (text: string) => {
     if (!activeSessionId) return;
@@ -54,50 +112,34 @@ const Chat = () => {
     // Track any global webhook error for better UX in fallback
     let lastGlobalError: unknown = null;
 
-    // Try global webhook system first
+    // Try async job system first
     try {
-      console.log("Chat: Attempting to use global webhook system");
+      console.log("Chat: Attempting to use async job system");
       
-      const webhookResponse = await webhookService.chat({
+      const { jobId, error: jobError } = await createChatJob(activeSessionId, {
         message: text,
         timestamp: new Date().toISOString(),
         sessionId: activeSessionId,
         messageId: `msg_${Date.now()}`,
       });
 
-      console.log("Chat: Global webhook raw response:", webhookResponse);
-
-      if (webhookResponse && webhookResponse.success) {
-        console.log("Chat: Global webhook succeeded:", webhookResponse);
-        
-        // Remove typing indicator and add response
-        removeMessage(activeSessionId, typingId);
-        
-        // Handle different response formats using robust normalization
-        console.log("Chat: Raw webhook response:", JSON.stringify(webhookResponse, null, 2));
-        
-        const rawContent = extractResponseContent(webhookResponse.data);
-        const responseContent = normalizeAiContent(rawContent);
-        
-        console.log("Chat: Processed response content:", responseContent);
-        console.log("Chat: Content length:", responseContent.length);
-        
-        const reply = {
-          id: `${Date.now()}a`,
-          role: "assistant" as const,
-          content: responseContent,
-        };
-        addMessage(activeSessionId, reply);
-        abortRef.current = null;
-        return;
-      } else {
-        console.log("Chat: Global webhook failed with response:", webhookResponse);
-        throw new Error(`Global webhook failed: ${JSON.stringify(webhookResponse)}`);
+      if (jobError) {
+        console.error("Chat: Job creation failed:", jobError);
+        throw new Error(`Job creation failed: ${jobError.message || 'Unknown error'}`);
       }
-    } catch (globalWebhookError) {
-      lastGlobalError = globalWebhookError;
-      console.error("Chat: Global webhook error details:", globalWebhookError);
-      console.log("Chat: Global webhook failed, trying legacy fallback:", globalWebhookError);
+
+      if (jobId) {
+        console.log("Chat: Job created successfully, starting polling:", jobId);
+        setCurrentJobId(jobId);
+        abortRef.current = { abort: () => stopPolling() } as AbortController;
+        return; // Let the polling handle the response
+      }
+      
+      throw new Error("Job creation returned no job ID");
+    } catch (jobError) {
+      lastGlobalError = jobError;
+      console.error("Chat: Async job error:", jobError);
+      console.log("Chat: Async job failed, trying legacy webhook fallback:", jobError);
     }
 
     // Fallback to legacy localStorage webhook system
@@ -296,7 +338,16 @@ const Chat = () => {
               ) : (
                 <ChatMessageList messages={getActiveSession()?.messages || []} />
               )}
-              <ChatInput onSend={handleSendMessage} onStop={() => abortRef.current?.abort()} />
+              <ChatInput 
+                onSend={handleSendMessage} 
+                onStop={() => {
+                  if (isPolling) {
+                    stopPolling();
+                    setCurrentJobId(null);
+                  }
+                  abortRef.current?.abort();
+                }} 
+              />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center p-6">
