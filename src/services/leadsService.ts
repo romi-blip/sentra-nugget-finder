@@ -23,17 +23,28 @@ export interface Lead {
   latest_lead_source?: string;
   latest_lead_source_details?: string;
   validation_status?: string;
-  validation_errors?: string[];
+  validation_errors?: any;
+  sync_errors?: any;
   salesforce_status?: string;
   salesforce_status_detail?: string;
   sf_existing_account?: boolean;
   sf_existing_contact?: boolean;
   sf_existing_lead?: boolean;
   salesforce_lead_id?: string;
+  salesforce_account_id?: string;
+  salesforce_contact_id?: string;
+  salesforce_owner_id?: string;
+  salesforce_sdr_owner_id?: string;
   salesforce_account_owner_id?: string;
   salesforce_account_sdr_owner_id?: string;
   salesforce_contact_owner_id?: string;
   salesforce_contact_sdr_owner_id?: string;
+  enrichment_status?: string;
+  zoominfo_phone_1?: string;
+  zoominfo_phone_2?: string;
+  zoominfo_company_state?: string;
+  zoominfo_company_country?: string;
+  sync_status?: string;
   created_at: string;
   updated_at: string;
 }
@@ -100,7 +111,7 @@ export class LeadsService {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    return { data: data || [], error, count: count || 0 };
+    return { data: data as Lead[] || [], error, count: count || 0 };
   }
 
   static async createLead(payload: CreateLeadPayload): Promise<{ data: Lead | null; error: any }> {
@@ -110,7 +121,7 @@ export class LeadsService {
       .select()
       .single();
 
-    return { data, error };
+    return { data: data as Lead, error };
   }
 
   static async updateLead(id: string, payload: UpdateLeadPayload): Promise<{ data: Lead | null; error: any }> {
@@ -121,7 +132,7 @@ export class LeadsService {
       .select()
       .single();
 
-    return { data, error };
+    return { data: data as Lead, error };
   }
 
   static async deleteLead(id: string): Promise<{ error: any }> {
@@ -159,7 +170,7 @@ export class LeadsService {
       })
       .select();
 
-    return { data, error };
+    return { data: data as Lead[], error };
   }
 
   static async searchLeads(eventId: string, searchTerm: string): Promise<{ data: Lead[]; error: any }> {
@@ -170,7 +181,7 @@ export class LeadsService {
       .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,account_name.ilike.%${searchTerm}%`)
       .order('created_at', { ascending: false });
 
-    return { data: data || [], error };
+    return { data: data as Lead[] || [], error };
   }
 
   static async getValidationCounts(eventId: string): Promise<{ validCount: number; invalidCount: number; error: any }> {
@@ -198,6 +209,28 @@ export class LeadsService {
       };
     } catch (error) {
       return { validCount: 0, invalidCount: 0, error };
+    }
+  }
+
+  static async validateEmails(eventId: string): Promise<{ success: boolean; message: string; job_id?: string; error?: any }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('leads-validate', {
+        body: { event_id: eventId }
+      });
+
+      if (error) {
+        console.error('Email validation error:', error);
+        return { success: false, message: 'Failed to start email validation', error };
+      }
+
+      return { 
+        success: true, 
+        message: data.message || 'Email validation started successfully',
+        job_id: data.job_id 
+      };
+    } catch (error) {
+      console.error('Email validation failed:', error);
+      return { success: false, message: 'Failed to start email validation', error };
     }
   }
 
