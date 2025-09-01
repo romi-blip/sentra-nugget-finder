@@ -488,10 +488,19 @@ export type Database = {
           notes: string | null
           phone: string | null
           salesforce_account_id: string | null
+          salesforce_account_owner_id: string | null
+          salesforce_account_sdr_owner_id: string | null
           salesforce_contact_id: string | null
+          salesforce_contact_owner_id: string | null
+          salesforce_contact_sdr_owner_id: string | null
+          salesforce_lead_id: string | null
           salesforce_owner_id: string | null
           salesforce_sdr_owner_id: string | null
           salesforce_status: string | null
+          salesforce_status_detail: string | null
+          sf_existing_account: boolean | null
+          sf_existing_contact: boolean | null
+          sf_existing_lead: boolean | null
           sync_errors: Json | null
           sync_status: string | null
           title: string | null
@@ -527,10 +536,19 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           salesforce_account_id?: string | null
+          salesforce_account_owner_id?: string | null
+          salesforce_account_sdr_owner_id?: string | null
           salesforce_contact_id?: string | null
+          salesforce_contact_owner_id?: string | null
+          salesforce_contact_sdr_owner_id?: string | null
+          salesforce_lead_id?: string | null
           salesforce_owner_id?: string | null
           salesforce_sdr_owner_id?: string | null
           salesforce_status?: string | null
+          salesforce_status_detail?: string | null
+          sf_existing_account?: boolean | null
+          sf_existing_contact?: boolean | null
+          sf_existing_lead?: boolean | null
           sync_errors?: Json | null
           sync_status?: string | null
           title?: string | null
@@ -566,10 +584,19 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           salesforce_account_id?: string | null
+          salesforce_account_owner_id?: string | null
+          salesforce_account_sdr_owner_id?: string | null
           salesforce_contact_id?: string | null
+          salesforce_contact_owner_id?: string | null
+          salesforce_contact_sdr_owner_id?: string | null
+          salesforce_lead_id?: string | null
           salesforce_owner_id?: string | null
           salesforce_sdr_owner_id?: string | null
           salesforce_status?: string | null
+          salesforce_status_detail?: string | null
+          sf_existing_account?: boolean | null
+          sf_existing_contact?: boolean | null
+          sf_existing_lead?: boolean | null
           sync_errors?: Json | null
           sync_status?: string | null
           title?: string | null

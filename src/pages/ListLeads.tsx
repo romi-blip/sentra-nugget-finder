@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   Pagination, 
@@ -14,7 +16,7 @@ import {
   PaginationNext, 
   PaginationPrevious 
 } from "@/components/ui/pagination";
-import { ArrowLeft, Search, Users, ExternalLink } from "lucide-react";
+import { ArrowLeft, Search, Users, ExternalLink, Building2, User, Phone } from "lucide-react";
 import { useEventLeads } from "@/hooks/useEventLeads";
 import { useEvents } from "@/hooks/useEvents";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
@@ -90,7 +92,7 @@ const ListLeads = () => {
   };
 
   const handleStageComplete = (stage: string) => {
-    if (stage === 'validate') {
+    if (stage === 'validate' || stage === 'salesforce') {
       refetchCounts();
       refetch();
     }
@@ -262,6 +264,8 @@ const ListLeads = () => {
                     <TableHead>Company</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Validation</TableHead>
+                    <TableHead>Salesforce Status</TableHead>
+                    <TableHead>Owner Info</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Phone</TableHead>
@@ -318,6 +322,94 @@ const ListLeads = () => {
                                 </div>
                               </TooltipContent>
                             )}
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          {lead.salesforce_status_detail && (
+                            <Badge variant="outline" className="text-xs mb-1">
+                              {lead.salesforce_status_detail.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </Badge>
+                          )}
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <Checkbox 
+                                checked={lead.sf_existing_account || false} 
+                                disabled 
+                                className="h-3 w-3" 
+                              />
+                              <span className="text-xs">Existing Account</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox 
+                                checked={lead.sf_existing_contact || false} 
+                                disabled 
+                                className="h-3 w-3" 
+                              />
+                              <span className="text-xs">Existing Contact</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox 
+                                checked={lead.sf_existing_lead || false} 
+                                disabled 
+                                className="h-3 w-3" 
+                              />
+                              <span className="text-xs">Existing Lead</span>
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="cursor-pointer space-y-1">
+                                {lead.salesforce_account_owner_id && (
+                                  <div className="flex items-center gap-1">
+                                    <Building2 className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs text-muted-foreground">Account Owner</span>
+                                  </div>
+                                )}
+                                {lead.salesforce_contact_owner_id && (
+                                  <div className="flex items-center gap-1">
+                                    <User className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs text-muted-foreground">Contact Owner</span>
+                                  </div>
+                                )}
+                                {!lead.salesforce_account_owner_id && !lead.salesforce_contact_owner_id && (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="space-y-2">
+                                {lead.salesforce_account_owner_id && (
+                                  <div>
+                                    <p className="font-semibold text-xs">Account Owner:</p>
+                                    <p className="text-xs">{lead.salesforce_account_owner_id}</p>
+                                    {lead.salesforce_account_sdr_owner_id && (
+                                      <>
+                                        <p className="font-semibold text-xs mt-1">Account SDR:</p>
+                                        <p className="text-xs">{lead.salesforce_account_sdr_owner_id}</p>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                                {lead.salesforce_contact_owner_id && (
+                                  <div>
+                                    <p className="font-semibold text-xs">Contact Owner:</p>
+                                    <p className="text-xs">{lead.salesforce_contact_owner_id}</p>
+                                    {lead.salesforce_contact_sdr_owner_id && (
+                                      <>
+                                        <p className="font-semibold text-xs mt-1">Contact SDR:</p>
+                                        <p className="text-xs">{lead.salesforce_contact_sdr_owner_id}</p>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </TableCell>

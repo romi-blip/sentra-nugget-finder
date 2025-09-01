@@ -22,6 +22,18 @@ export interface Lead {
   linkedin?: string;
   latest_lead_source?: string;
   latest_lead_source_details?: string;
+  validation_status?: string;
+  validation_errors?: string[];
+  salesforce_status?: string;
+  salesforce_status_detail?: string;
+  sf_existing_account?: boolean;
+  sf_existing_contact?: boolean;
+  sf_existing_lead?: boolean;
+  salesforce_lead_id?: string;
+  salesforce_account_owner_id?: string;
+  salesforce_account_sdr_owner_id?: string;
+  salesforce_contact_owner_id?: string;
+  salesforce_contact_sdr_owner_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -186,6 +198,28 @@ export class LeadsService {
       };
     } catch (error) {
       return { validCount: 0, invalidCount: 0, error };
+    }
+  }
+
+  static async checkSalesforceStatus(eventId: string): Promise<{ success: boolean; message: string; job_id?: string; error?: any }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('leads-check-salesforce', {
+        body: { event_id: eventId }
+      });
+
+      if (error) {
+        console.error('Salesforce check error:', error);
+        return { success: false, message: 'Failed to start Salesforce check', error };
+      }
+
+      return { 
+        success: true, 
+        message: data.message || 'Salesforce check started successfully',
+        job_id: data.job_id 
+      };
+    } catch (error) {
+      console.error('Salesforce check failed:', error);
+      return { success: false, message: 'Failed to start Salesforce check', error };
     }
   }
 }

@@ -1,0 +1,114 @@
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { corsHeaders } from '../_shared/cors.ts'
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    const { leads, job_id } = await req.json()
+    console.log('Processing Salesforce callback for job:', job_id, 'with', leads?.length, 'leads')
+
+    if (!leads || !Array.isArray(leads)) {
+      throw new Error('Invalid leads data received')
+    }
+
+    let processedCount = 0
+    let failedCount = 0
+
+    // Process each lead result from N8N
+    for (const leadResult of leads) {
+      try {
+        const {
+          id,
+          salesforce_status_detail,
+          sf_existing_account,
+          sf_existing_contact,
+          sf_existing_lead,
+          salesforce_lead_id,
+          salesforce_account_owner_id,
+          salesforce_account_sdr_owner_id,
+          salesforce_contact_owner_id,
+          salesforce_contact_sdr_owner_id
+        } = leadResult
+
+        if (!id) {
+          console.error('Missing lead ID in result:', leadResult)
+          failedCount++
+          continue
+        }
+
+        // Update the lead with Salesforce status information
+        const { error } = await supabaseClient
+          .from('event_leads')
+          .update({
+            salesforce_status: 'completed',
+            salesforce_status_detail,
+            sf_existing_account: sf_existing_account || false,
+            sf_existing_contact: sf_existing_contact || false,
+            sf_existing_lead: sf_existing_lead || false,
+            salesforce_lead_id,
+            salesforce_account_owner_id,
+            salesforce_account_sdr_owner_id,
+            salesforce_contact_owner_id,
+            salesforce_contact_sdr_owner_id
+          })
+          .eq('id', id)
+
+        if (error) {
+          console.error(`Failed to update lead ${id}:`, error)
+          failedCount++
+        } else {
+          processedCount++
+          console.log(`Updated lead ${id} with status: ${salesforce_status_detail}`)
+        }
+
+      } catch (error) {
+        console.error('Error processing lead result:', error)
+        failedCount++
+      }
+    }
+
+    // Update the job status if job_id provided
+    if (job_id) {
+      await supabaseClient
+        .from('lead_processing_jobs')
+        .update({
+          status: 'completed',
+          processed_leads: processedCount,
+          failed_leads: failedCount,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', job_id)
+    }
+
+    console.log(`Salesforce callback completed: ${processedCount} processed, ${failedCount} failed`)
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        processed: processedCount,
+        failed: failedCount
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    )
+  } catch (error) {
+    console.error('Error in leads-salesforce-callback function:', error)
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    )
+  }
+})
