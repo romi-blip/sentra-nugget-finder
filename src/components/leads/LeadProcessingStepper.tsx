@@ -8,6 +8,7 @@ import { CheckCircle, Clock, Play, AlertCircle, Database, Users, FileCheck, Buil
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
+import { useLeadProcessingJob } from "@/hooks/useLeadProcessingJob";
 
 interface LeadProcessingStepperProps {
   eventId: string;
@@ -22,6 +23,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   const [isCheckingSalesforce, setIsCheckingSalesforce] = useState(false);
   const { toast } = useToast();
   const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId);
+  const { data: salesforceJob } = useLeadProcessingJob(eventId, 'check_salesforce');
 
   const handleValidateEmails = async () => {
     setIsValidating(true);
@@ -97,6 +99,34 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   const validationProgress = validationCounts ? 
     Math.round((validationCounts.validCount / (validationCounts.validCount + validationCounts.invalidCount)) * 100) : 0;
 
+  // Derive Salesforce step status from job data
+  const getSalesforceStepStatus = () => {
+    if (!salesforceJob) return 'pending';
+    
+    switch (salesforceJob.status) {
+      case 'completed': return 'completed';
+      case 'running': return 'in-progress';
+      case 'failed': return 'failed';
+      default: return 'pending';
+    }
+  };
+
+  const getSalesforceProgress = () => {
+    if (!salesforceJob || salesforceJob.total_leads === 0) return undefined;
+    return Math.round((salesforceJob.processed_leads / salesforceJob.total_leads) * 100);
+  };
+
+  const getSalesforceStats = () => {
+    if (!salesforceJob) return undefined;
+    if (salesforceJob.status === 'completed') {
+      return `${salesforceJob.processed_leads} processed, ${salesforceJob.failed_leads} failed`;
+    }
+    if (salesforceJob.status === 'running') {
+      return `${salesforceJob.processed_leads}/${salesforceJob.total_leads} processed`;
+    }
+    return undefined;
+  };
+
   const steps = [
     {
       id: 'upload',
@@ -123,10 +153,12 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
       title: 'Check Salesforce',
       description: 'Verify existing accounts and contacts',
       icon: <Building className="h-5 w-5" />,
-      status: 'pending',
+      status: getSalesforceStepStatus(),
       canStart: hasValidLeads,
       action: handleCheckSalesforce,
-      isLoading: isCheckingSalesforce,
+      isLoading: isCheckingSalesforce || salesforceJob?.status === 'running',
+      progress: getSalesforceProgress(),
+      stats: getSalesforceStats(),
       requiresPrevious: 'validate'
     },
     {
@@ -153,6 +185,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     switch (status) {
       case 'completed': return 'bg-green-100 text-green-800';
       case 'in-progress': return 'bg-blue-100 text-blue-800';
+      case 'failed': return 'bg-red-100 text-red-800';
       case 'pending': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -163,6 +196,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     switch (status) {
       case 'completed': return <CheckCircle className="h-4 w-4 text-green-600" />;
       case 'in-progress': return <Clock className="h-4 w-4 text-blue-600" />;
+      case 'failed': return <AlertCircle className="h-4 w-4 text-red-600" />;
       case 'pending': return <AlertCircle className="h-4 w-4 text-gray-400" />;
       default: return <AlertCircle className="h-4 w-4 text-gray-400" />;
     }
