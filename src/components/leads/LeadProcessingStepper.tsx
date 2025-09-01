@@ -180,28 +180,27 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {steps.map((step, index) => (
-            <div key={step.id} className="flex items-center gap-4 p-4 border rounded-lg">
-              <div className="flex-shrink-0">
-                {step.icon}
+            <div key={step.id} className="flex flex-col p-4 border rounded-lg h-full">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-shrink-0">
+                  {step.icon}
+                </div>
+                <Badge variant="outline" className={getStatusColor(step.status)}>
+                  <div className="flex items-center gap-1">
+                    {getStatusIcon(step.status, step.isLoading)}
+                    <span className="text-xs">{step.status}</span>
+                  </div>
+                </Badge>
               </div>
               
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-sm font-medium">{step.title}</h3>
-                  <Badge variant="outline" className={getStatusColor(step.status)}>
-                    <div className="flex items-center gap-1">
-                      {getStatusIcon(step.status, step.isLoading)}
-                      {step.status}
-                    </div>
-                  </Badge>
-                </div>
-                
-                <p className="text-sm text-muted-foreground mb-2">{step.description}</p>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium mb-1">{step.title}</h3>
+                <p className="text-xs text-muted-foreground mb-3">{step.description}</p>
                 
                 {step.progress !== undefined && (
-                  <div className="space-y-1">
+                  <div className="space-y-1 mb-3">
                     <Progress value={step.progress} className="h-2" />
                     <p className="text-xs text-muted-foreground">
                       {step.progress}% complete
@@ -210,17 +209,18 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                 )}
                 
                 {step.stats && (
-                  <p className="text-xs text-muted-foreground">{step.stats}</p>
+                  <p className="text-xs text-muted-foreground mb-3">{step.stats}</p>
                 )}
               </div>
               
-              <div className="flex-shrink-0">
+              <div className="mt-auto">
                 {step.action && (
                   <Button
                     size="sm"
                     onClick={step.action}
                     disabled={!step.canStart || step.isLoading}
                     variant={step.status === 'completed' ? 'outline' : 'default'}
+                    className="w-full"
                   >
                     {step.isLoading ? (
                       <Clock className="h-4 w-4 animate-spin mr-2" />
