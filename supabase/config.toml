@@ -70,3 +70,6 @@ verify_jwt = true
 
 [functions.webhook-callback]
 verify_jwt = false
+
+[functions.leads-salesforce-callback]
+verify_jwt = false
