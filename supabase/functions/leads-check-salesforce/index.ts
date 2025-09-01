@@ -30,66 +30,10 @@ Deno.serve(async (req) => {
 
     if (jobError) throw jobError
 
-    // Get validated leads
-    const { data: leads, error: leadsError } = await supabaseClient
-      .from('event_leads')
-      .select('*')
-      .eq('event_id', event_id)
-      .eq('validation_status', 'completed')
-
-    if (leadsError) throw leadsError
-
-    if (!leads || leads.length === 0) {
-      await supabaseClient
-        .from('lead_processing_jobs')
-        .update({
-          status: 'completed',
-          total_leads: 0,
-          processed_leads: 0,
-          failed_leads: 0,
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', job.id)
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'No validated leads to process',
-          processed: 0,
-          job_id: job.id
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      )
-    }
-
-    // Update job with total count
-    await supabaseClient
-      .from('lead_processing_jobs')
-      .update({ total_leads: leads.length })
-      .eq('id', job.id)
-
-    // Prepare leads data for N8N webhook
-    const leadsForWebhook = leads.map(lead => ({
-      id: lead.id,
-      first_name: lead.first_name,
-      last_name: lead.last_name,
-      email: lead.email,
-      account_name: lead.account_name,
-      title: lead.title,
-      phone: lead.phone,
-      mobile: lead.mobile,
-      mailing_city: lead.mailing_city,
-      mailing_state_province: lead.mailing_state_province,
-      mailing_country: lead.mailing_country
-    }))
-
-    // Send to N8N webhook
+    // Send minimal trigger to N8N webhook
     const webhookUrl = 'https://sentra.app.n8n.cloud/webhook/572ccfec-0a34-43c0-b23a-952c7ffcbfc0'
-    const callbackUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/leads-salesforce-callback`
     
-    console.log('Sending leads to N8N webhook:', webhookUrl)
+    console.log('Triggering N8N Salesforce check workflow:', webhookUrl)
     
     const webhookResponse = await fetch(webhookUrl, {
       method: 'POST',
@@ -97,10 +41,9 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        leads: leadsForWebhook,
+        event_id: event_id,
         job_id: job.id,
-        callback_url: callbackUrl,
-        event_id: event_id
+        trigger: 'check_salesforce'
       })
     })
 
@@ -124,13 +67,12 @@ Deno.serve(async (req) => {
     const webhookResult = await webhookResponse.text()
     console.log('N8N webhook response:', webhookResult)
 
-    console.log(`Salesforce check initiated: ${leads.length} leads sent to N8N for processing`)
+    console.log('Salesforce check triggered successfully for event:', event_id)
 
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Salesforce check initiated',
-        leads_sent: leads.length,
         job_id: job.id
       }),
       {
