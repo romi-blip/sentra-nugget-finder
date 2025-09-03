@@ -273,13 +273,6 @@ const ListLeads = () => {
         </div>
       </div>
 
-      {/* Progress Banner */}
-      {eventId && (
-        <div className="mb-6">
-          <LeadProgressBanner eventId={eventId} />
-        </div>
-      )}
-
       {/* Lead Processing Pipeline */}
       <div className="mb-6">
         <LeadProcessingStepper eventId={eventId} onStageComplete={handleStageComplete} />
@@ -555,13 +548,53 @@ const ListLeads = () => {
                 </TableHeader>
                 <TableBody>
                   {displayedLeads.map((lead) => (
-                    <LeadTableRow
+                    <TableRow 
                       key={lead.id}
-                      lead={lead}
-                      isSelected={selectedLeads.has(lead.id)}
-                      onSelectChange={(selected) => handleSelectLead(lead.id, selected)}
-                      isCompact={isCompact}
-                    />
+                      className={`${lead.validation_status === 'failed' ? 'opacity-60' : ''} ${selectedLeads.has(lead.id) ? 'bg-muted/50' : ''}`}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox 
+                          checked={selectedLeads.has(lead.id)}
+                          onCheckedChange={(checked) => handleSelectLead(lead.id, checked as boolean)}
+                        />
+                      </TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className="font-medium">{lead.first_name} {lead.last_name}</TableCell>
+                      <TableCell>
+                        <a href={`mailto:${lead.email}`} className="text-primary hover:underline">
+                          {lead.email}
+                        </a>
+                      </TableCell>
+                      <TableCell>{lead.account_name}</TableCell>
+                      <TableCell>{lead.title || '-'}</TableCell>
+                      <TableCell>
+                        {lead.validation_status === 'completed' ? (
+                          <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">Valid</Badge>
+                        ) : lead.validation_status === 'failed' ? (
+                          <Badge variant="destructive">Invalid</Badge>
+                        ) : (
+                          <Badge variant="outline">Pending</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {lead.salesforce_status === 'completed' ? (
+                          <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">Synced</Badge>
+                        ) : lead.salesforce_status === 'failed' ? (
+                          <Badge variant="destructive">Failed</Badge>
+                        ) : (
+                          <Badge variant="outline">Pending</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {lead.enrichment_status === 'completed' ? (
+                          <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">Enriched</Badge>
+                        ) : lead.enrichment_status === 'failed' ? (
+                          <Badge variant="destructive">Failed</Badge>
+                        ) : (
+                          <Badge variant="outline">Pending</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
                   ))}
                 </TableBody>
               </Table>
