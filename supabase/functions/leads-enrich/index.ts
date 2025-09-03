@@ -205,8 +205,30 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     console.error('Error in leads-enrich function:', error)
+    
+    // Try to update job status even if we caught an error
+    try {
+      if (typeof job !== 'undefined' && job?.id) {
+        await supabaseClient
+          .from('lead_processing_jobs')
+          .update({
+            status: 'failed',
+            error_message: error.message,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', job.id)
+        console.log(`Updated job ${job.id} to failed status`)
+      }
+    } catch (jobUpdateError) {
+      console.error('Failed to update job status:', jobUpdateError)
+    }
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

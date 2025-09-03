@@ -1,0 +1,1 @@
+UPDATE lead_processing_jobs SET status = 'failed', error_message = 'Function crashed with 500 error', completed_at = NOW() WHERE id = '9ecdcb27-e158-4d6e-af02-1fcd4c8ea9b1';
