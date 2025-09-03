@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
         await supabaseClient
           .from('event_leads')
           .update({
-            sync_status: syncErrors.length > 0 ? 'failed' : 'completed',
+            salesforce_status: syncErrors.length > 0 ? 'failed' : 'synced',
             sync_errors: syncErrors,
             salesforce_account_id: accountId,
             salesforce_contact_id: contactId
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
         await supabaseClient
           .from('event_leads')
           .update({
-            sync_status: 'failed',
+            salesforce_status: 'failed',
             sync_errors: [error.message]
           })
           .eq('id', lead.id)

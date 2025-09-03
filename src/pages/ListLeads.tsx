@@ -53,7 +53,7 @@ const ListLeads = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [validationFilter, setValidationFilter] = useState<'all' | 'valid' | 'invalid'>('all');
-  const [salesforceFilter, setSalesforceFilter] = useState<'all' | 'synced' | 'pending' | 'failed'>('all');
+  const [salesforceFilter, setSalesforceFilter] = useState<'all' | 'pending' | 'existing_contact' | 'existing_account' | 'existing_lead' | 'net_new' | 'synced' | 'failed'>('all');
   const [enrichmentFilter, setEnrichmentFilter] = useState<'all' | 'enriched' | 'pending' | 'failed'>('all');
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<string>('');
@@ -128,8 +128,12 @@ const ListLeads = () => {
       if (validationFilter === 'invalid' && lead.validation_status !== 'failed') return false;
       
       // Salesforce filter
-      if (salesforceFilter === 'synced' && lead.salesforce_status !== 'completed') return false;
       if (salesforceFilter === 'pending' && lead.salesforce_status !== 'pending') return false;
+      if (salesforceFilter === 'existing_contact' && lead.salesforce_status !== 'existing_contact') return false;
+      if (salesforceFilter === 'existing_account' && lead.salesforce_status !== 'existing_account') return false;
+      if (salesforceFilter === 'existing_lead' && lead.salesforce_status !== 'existing_lead') return false;
+      if (salesforceFilter === 'net_new' && lead.salesforce_status !== 'net_new') return false;
+      if (salesforceFilter === 'synced' && lead.salesforce_status !== 'synced') return false;
       if (salesforceFilter === 'failed' && lead.salesforce_status !== 'failed') return false;
       
       // Enrichment filter
@@ -327,7 +331,7 @@ const ListLeads = () => {
               </div>
 
               {/* Salesforce Filters */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-wrap">
                 <span className="text-sm text-muted-foreground">Salesforce:</span>
                 <Button
                   variant={salesforceFilter === 'all' ? 'default' : 'outline'}
@@ -338,6 +342,46 @@ const ListLeads = () => {
                   All
                 </Button>
                 <Button
+                  variant={salesforceFilter === 'pending' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('pending')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Pending
+                </Button>
+                <Button
+                  variant={salesforceFilter === 'existing_contact' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('existing_contact')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Existing Contact
+                </Button>
+                <Button
+                  variant={salesforceFilter === 'existing_account' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('existing_account')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Existing Account
+                </Button>
+                <Button
+                  variant={salesforceFilter === 'existing_lead' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('existing_lead')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Existing Lead
+                </Button>
+                <Button
+                  variant={salesforceFilter === 'net_new' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('net_new')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Net New
+                </Button>
+                <Button
                   variant={salesforceFilter === 'synced' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setSalesforceFilter('synced')}
@@ -346,12 +390,12 @@ const ListLeads = () => {
                   Synced
                 </Button>
                 <Button
-                  variant={salesforceFilter === 'pending' ? 'default' : 'outline'}
+                  variant={salesforceFilter === 'failed' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setSalesforceFilter('pending')}
+                  onClick={() => setSalesforceFilter('failed')}
                   className="h-7 px-2 text-xs"
                 >
-                  Pending
+                  Failed
                 </Button>
               </div>
 
@@ -575,8 +619,16 @@ const ListLeads = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {lead.salesforce_status === 'completed' ? (
+                        {lead.salesforce_status === 'synced' ? (
                           <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">Synced</Badge>
+                        ) : lead.salesforce_status === 'existing_contact' ? (
+                          <Badge variant="secondary" className="bg-cyan-50 text-cyan-700 border-cyan-200">Existing Contact</Badge>
+                        ) : lead.salesforce_status === 'existing_account' ? (
+                          <Badge variant="secondary" className="bg-teal-50 text-teal-700 border-teal-200">Existing Account</Badge>
+                        ) : lead.salesforce_status === 'existing_lead' ? (
+                          <Badge variant="secondary" className="bg-yellow-50 text-yellow-700 border-yellow-200">Existing Lead</Badge>
+                        ) : lead.salesforce_status === 'net_new' ? (
+                          <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-200">Net New</Badge>
                         ) : lead.salesforce_status === 'failed' ? (
                           <Badge variant="destructive">Failed</Badge>
                         ) : (

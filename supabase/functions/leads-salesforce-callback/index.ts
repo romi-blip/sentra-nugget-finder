@@ -45,11 +45,22 @@ Deno.serve(async (req) => {
           continue
         }
 
+        // Determine Salesforce status based on existing flags
+        let salesforceStatus = 'net_new' // Default for brand new records
+        
+        if (sf_existing_contact) {
+          salesforceStatus = 'existing_contact'
+        } else if (sf_existing_account) {
+          salesforceStatus = 'existing_account'  
+        } else if (sf_existing_lead) {
+          salesforceStatus = 'existing_lead'
+        }
+
         // Update the lead with Salesforce status information
         const { error } = await supabaseClient
           .from('event_leads')
           .update({
-            salesforce_status: 'completed',
+            salesforce_status: salesforceStatus,
             salesforce_status_detail,
             sf_existing_account: sf_existing_account || false,
             sf_existing_contact: sf_existing_contact || false,
@@ -67,7 +78,7 @@ Deno.serve(async (req) => {
           failedCount++
         } else {
           processedCount++
-          console.log(`Updated lead ${id} with status: ${salesforce_status_detail}`)
+          console.log(`Updated lead ${id} with status: ${salesforceStatus} - ${salesforce_status_detail}`)
         }
 
       } catch (error) {
