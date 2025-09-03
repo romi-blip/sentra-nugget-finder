@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle, Clock, Play, AlertCircle, Database, Users, FileCheck, Building, UserPlus } from "lucide-react";
+import { CheckCircle, Clock, Play, AlertCircle, Database, Users, FileCheck, Building, UserPlus, ExternalLink } from "lucide-react";
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
@@ -317,9 +317,21 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                   </div>
                 )}
                 
-                {step.stats && (
-                  <p className="text-xs text-muted-foreground mb-3">{step.stats}</p>
-                )}
+                 {step.stats && (
+                   <p className="text-xs text-muted-foreground mb-3">{step.stats}</p>
+                 )}
+                 
+                 {step.id === 'enrich' && enrichmentJob?.status === 'failed' && (
+                   <Button
+                     size="sm"
+                     variant="outline"
+                     onClick={() => window.open('https://supabase.com/dashboard/project/gmgrlphiopslkyxmuced/functions/leads-enrich/logs', '_blank')}
+                     className="w-full mb-2"
+                   >
+                     <ExternalLink className="h-4 w-4 mr-2" />
+                     View Logs
+                   </Button>
+                 )}
               </div>
               
               <div className="mt-auto">
