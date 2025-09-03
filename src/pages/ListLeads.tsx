@@ -269,6 +269,7 @@ const ListLeads = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Phone</TableHead>
+                    <TableHead>Enrichment</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -421,24 +422,63 @@ const ListLeads = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {lead.mailing_city || lead.mailing_state_province || lead.mailing_country ? (
-                          <div className="text-sm">
-                            {[lead.mailing_city, lead.mailing_state_province, lead.mailing_country]
-                              .filter(Boolean)
-                              .join(', ')}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
+                        <div className="text-sm space-y-1">
+                          {/* Original location */}
+                          {(lead.mailing_city || lead.mailing_state_province || lead.mailing_country) && (
+                            <div>
+                              {[lead.mailing_city, lead.mailing_state_province, lead.mailing_country]
+                                .filter(Boolean)
+                                .join(', ')}
+                            </div>
+                          )}
+                          {/* ZoomInfo enriched location */}
+                          {(lead.zoominfo_company_state || lead.zoominfo_company_country) && (
+                            <div className="text-primary font-medium">
+                              📍 {[lead.zoominfo_company_state, lead.zoominfo_company_country]
+                                .filter(Boolean)
+                                .join(', ')}
+                            </div>
+                          )}
+                          {!lead.mailing_city && !lead.mailing_state_province && !lead.mailing_country && 
+                           !lead.zoominfo_company_state && !lead.zoominfo_company_country && (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
-                        {lead.phone || lead.mobile ? (
-                          <div className="text-sm space-y-1">
-                            {lead.phone && <div>{lead.phone}</div>}
-                            {lead.mobile && <div className="text-muted-foreground">{lead.mobile}</div>}
-                          </div>
+                        <div className="text-sm space-y-1">
+                          {/* Original phones */}
+                          {lead.phone && <div className="flex items-center gap-1"><Phone className="h-3 w-3" />{lead.phone}</div>}
+                          {lead.mobile && <div className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{lead.mobile}</div>}
+                          {/* ZoomInfo enriched phones */}
+                          {lead.zoominfo_phone_1 && (
+                            <div className="flex items-center gap-1 text-primary font-medium">
+                              📞 {lead.zoominfo_phone_1}
+                            </div>
+                          )}
+                          {lead.zoominfo_phone_2 && (
+                            <div className="flex items-center gap-1 text-primary font-medium">
+                              📞 {lead.zoominfo_phone_2}
+                            </div>
+                          )}
+                          {!lead.phone && !lead.mobile && !lead.zoominfo_phone_1 && !lead.zoominfo_phone_2 && (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {lead.enrichment_status === 'completed' ? (
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+                            ✅ Enriched
+                          </Badge>
+                        ) : lead.enrichment_status === 'failed' ? (
+                          <Badge variant="destructive">
+                            ❌ Failed
+                          </Badge>
                         ) : (
-                          <span className="text-muted-foreground">-</span>
+                          <Badge variant="outline">
+                            ⏳ Pending
+                          </Badge>
                         )}
                       </TableCell>
                     </TableRow>

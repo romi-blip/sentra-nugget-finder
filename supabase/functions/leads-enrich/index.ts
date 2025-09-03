@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
       .insert({
         event_id,
         stage: 'enrich',
-        status: 'processing',
+        status: 'running',
         started_at: new Date().toISOString()
       })
       .select()
@@ -66,10 +66,13 @@ Deno.serve(async (req) => {
       })
     })
 
-    const authData = await authResponse.json()
     if (!authResponse.ok) {
-      throw new Error(`ZoomInfo auth failed: ${authData.message}`)
+      const errorText = await authResponse.text()
+      console.error('ZoomInfo auth failed:', authResponse.status, errorText)
+      throw new Error(`ZoomInfo auth failed: ${authResponse.status} - ${errorText}`)
     }
+
+    const authData = await authResponse.json()
 
     const accessToken = authData.jwt
     
@@ -93,6 +96,12 @@ Deno.serve(async (req) => {
             companyName: lead.account_name
           })
         })
+
+        if (!searchResponse.ok) {
+          const errorText = await searchResponse.text()
+          console.error(`ZoomInfo search failed for lead ${lead.id}:`, searchResponse.status, errorText)
+          throw new Error(`ZoomInfo search failed: ${searchResponse.status}`)
+        }
 
         const searchData = await searchResponse.json()
         
