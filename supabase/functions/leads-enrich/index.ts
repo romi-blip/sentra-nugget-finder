@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
             sync_errors: [{ 
               error: error.message, 
               timestamp: new Date().toISOString(),
-              api_product: apiProduct
+              attempted_endpoints: attemptedEndpoints || []
             }]
           })
           .eq('id', lead.id)
@@ -189,15 +189,14 @@ Deno.serve(async (req) => {
       })
       .eq('id', job.id)
 
-    console.log(`Enrichment completed using ${apiProduct} API: ${processedCount} processed, ${failedCount} failed`)
+    console.log(`Enrichment completed: ${processedCount} processed, ${failedCount} failed`)
 
     return new Response(
       JSON.stringify({
         success: true,
         processed: processedCount,
         failed: failedCount,
-        job_id: job.id,
-        api_product: apiProduct
+        job_id: job.id
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
