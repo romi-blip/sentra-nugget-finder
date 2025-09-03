@@ -83,10 +83,11 @@ Deno.serve(async (req) => {
     for (const lead of leads || []) {
       try {
         // Search for contact in ZoomInfo
-        const searchResponse = await fetch('https://api.zoominfo.com/search/person', {
+        const searchResponse = await fetch('https://api.zoominfo.com/person/search', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
+            'apikey': zoomInfoApiKey || '',
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
