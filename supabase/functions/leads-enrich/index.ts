@@ -230,6 +230,17 @@ Deno.serve(async (req) => {
             processedCount++
           } catch (err: any) {
             console.error(`Error enriching lead ${lead?.id}:`, err?.message || err)
+            
+            // Create detailed error message with endpoint info
+            let errorMessage = 'Enrichment failed'
+            if (err instanceof Error) {
+              errorMessage = err.message
+              if (attemptedEndpoints.length > 0) {
+                const endpoints = attemptedEndpoints.map(ep => `${ep.path}:${ep.status || 'unknown'}`).join(', ')
+                errorMessage = `${err.message} (endpoints: ${endpoints})`
+              }
+            }
+            
             try {
               await supabaseClient
                 .from('event_leads')
@@ -238,7 +249,7 @@ Deno.serve(async (req) => {
                   sync_errors: [
                     {
                       stage: 'enrich',
-                      error: String(err?.message || err),
+                      error: errorMessage,
                       timestamp: new Date().toISOString(),
                     },
                   ],
