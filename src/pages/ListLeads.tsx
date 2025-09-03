@@ -41,13 +41,10 @@ import {
 import { useEventLeads } from "@/hooks/useEventLeads";
 import { useEvents } from "@/hooks/useEvents";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
-
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
 import LeadProcessingStepper from "@/components/leads/LeadProcessingStepper";
-import LeadProgressBanner from "@/components/leads/LeadProgressBanner";
-import LeadTableRow from "@/components/leads/LeadTableRow";
 
 const ListLeads = () => {
   const { eventId } = useParams<{ eventId: string }>();
@@ -161,7 +158,7 @@ const ListLeads = () => {
     });
   };
 
-  const displayedLeads = getSortedData(getFilteredResults(searchTerm ? searchResults : leads));
+  const displayedLeads = getSortedData(getFilteredResults(debouncedSearch ? searchResults : leads));
 
   const handleFilterChange = (filter: 'all' | 'valid' | 'invalid') => {
     setValidationFilter(filter);
@@ -398,6 +395,7 @@ const ListLeads = () => {
                   size="sm"
                   onClick={() => {
                     setSearchTerm('');
+                    setDebouncedSearch('');
                     setValidationFilter('all');
                     setSalesforceFilter('all');
                     setEnrichmentFilter('all');
