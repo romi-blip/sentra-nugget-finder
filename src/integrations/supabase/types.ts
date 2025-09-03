@@ -484,11 +484,13 @@ export type Database = {
           mailing_state_province: string | null
           mailing_street: string | null
           mailing_zip_postal_code: string | null
+          manual_owner_email: string | null
           mobile: string | null
           notes: string | null
           phone: string | null
           salesforce_account_id: string | null
           salesforce_account_owner_id: string | null
+          salesforce_account_sdr_owner_email: string | null
           salesforce_account_sdr_owner_id: string | null
           salesforce_contact_id: string | null
           salesforce_contact_owner_id: string | null
@@ -500,7 +502,9 @@ export type Database = {
           salesforce_status_detail: string | null
           sf_existing_account: boolean | null
           sf_existing_contact: boolean | null
+          sf_existing_customer: boolean | null
           sf_existing_lead: boolean | null
+          sf_existing_opportunity: boolean | null
           sync_errors: Json | null
           sync_status: string | null
           title: string | null
@@ -532,11 +536,13 @@ export type Database = {
           mailing_state_province?: string | null
           mailing_street?: string | null
           mailing_zip_postal_code?: string | null
+          manual_owner_email?: string | null
           mobile?: string | null
           notes?: string | null
           phone?: string | null
           salesforce_account_id?: string | null
           salesforce_account_owner_id?: string | null
+          salesforce_account_sdr_owner_email?: string | null
           salesforce_account_sdr_owner_id?: string | null
           salesforce_contact_id?: string | null
           salesforce_contact_owner_id?: string | null
@@ -548,7 +554,9 @@ export type Database = {
           salesforce_status_detail?: string | null
           sf_existing_account?: boolean | null
           sf_existing_contact?: boolean | null
+          sf_existing_customer?: boolean | null
           sf_existing_lead?: boolean | null
+          sf_existing_opportunity?: boolean | null
           sync_errors?: Json | null
           sync_status?: string | null
           title?: string | null
@@ -580,11 +588,13 @@ export type Database = {
           mailing_state_province?: string | null
           mailing_street?: string | null
           mailing_zip_postal_code?: string | null
+          manual_owner_email?: string | null
           mobile?: string | null
           notes?: string | null
           phone?: string | null
           salesforce_account_id?: string | null
           salesforce_account_owner_id?: string | null
+          salesforce_account_sdr_owner_email?: string | null
           salesforce_account_sdr_owner_id?: string | null
           salesforce_contact_id?: string | null
           salesforce_contact_owner_id?: string | null
@@ -596,7 +606,9 @@ export type Database = {
           salesforce_status_detail?: string | null
           sf_existing_account?: boolean | null
           sf_existing_contact?: boolean | null
+          sf_existing_customer?: boolean | null
           sf_existing_lead?: boolean | null
+          sf_existing_opportunity?: boolean | null
           sync_errors?: Json | null
           sync_status?: string | null
           title?: string | null

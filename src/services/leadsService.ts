@@ -30,6 +30,8 @@ export interface Lead {
   sf_existing_account?: boolean;
   sf_existing_contact?: boolean;
   sf_existing_lead?: boolean;
+  sf_existing_customer?: boolean;
+  sf_existing_opportunity?: boolean;
   salesforce_lead_id?: string;
   salesforce_account_id?: string;
   salesforce_contact_id?: string;
@@ -37,8 +39,10 @@ export interface Lead {
   salesforce_sdr_owner_id?: string;
   salesforce_account_owner_id?: string;
   salesforce_account_sdr_owner_id?: string;
+  salesforce_account_sdr_owner_email?: string;
   salesforce_contact_owner_id?: string;
   salesforce_contact_sdr_owner_id?: string;
+  manual_owner_email?: string;
   enrichment_status?: string;
   zoominfo_phone_1?: string;
   zoominfo_phone_2?: string;

@@ -32,9 +32,12 @@ Deno.serve(async (req) => {
           sf_existing_account,
           sf_existing_contact,
           sf_existing_lead,
+          sf_existing_customer,
+          sf_existing_opportunity,
           salesforce_lead_id,
           salesforce_account_owner_id,
           salesforce_account_sdr_owner_id,
+          salesforce_account_sdr_owner_email,
           salesforce_contact_owner_id,
           salesforce_contact_sdr_owner_id
         } = leadResult
@@ -45,10 +48,14 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // Determine Salesforce status based on existing flags
+        // Determine Salesforce status based on existing flags with proper precedence
         let salesforceStatus = 'net_new' // Default for brand new records
         
-        if (sf_existing_contact) {
+        if (sf_existing_customer) {
+          salesforceStatus = 'existing_customer'
+        } else if (sf_existing_opportunity) {
+          salesforceStatus = 'existing_opportunity'
+        } else if (sf_existing_contact) {
           salesforceStatus = 'existing_contact'
         } else if (sf_existing_account) {
           salesforceStatus = 'existing_account'  
@@ -65,9 +72,12 @@ Deno.serve(async (req) => {
             sf_existing_account: sf_existing_account || false,
             sf_existing_contact: sf_existing_contact || false,
             sf_existing_lead: sf_existing_lead || false,
+            sf_existing_customer: sf_existing_customer || false,
+            sf_existing_opportunity: sf_existing_opportunity || false,
             salesforce_lead_id,
             salesforce_account_owner_id,
             salesforce_account_sdr_owner_id,
+            salesforce_account_sdr_owner_email,
             salesforce_contact_owner_id,
             salesforce_contact_sdr_owner_id
           })

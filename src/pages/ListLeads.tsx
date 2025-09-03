@@ -53,7 +53,7 @@ const ListLeads = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [validationFilter, setValidationFilter] = useState<'all' | 'valid' | 'invalid'>('all');
-  const [salesforceFilter, setSalesforceFilter] = useState<'all' | 'pending' | 'existing_contact' | 'existing_account' | 'existing_lead' | 'net_new' | 'synced' | 'failed'>('all');
+  const [salesforceFilter, setSalesforceFilter] = useState<'all' | 'pending' | 'existing_customer' | 'existing_opportunity' | 'existing_contact' | 'existing_account' | 'existing_lead' | 'net_new' | 'synced' | 'failed'>('all');
   const [enrichmentFilter, setEnrichmentFilter] = useState<'all' | 'enriched' | 'pending' | 'failed'>('all');
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<string>('');
@@ -129,6 +129,8 @@ const ListLeads = () => {
       
       // Salesforce filter
       if (salesforceFilter === 'pending' && lead.salesforce_status !== 'pending') return false;
+      if (salesforceFilter === 'existing_customer' && lead.salesforce_status !== 'existing_customer') return false;
+      if (salesforceFilter === 'existing_opportunity' && lead.salesforce_status !== 'existing_opportunity') return false;
       if (salesforceFilter === 'existing_contact' && lead.salesforce_status !== 'existing_contact') return false;
       if (salesforceFilter === 'existing_account' && lead.salesforce_status !== 'existing_account') return false;
       if (salesforceFilter === 'existing_lead' && lead.salesforce_status !== 'existing_lead') return false;
@@ -348,6 +350,22 @@ const ListLeads = () => {
                   className="h-7 px-2 text-xs"
                 >
                   Pending
+                </Button>
+                <Button
+                  variant={salesforceFilter === 'existing_customer' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('existing_customer')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Existing Customer
+                </Button>
+                <Button
+                  variant={salesforceFilter === 'existing_opportunity' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('existing_opportunity')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Existing Opportunity
                 </Button>
                 <Button
                   variant={salesforceFilter === 'existing_contact' ? 'default' : 'outline'}
@@ -583,6 +601,8 @@ const ListLeads = () => {
                       </div>
                     </TableHead>
                     <TableHead>Title</TableHead>
+                    <TableHead>Account SDR Owner</TableHead>
+                    <TableHead>Manual Ownership</TableHead>
                     <TableHead>Validation</TableHead>
                     <TableHead>Salesforce</TableHead>
                     <TableHead>Enrichment</TableHead>
@@ -609,6 +629,8 @@ const ListLeads = () => {
                       </TableCell>
                       <TableCell>{lead.account_name}</TableCell>
                       <TableCell>{lead.title || '-'}</TableCell>
+                      <TableCell>{lead.salesforce_account_sdr_owner_email || '-'}</TableCell>
+                      <TableCell>{lead.manual_owner_email || '-'}</TableCell>
                       <TableCell>
                         {lead.validation_status === 'completed' ? (
                           <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">Valid</Badge>
@@ -621,6 +643,10 @@ const ListLeads = () => {
                       <TableCell>
                         {lead.salesforce_status === 'synced' ? (
                           <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">Synced</Badge>
+                        ) : lead.salesforce_status === 'existing_customer' ? (
+                          <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">Existing Customer</Badge>
+                        ) : lead.salesforce_status === 'existing_opportunity' ? (
+                          <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-200">Existing Opportunity</Badge>
                         ) : lead.salesforce_status === 'existing_contact' ? (
                           <Badge variant="secondary" className="bg-cyan-50 text-cyan-700 border-cyan-200">Existing Contact</Badge>
                         ) : lead.salesforce_status === 'existing_account' ? (
