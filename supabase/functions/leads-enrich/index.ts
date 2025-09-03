@@ -111,21 +111,35 @@ Deno.serve(async (req) => {
         let companyState = null
         let companyCountry = null
 
-        if (searchResponse.ok && searchData.data && searchData.data.length > 0) {
-          const contact = searchData.data[0]
-          
-          // Extract phone numbers
-          if (contact.phones && contact.phones.length > 0) {
-            phone1 = contact.phones[0].number
-            if (contact.phones.length > 1) {
-              phone2 = contact.phones[1].number
-            }
+        if (searchData) {
+          let contact: any = null
+          if (Array.isArray(searchData?.data) && searchData.data.length > 0) {
+            contact = searchData.data[0]
+          } else if (Array.isArray(searchData) && searchData.length > 0) {
+            contact = searchData[0]
+          } else if (typeof searchData === 'object') {
+            contact = searchData
           }
 
-          // Extract company location
-          if (contact.company) {
-            companyState = contact.company.state
-            companyCountry = contact.company.country
+          if (contact) {
+            // Extract phone numbers
+            if (contact.phones && contact.phones.length > 0) {
+              phone1 = contact.phones[0].number || contact.phones[0]
+              if (contact.phones.length > 1) {
+                phone2 = contact.phones[1].number || contact.phones[1]
+              }
+            } else if (contact.phone) {
+              phone1 = contact.phone
+            }
+
+            // Extract company location
+            if (contact.company) {
+              companyState = contact.company.state || contact.company.stateCode || contact.company_state
+              companyCountry = contact.company.country || contact.company.countryCode || contact.company_country
+            } else {
+              companyState = contact.companyState || contact.company_state || null
+              companyCountry = contact.companyCountry || contact.company_country || null
+            }
           }
         }
 
