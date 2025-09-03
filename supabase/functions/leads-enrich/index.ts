@@ -187,24 +187,36 @@ Deno.serve(async (req) => {
               }
             }
 
+            // Extract enrichment data
             let phone1: string | null = null
             let phone2: string | null = null
             let companyState: string | null = null
             let companyCountry: string | null = null
 
             if (contact) {
-              const phones = (contact.phones ?? contact.phoneNumbers ?? contact.phoneList ?? []) as any[]
+              // Extract phone numbers - check various field patterns
+              const phoneFields = ['phone', 'directPhone', 'mobilePhone', 'companyPhone']
+              for (const field of phoneFields) {
+                if (contact[field] && typeof contact[field] === 'string' && !phone1) {
+                  phone1 = contact[field]
+                  break
+                }
+              }
+              
+              // Check phone arrays
+              const phones = contact.phones ?? contact.phoneNumbers ?? contact.phoneList ?? []
               if (Array.isArray(phones) && phones.length > 0) {
                 const p0 = phones[0]
-                phone1 = typeof p0 === 'string' ? p0 : (p0.number ?? p0.phone ?? null)
+                if (!phone1) {
+                  phone1 = typeof p0 === 'string' ? p0 : (p0.number ?? p0.phone ?? null)
+                }
                 if (phones.length > 1) {
                   const p1 = phones[1]
                   phone2 = typeof p1 === 'string' ? p1 : (p1.number ?? p1.phone ?? null)
                 }
-              } else if (contact.phone) {
-                phone1 = contact.phone
               }
 
+              // Extract company location - multiple possible structures
               const comp = contact.company ?? contact.currentCompany ?? null
               if (comp) {
                 companyState = comp.state || comp.stateCode || comp.companyState || null
@@ -213,6 +225,10 @@ Deno.serve(async (req) => {
                 companyState = contact.companyState || contact.company_state || null
                 companyCountry = contact.companyCountry || contact.company_country || null
               }
+              
+              console.log(`Enriched lead ${lead.id}: phone=${phone1 ? 'found' : 'none'}, state=${companyState || 'none'}, country=${companyCountry || 'none'}`)
+            } else {
+              console.log(`No contact data found for lead ${lead.id}`)
             }
 
             await supabaseClient
