@@ -1,0 +1,1 @@
+UPDATE lead_processing_jobs SET status = 'failed', error_message = 'Job timeout - stuck in running state', completed_at = NOW() WHERE id = '2ec040e0-fb2b-4ebb-a86e-5e13bdae37bd';
