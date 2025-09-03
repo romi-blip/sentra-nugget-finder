@@ -45,52 +45,22 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  let supabaseClient: ReturnType<typeof createClient> | null = null
-  let job: any | null = null
+  // Init Supabase admin client
+  const supabaseClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
 
   try {
-    // Init Supabase admin client
-    supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
     const { event_id } = await req.json()
     if (!event_id) {
       return new Response(JSON.stringify({ success: false, error: 'Missing event_id' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    console.log('Starting enrichment for event:', event_id)
+    console.log('Starting enrichment request for event:', event_id)
 
-    // ZoomInfo creds
-    const zoomInfoApiKey = Deno.env.get('ZOOMINFO_API_KEY')
-    const zoomInfoUsername = Deno.env.get('ZOOMINFO_USERNAME')
-    const zoomInfoPassword = Deno.env.get('ZOOMINFO_PASSWORD')
-
-    if (!zoomInfoApiKey || !zoomInfoUsername || !zoomInfoPassword) {
-      throw new Error('Missing ZoomInfo credentials')
-    }
-
-    // Create processing job
-    {
-      const { data, error } = await (supabaseClient as any)
-        .from('lead_processing_jobs')
-        .insert({
-          event_id,
-          stage: 'enrich',
-          status: 'running',
-          started_at: new Date().toISOString(),
-          processed_leads: 0,
-          failed_leads: 0
-        })
-        .select()
-        .single()
-      if (error) throw error
-      job = data
-    }
-
-    // Get leads that passed validation and Salesforce check
-    const { data: leads, error: leadsError } = await (supabaseClient as any)
+    // Get candidate leads and count upfront
+    const { data: leads, error: leadsError } = await supabaseClient
       .from('event_leads')
       .select('*')
       .eq('event_id', event_id)
@@ -101,233 +71,224 @@ Deno.serve(async (req) => {
 
     const totalLeads = leads?.length || 0
 
-    // Update job with total count
-    await (supabaseClient as any)
-      .from('lead_processing_jobs')
-      .update({ total_leads: totalLeads })
-      .eq('id', job.id)
+    // Supersede any existing running enrich jobs for this event
+    try {
+      await supabaseClient
+        .from('lead_processing_jobs')
+        .update({ status: 'failed', error_message: 'Superseded by a new enrichment run', completed_at: new Date().toISOString() })
+        .eq('event_id', event_id)
+        .eq('stage', 'enrich')
+        .eq('status', 'running')
+    } catch (e) {
+      console.warn('Failed to supersede previous jobs:', e)
+    }
 
-    if (!leads || leads.length === 0) {
-      await (supabaseClient as any)
+    // Create processing job (status: running)
+    const { data: job, error: jobError } = await supabaseClient
+      .from('lead_processing_jobs')
+      .insert({
+        event_id,
+        stage: 'enrich',
+        status: 'running',
+        total_leads: totalLeads,
+        processed_leads: 0,
+        failed_leads: 0,
+        started_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (jobError) throw jobError
+
+    // If nothing to process, complete immediately
+    if (totalLeads === 0) {
+      await supabaseClient
         .from('lead_processing_jobs')
         .update({ status: 'completed', completed_at: new Date().toISOString() })
         .eq('id', job.id)
 
-      return new Response(JSON.stringify({ success: true, processed: 0, failed: 0, job_id: job.id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ success: true, message: 'No leads to enrich', job_id: job.id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Authenticate with ZoomInfo
-    const authRes = await fetchWithRetry(`${ZI_BASE_URL}/authenticate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: zoomInfoUsername, password: zoomInfoPassword })
-    }, { retries: 2, minDelayMs: 300, maxDelayMs: 1500 })
-
-    const authData = await authRes.json()
-    const accessToken = authData?.jwt
-    if (!accessToken) {
-      throw new Error('ZoomInfo auth failed: missing jwt in response')
-    }
-
-    let processedCount = 0
-    let failedCount = 0
-
-    // Per-lead enrichment
-    for (const lead of leads) {
-      const attemptedEndpoints: { path: string; status?: number; note?: string }[] = []
+    // Kick off enrichment in background so the client gets a fast response
+    EdgeRuntime.waitUntil((async () => {
+      console.log(`Background enrichment started for job ${job.id} with ${totalLeads} leads`)
 
       try {
-        // Build common headers
-        const headers: Record<string, string> = {
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': zoomInfoApiKey,
-          'Content-Type': 'application/json'
+        // ZoomInfo creds
+        const zoomInfoApiKey = Deno.env.get('ZOOMINFO_API_KEY')
+        const zoomInfoUsername = Deno.env.get('ZOOMINFO_USERNAME')
+        const zoomInfoPassword = Deno.env.get('ZOOMINFO_PASSWORD')
+
+        if (!zoomInfoApiKey || !zoomInfoUsername || !zoomInfoPassword) {
+          throw new Error('Missing ZoomInfo credentials')
         }
 
-        // 1) Try Person Search first (corrected path: /search/person)
-        const searchBody: Record<string, any> = {}
-        if (lead?.email) searchBody.emails = [lead.email]
-        if (lead?.first_name) searchBody.firstName = lead.first_name
-        if (lead?.last_name) searchBody.lastName = lead.last_name
-        if (lead?.account_name) searchBody.companyName = lead.account_name
+        // Authenticate with ZoomInfo
+        const authRes = await fetchWithRetry(`${ZI_BASE_URL}/authenticate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: zoomInfoUsername, password: zoomInfoPassword })
+        }, { retries: 2, minDelayMs: 300, maxDelayMs: 1500 })
 
-        let contact: any = null
-
-        if (Object.keys(searchBody).length > 0) {
-          const searchPath = '/search/person'
-          attemptedEndpoints.push({ path: searchPath })
-          const searchRes = await fetchWithRetry(`${ZI_BASE_URL}${searchPath}`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(searchBody)
-          })
-
-          const searchData = await searchRes.json()
-
-          if (Array.isArray(searchData?.data) && searchData.data.length > 0) {
-            contact = searchData.data[0]
-          } else if (Array.isArray(searchData) && searchData.length > 0) {
-            contact = searchData[0]
-          } else if (searchData && typeof searchData === 'object') {
-            contact = searchData
-          }
+        const authData = await authRes.json()
+        const accessToken = authData?.jwt
+        if (!accessToken) {
+          throw new Error('ZoomInfo auth failed: missing jwt in response')
         }
 
-        // Fallback: if no contact found but we have email, try enrich endpoint (path: /enrich/person)
-        if (!contact && lead?.email) {
-          const enrichPath = '/enrich/person'
-          attemptedEndpoints.push({ path: enrichPath })
-          const enrichRes = await fetchWithRetry(`${ZI_BASE_URL}${enrichPath}`, {
-            method: 'POST',
-            headers: {
+        let processedCount = 0
+        let failedCount = 0
+
+        for (const lead of leads || []) {
+          const attemptedEndpoints: { path: string; status?: number; note?: string }[] = []
+          try {
+            const headers: Record<string, string> = {
               'Authorization': `Bearer ${accessToken}`,
               'apikey': zoomInfoApiKey,
               'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ email: lead.email })
-          })
-
-          const enrichData = await enrichRes.json()
-          if (enrichData) {
-            contact = Array.isArray(enrichData?.data) && enrichData.data.length > 0 ? enrichData.data[0] : enrichData
-          }
-        }
-
-        let phone1: string | null = null
-        let phone2: string | null = null
-        let companyState: string | null = null
-        let companyCountry: string | null = null
-
-        if (contact) {
-          // Extract phone numbers robustly
-          const phones = (contact.phones ?? contact.phoneNumbers ?? contact.phoneList ?? []) as any[]
-          if (Array.isArray(phones) && phones.length > 0) {
-            const p0 = phones[0]
-            phone1 = typeof p0 === 'string' ? p0 : (p0.number ?? p0.phone ?? null)
-            if (phones.length > 1) {
-              const p1 = phones[1]
-              phone2 = typeof p1 === 'string' ? p1 : (p1.number ?? p1.phone ?? null)
             }
-          } else if (contact.phone) {
-            phone1 = contact.phone
-          }
 
-          // Extract company location
-          const comp = contact.company ?? contact.currentCompany ?? null
-          if (comp) {
-            companyState = comp.state || comp.stateCode || comp.companyState || null
-            companyCountry = comp.country || comp.countryCode || comp.companyCountry || null
-          } else {
-            companyState = contact.companyState || contact.company_state || null
-            companyCountry = contact.companyCountry || contact.company_country || null
+            // Prefer search with all available hints
+            const searchBody: Record<string, any> = {}
+            if (lead?.email) searchBody.emails = [lead.email]
+            if (lead?.first_name) searchBody.firstName = lead.first_name
+            if (lead?.last_name) searchBody.lastName = lead.last_name
+            if (lead?.account_name) searchBody.companyName = lead.account_name
+
+            let contact: any = null
+
+            if (Object.keys(searchBody).length > 0) {
+              const searchPath = '/search/person'
+              attemptedEndpoints.push({ path: searchPath })
+              const searchRes = await fetchWithRetry(`${ZI_BASE_URL}${searchPath}`, {
+                method: 'POST', headers, body: JSON.stringify(searchBody)
+              })
+              const searchData = await searchRes.json()
+              if (Array.isArray(searchData?.data) && searchData.data.length > 0) {
+                contact = searchData.data[0]
+              } else if (Array.isArray(searchData) && searchData.length > 0) {
+                contact = searchData[0]
+              } else if (searchData && typeof searchData === 'object') {
+                contact = searchData
+              }
+            }
+
+            // Fallback enrich by email
+            if (!contact && lead?.email) {
+              const enrichPath = '/enrich/person'
+              attemptedEndpoints.push({ path: enrichPath })
+              const enrichRes = await fetchWithRetry(`${ZI_BASE_URL}${enrichPath}`, {
+                method: 'POST', headers, body: JSON.stringify({ email: lead.email })
+              })
+              const enrichData = await enrichRes.json()
+              if (enrichData) {
+                contact = Array.isArray(enrichData?.data) && enrichData.data.length > 0 ? enrichData.data[0] : enrichData
+              }
+            }
+
+            let phone1: string | null = null
+            let phone2: string | null = null
+            let companyState: string | null = null
+            let companyCountry: string | null = null
+
+            if (contact) {
+              const phones = (contact.phones ?? contact.phoneNumbers ?? contact.phoneList ?? []) as any[]
+              if (Array.isArray(phones) && phones.length > 0) {
+                const p0 = phones[0]
+                phone1 = typeof p0 === 'string' ? p0 : (p0.number ?? p0.phone ?? null)
+                if (phones.length > 1) {
+                  const p1 = phones[1]
+                  phone2 = typeof p1 === 'string' ? p1 : (p1.number ?? p1.phone ?? null)
+                }
+              } else if (contact.phone) {
+                phone1 = contact.phone
+              }
+
+              const comp = contact.company ?? contact.currentCompany ?? null
+              if (comp) {
+                companyState = comp.state || comp.stateCode || comp.companyState || null
+                companyCountry = comp.country || comp.countryCode || comp.companyCountry || null
+              } else {
+                companyState = contact.companyState || contact.company_state || null
+                companyCountry = contact.companyCountry || contact.company_country || null
+              }
+            }
+
+            await supabaseClient
+              .from('event_leads')
+              .update({
+                enrichment_status: 'completed',
+                zoominfo_phone_1: phone1,
+                zoominfo_phone_2: phone2,
+                zoominfo_company_state: companyState,
+                zoominfo_company_country: companyCountry,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', lead.id)
+
+            processedCount++
+          } catch (err: any) {
+            console.error(`Error enriching lead ${lead?.id}:`, err?.message || err)
+            try {
+              await supabaseClient
+                .from('event_leads')
+                .update({
+                  enrichment_status: 'failed',
+                  sync_errors: [
+                    {
+                      stage: 'enrich',
+                      error: String(err?.message || err),
+                      timestamp: new Date().toISOString(),
+                    },
+                  ],
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', lead.id)
+            } catch (updateErr) {
+              console.error('Failed to update lead failure status:', updateErr)
+            }
+            failedCount++
+          } finally {
+            // Update job progress regardless of success/failure
+            try {
+              await supabaseClient
+                .from('lead_processing_jobs')
+                .update({ processed_leads: processedCount, failed_leads: failedCount, updated_at: new Date().toISOString() })
+                .eq('id', job.id)
+            } catch (jobErr) {
+              console.error('Failed to update job progress:', jobErr)
+            }
+            await sleep(120)
           }
         }
 
-        // Update lead with enrichment data
-        await (supabaseClient as any)
-          .from('event_leads')
-          .update({
-            enrichment_status: 'completed',
-            zoominfo_phone_1: phone1,
-            zoominfo_phone_2: phone2,
-            zoominfo_company_state: companyState,
-            zoominfo_company_country: companyCountry,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', lead.id)
-
-        processedCount++
-
-        // Update job progress after each lead
-        await (supabaseClient as any)
+        await supabaseClient
           .from('lead_processing_jobs')
-          .update({ processed_leads: processedCount, failed_leads: failedCount, updated_at: new Date().toISOString() })
+          .update({ status: 'completed', processed_leads: processedCount, failed_leads: failedCount, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq('id', job.id)
 
-        console.log(`Enriched lead ${lead.id}`)
-
-        // Rate limiting - wait a bit between requests
-        await sleep(120)
-      } catch (err: any) {
-        console.error(`Error enriching lead ${lead?.id}:`, err?.message || err)
-
-        // Mark lead as failed with sync_errors entry
+        console.log(`Background enrichment completed for job ${job.id}: ${processedCount} processed, ${failedCount} failed`)
+      } catch (error: any) {
+        console.error('Background enrichment failed:', error?.message || error)
         try {
-          await (supabaseClient as any)
-            .from('event_leads')
-            .update({
-              enrichment_status: 'failed',
-              sync_errors: [
-                {
-                  stage: 'enrich',
-                  error: String(err?.message || err),
-                  timestamp: new Date().toISOString(),
-                  attempted_endpoints: attemptedEndpoints,
-                },
-              ],
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', lead.id)
-        } catch (updateErr) {
-          console.error('Failed to update lead failure status:', updateErr)
-        }
-
-        failedCount++
-
-        // Update job progress after failure
-        try {
-          await (supabaseClient as any)
+          await supabaseClient
             .from('lead_processing_jobs')
-            .update({ processed_leads: processedCount, failed_leads: failedCount, updated_at: new Date().toISOString() })
+            .update({ status: 'failed', error_message: String(error?.message || error), completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
             .eq('id', job.id)
-        } catch (jobErr) {
-          console.error('Failed to update job progress:', jobErr)
+        } catch (jobUpdateError) {
+          console.error('Failed to update job status in background:', jobUpdateError)
         }
-
-        // Small pause before next lead
-        await sleep(120)
       }
-    }
+    })())
 
-    // Update job completion
-    await (supabaseClient as any)
-      .from('lead_processing_jobs')
-      .update({
-        status: 'completed',
-        processed_leads: processedCount,
-        failed_leads: failedCount,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', job.id)
-
-    console.log(`Enrichment completed: ${processedCount} processed, ${failedCount} failed`)
-
+    // Immediate response to unblock UI
     return new Response(
-      JSON.stringify({ success: true, processed: processedCount, failed: failedCount, job_id: job.id }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, message: 'Lead enrichment started', job_id: job.id, total_leads: totalLeads }),
+      { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error: any) {
-    console.error('Error in leads-enrich function:', error?.message || error)
-
-    // Best effort: update job status
-    try {
-      if (supabaseClient && job?.id) {
-        await (supabaseClient as any)
-          .from('lead_processing_jobs')
-          .update({
-            status: 'failed',
-            error_message: String(error?.message || error),
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', job.id)
-        console.log(`Updated job ${job.id} to failed status`)
-      }
-    } catch (jobUpdateError) {
-      console.error('Failed to update job status:', jobUpdateError)
-    }
-
+    console.error('Error in leads-enrich handler:', error?.message || error)
     return new Response(
       JSON.stringify({ success: false, error: String(error?.message || error), timestamp: new Date().toISOString() }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
