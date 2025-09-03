@@ -73,3 +73,6 @@ verify_jwt = false
 
 [functions.leads-salesforce-callback]
 verify_jwt = false
+
+[functions.leads-enrich]
+verify_jwt = false

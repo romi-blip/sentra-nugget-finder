@@ -255,4 +255,26 @@ export class LeadsService {
       return { success: false, message: 'Failed to start Salesforce check', error };
     }
   }
+
+  static async enrichLeads(eventId: string): Promise<{ success: boolean; message: string; job_id?: string; error?: any }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('leads-enrich', {
+        body: { event_id: eventId }
+      });
+
+      if (error) {
+        console.error('Lead enrichment error:', error);
+        return { success: false, message: 'Failed to start lead enrichment', error };
+      }
+
+      return { 
+        success: true, 
+        message: data.message || 'Lead enrichment started successfully',
+        job_id: data.job_id 
+      };
+    } catch (error) {
+      console.error('Lead enrichment failed:', error);
+      return { success: false, message: 'Failed to start lead enrichment', error };
+    }
+  }
 }

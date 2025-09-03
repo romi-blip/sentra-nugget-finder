@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle, Clock, Play, AlertCircle, Database, Users, FileCheck, Building } from "lucide-react";
+import { CheckCircle, Clock, Play, AlertCircle, Database, Users, FileCheck, Building, UserPlus } from "lucide-react";
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
@@ -21,9 +21,11 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
 }) => {
   const [isValidating, setIsValidating] = useState(false);
   const [isCheckingSalesforce, setIsCheckingSalesforce] = useState(false);
+  const [isEnriching, setIsEnriching] = useState(false);
   const { toast } = useToast();
   const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId);
   const { data: salesforceJob } = useLeadProcessingJob(eventId, 'check_salesforce');
+  const { data: enrichmentJob } = useLeadProcessingJob(eventId, 'enrich');
 
   const handleValidateEmails = async () => {
     setIsValidating(true);
@@ -95,7 +97,48 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     }
   };
 
+  const handleEnrichLeads = async () => {
+    if (!hasSalesforceCompleted) {
+      toast({
+        title: "Prerequisite not met",
+        description: "Please complete Salesforce check first to proceed with enrichment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsEnriching(true);
+    try {
+      const result = await LeadsService.enrichLeads(eventId);
+      if (result.success) {
+        toast({
+          title: "Lead Enrichment Started",
+          description: result.message,
+        });
+        setTimeout(() => {
+          onStageComplete?.('enrich');
+        }, 2000);
+      } else {
+        toast({
+          title: "Error",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Lead enrichment error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start lead enrichment",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEnriching(false);
+    }
+  };
+
   const hasValidLeads = validationCounts && validationCounts.validCount > 0;
+  const hasSalesforceCompleted = salesforceJob?.status === 'completed';
   const validationProgress = validationCounts ? 
     Math.round((validationCounts.validCount / (validationCounts.validCount + validationCounts.invalidCount)) * 100) : 0;
 
@@ -123,6 +166,34 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     }
     if (salesforceJob.status === 'running') {
       return `${salesforceJob.processed_leads}/${salesforceJob.total_leads} processed`;
+    }
+    return undefined;
+  };
+
+  // Derive Enrichment step status from job data
+  const getEnrichmentStepStatus = () => {
+    if (!enrichmentJob) return 'pending';
+    
+    switch (enrichmentJob.status) {
+      case 'completed': return 'completed';
+      case 'running': return 'in-progress';
+      case 'failed': return 'failed';
+      default: return 'pending';
+    }
+  };
+
+  const getEnrichmentProgress = () => {
+    if (!enrichmentJob || enrichmentJob.total_leads === 0) return undefined;
+    return Math.round((enrichmentJob.processed_leads / enrichmentJob.total_leads) * 100);
+  };
+
+  const getEnrichmentStats = () => {
+    if (!enrichmentJob) return undefined;
+    if (enrichmentJob.status === 'completed') {
+      return `${enrichmentJob.processed_leads} enriched, ${enrichmentJob.failed_leads} failed`;
+    }
+    if (enrichmentJob.status === 'running') {
+      return `${enrichmentJob.processed_leads}/${enrichmentJob.total_leads} processed`;
     }
     return undefined;
   };
@@ -164,10 +235,14 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     {
       id: 'enrich',
       title: 'Enrich Data',
-      description: 'Add contact details from ZoomInfo',
-      icon: <Database className="h-5 w-5" />,
-      status: 'pending',
-      canStart: false,
+      description: 'Add additional contact information from ZoomInfo',
+      icon: <UserPlus className="h-5 w-5" />,
+      status: getEnrichmentStepStatus(),
+      canStart: hasSalesforceCompleted,
+      action: handleEnrichLeads,
+      isLoading: isEnriching || enrichmentJob?.status === 'running',
+      progress: getEnrichmentProgress(),
+      stats: getEnrichmentStats(),
       requiresPrevious: 'salesforce'
     },
     {
