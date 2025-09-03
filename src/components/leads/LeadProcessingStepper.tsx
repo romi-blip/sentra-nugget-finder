@@ -240,7 +240,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
       status: getEnrichmentStepStatus(),
       canStart: hasSalesforceCompleted,
       action: handleEnrichLeads,
-      isLoading: isEnriching || enrichmentJob?.status === 'running',
+      isLoading: isEnriching,
       progress: getEnrichmentProgress(),
       stats: getEnrichmentStats(),
       requiresPrevious: 'salesforce'
