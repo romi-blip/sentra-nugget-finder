@@ -64,8 +64,8 @@ const ListLeads = () => {
   const [isCompact, setIsCompact] = useState(false);
   const { toast } = useToast();
 
-  // Debounced search
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  // Debounced search state
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const pageSize = 50;
   
@@ -76,10 +76,17 @@ const ListLeads = () => {
   const currentEvent = events.find(event => event.id === eventId);
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  // Auto-search when debounced term changes
+  // Auto-search with debouncing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   useEffect(() => {
     const handleSearch = async () => {
-      if (!debouncedSearchTerm.trim() || !eventId) {
+      if (!debouncedSearch.trim() || !eventId) {
         setSearchResults([]);
         setIsSearching(false);
         return;
@@ -87,7 +94,7 @@ const ListLeads = () => {
       
       setIsSearching(true);
       try {
-        const { data, error } = await LeadsService.searchLeads(eventId, debouncedSearchTerm.trim());
+        const { data, error } = await LeadsService.searchLeads(eventId, debouncedSearch.trim());
         if (error) {
           toast({
             title: "Search Error",
@@ -109,7 +116,7 @@ const ListLeads = () => {
     };
 
     handleSearch();
-  }, [debouncedSearchTerm, eventId, toast]);
+  }, [debouncedSearch, eventId, toast]);
 
   const clearSearch = () => {
     setSearchTerm("");
@@ -560,7 +567,7 @@ const ListLeads = () => {
               </Table>
 
               {/* Pagination - only show for non-search results */}
-              {!searchTerm && totalPages > 1 && (
+              {!debouncedSearch && totalPages > 1 && (
                 <div className="mt-6 flex justify-center p-4">
                   <Pagination>
                     <PaginationContent>
