@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -37,6 +38,8 @@ const EventManagement = () => {
     end_date: "",
     details: "",
     salesforce_campaign_url: "",
+    latest_lead_source: "",
+    latest_lead_source_details: "",
   });
 
   const { toast } = useToast();
@@ -45,10 +48,10 @@ const EventManagement = () => {
   const { leads, upsertLeads, isUploadingLeads } = useEventLeads(selectedEvent?.id || "", 1, 1000);
 
   const handleCreateEvent = () => {
-    if (!eventForm.name || !eventForm.start_date || !eventForm.end_date || !eventForm.salesforce_campaign_url) {
+    if (!eventForm.name || !eventForm.start_date || !eventForm.end_date || !eventForm.salesforce_campaign_url || !eventForm.latest_lead_source || !eventForm.latest_lead_source_details) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields including Salesforce Campaign URL",
+        description: "Please fill in all required fields including Lead Source and Lead Source Details",
         variant: "destructive",
       });
       return;
@@ -65,7 +68,7 @@ const EventManagement = () => {
 
     createEvent(eventForm);
     setCreateEventOpen(false);
-    setEventForm({ name: "", start_date: "", end_date: "", details: "", salesforce_campaign_url: "" });
+    setEventForm({ name: "", start_date: "", end_date: "", details: "", salesforce_campaign_url: "", latest_lead_source: "", latest_lead_source_details: "" });
   };
 
   const handleEditEvent = (event: Event) => {
@@ -76,16 +79,18 @@ const EventManagement = () => {
       end_date: event.end_date,
       details: event.details || "",
       salesforce_campaign_url: event.salesforce_campaign_url || "",
+      latest_lead_source: event.latest_lead_source || "",
+      latest_lead_source_details: event.latest_lead_source_details || "",
     });
   };
 
   const handleUpdateEvent = () => {
     if (!editingEvent) return;
 
-    if (!eventForm.name || !eventForm.start_date || !eventForm.end_date || !eventForm.salesforce_campaign_url) {
+    if (!eventForm.name || !eventForm.start_date || !eventForm.end_date || !eventForm.salesforce_campaign_url || !eventForm.latest_lead_source || !eventForm.latest_lead_source_details) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields including Salesforce Campaign URL",
+        description: "Please fill in all required fields including Lead Source and Lead Source Details",
         variant: "destructive",
       });
       return;
@@ -102,7 +107,7 @@ const EventManagement = () => {
 
     updateEvent({ id: editingEvent.id, payload: eventForm });
     setEditingEvent(null);
-    setEventForm({ name: "", start_date: "", end_date: "", details: "", salesforce_campaign_url: "" });
+    setEventForm({ name: "", start_date: "", end_date: "", details: "", salesforce_campaign_url: "", latest_lead_source: "", latest_lead_source_details: "" });
   };
 
   const handleDeleteEvent = (eventId: string) => {
@@ -181,8 +186,9 @@ const EventManagement = () => {
       mailing_country: row[mappingLookup['mailing_country']] || '',
       linkedin: row[mappingLookup['linkedin']] || '',
       notes: row[mappingLookup['notes']] || '',
-      latest_lead_source: row[mappingLookup['latest_lead_source']] || '',
-      latest_lead_source_details: row[mappingLookup['latest_lead_source_details']] || '',
+      // Force inherit from the list/event level
+      latest_lead_source: selectedEvent.latest_lead_source || '',
+      latest_lead_source_details: selectedEvent.latest_lead_source_details || '',
       lead_exclusion_field: row[mappingLookup['lead_exclusion_field']] || '',
       email_opt_out: row[mappingLookup['email_opt_out']]?.toLowerCase() === 'true' || false,
     }));
@@ -254,9 +260,8 @@ const EventManagement = () => {
         'Phone': '+1-555-123-4567',
         'Mobile': '+1-555-987-6543',
         'Email Opt Out': 'false',
-        'LinkedIn': 'https://linkedin.com/in/johndoe',
-        'Latest Lead Source': '',
-        'Latest Lead Source Details': ''
+        'LinkedIn': 'https://linkedin.com/in/johndoe'
+        // Note: Latest Lead Source and Latest Lead Source Details are inherited from the list
       }
     ];
 
@@ -334,6 +339,33 @@ const EventManagement = () => {
                     value={eventForm.end_date}
                     onChange={(e) => setEventForm(prev => ({ ...prev, end_date: e.target.value }))}
                   />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="latest-lead-source">Latest Lead Source *</Label>
+                  <Select value={eventForm.latest_lead_source} onValueChange={(value) => setEventForm(prev => ({ ...prev, latest_lead_source: value }))}>
+                    <SelectTrigger id="latest-lead-source">
+                      <SelectValue placeholder="Select lead source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Events">Events</SelectItem>
+                      <SelectItem value="Outbound">Outbound</SelectItem>
+                      <SelectItem value="3rd Party">3rd Party</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="latest-lead-source-details">Latest Lead Source Details *</Label>
+                  <Input
+                    id="latest-lead-source-details"
+                    value={eventForm.latest_lead_source_details}
+                    onChange={(e) => setEventForm(prev => ({ ...prev, latest_lead_source_details: e.target.value }))}
+                    placeholder="e.g., 2025-Q1-Events-BlackHat-LasVegas"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Example format: YYYY-QX-[Lead Source]-[Name]-[Location]
+                  </p>
                 </div>
               </div>
               <div>
@@ -534,6 +566,33 @@ const EventManagement = () => {
                   value={eventForm.end_date}
                   onChange={(e) => setEventForm(prev => ({ ...prev, end_date: e.target.value }))}
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-latest-lead-source">Latest Lead Source *</Label>
+                <Select value={eventForm.latest_lead_source} onValueChange={(value) => setEventForm(prev => ({ ...prev, latest_lead_source: value }))}>
+                  <SelectTrigger id="edit-latest-lead-source">
+                    <SelectValue placeholder="Select lead source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Events">Events</SelectItem>
+                    <SelectItem value="Outbound">Outbound</SelectItem>
+                    <SelectItem value="3rd Party">3rd Party</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-latest-lead-source-details">Latest Lead Source Details *</Label>
+                <Input
+                  id="edit-latest-lead-source-details"
+                  value={eventForm.latest_lead_source_details}
+                  onChange={(e) => setEventForm(prev => ({ ...prev, latest_lead_source_details: e.target.value }))}
+                  placeholder="e.g., 2025-Q1-Events-BlackHat-LasVegas"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Example format: YYYY-QX-[Lead Source]-[Name]-[Location]
+                </p>
               </div>
             </div>
             <div>

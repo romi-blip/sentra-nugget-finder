@@ -625,6 +625,8 @@ export type Database = {
           details: string | null
           end_date: string
           id: string
+          latest_lead_source: string | null
+          latest_lead_source_details: string | null
           name: string
           salesforce_campaign_url: string | null
           start_date: string
@@ -636,6 +638,8 @@ export type Database = {
           details?: string | null
           end_date: string
           id?: string
+          latest_lead_source?: string | null
+          latest_lead_source_details?: string | null
           name: string
           salesforce_campaign_url?: string | null
           start_date: string
@@ -647,6 +651,8 @@ export type Database = {
           details?: string | null
           end_date?: string
           id?: string
+          latest_lead_source?: string | null
+          latest_lead_source_details?: string | null
           name?: string
           salesforce_campaign_url?: string | null
           start_date?: string
