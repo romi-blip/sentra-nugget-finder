@@ -258,23 +258,32 @@ export class LeadsService {
 
   static async enrichLeads(eventId: string): Promise<{ success: boolean; message: string; job_id?: string; error?: any }> {
     try {
-      const { data, error } = await supabase.functions.invoke('leads-enrich', {
-        body: { event_id: eventId }
+      // Trigger external N8N workflow instead of internal edge function
+      const webhookUrl = 'https://sentra.app.n8n.cloud/webhook/af111dbd-b920-4884-b2ed-fad53f440ec6';
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: eventId })
       });
 
-      if (error) {
-        console.error('Lead enrichment error:', error);
-        return { success: false, message: 'Failed to start lead enrichment', error };
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('N8N webhook error:', res.status, text);
+        return { success: false, message: 'Failed to trigger enrichment webhook', error: text };
       }
 
-      return { 
-        success: true, 
-        message: data.message || 'Lead enrichment started successfully',
-        job_id: data.job_id 
+      // Try to parse JSON response; if not JSON just return success
+      let data: any = null;
+      try { data = await res.json(); } catch {}
+
+      return {
+        success: true,
+        message: (data && (data.message || data.status)) || 'Enrichment webhook triggered',
+        job_id: data?.job_id
       };
     } catch (error) {
-      console.error('Lead enrichment failed:', error);
-      return { success: false, message: 'Failed to start lead enrichment', error };
+      console.error('Lead enrichment webhook failed:', error);
+      return { success: false, message: 'Failed to trigger enrichment webhook', error };
     }
   }
 }
