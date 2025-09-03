@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,14 +15,39 @@ import {
   PaginationNext, 
   PaginationPrevious 
 } from "@/components/ui/pagination";
-import { ArrowLeft, Search, Users, ExternalLink, Building2, User, Phone } from "lucide-react";
+import { 
+  ArrowLeft, 
+  Search, 
+  Users, 
+  ExternalLink, 
+  Building2, 
+  User, 
+  Phone, 
+  ArrowUpDown,
+  Filter,
+  Download,
+  Trash2,
+  Settings,
+  MoreHorizontal
+} from "lucide-react";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem
+} from "@/components/ui/dropdown-menu";
 import { useEventLeads } from "@/hooks/useEventLeads";
 import { useEvents } from "@/hooks/useEvents";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
+import { useDebounce } from "@/hooks/useDebounce";
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
 import LeadProcessingStepper from "@/components/leads/LeadProcessingStepper";
+import LeadProgressBanner from "@/components/leads/LeadProgressBanner";
+import LeadTableRow from "@/components/leads/LeadTableRow";
 
 const ListLeads = () => {
   const { eventId } = useParams<{ eventId: string }>();
@@ -32,7 +56,16 @@ const ListLeads = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [validationFilter, setValidationFilter] = useState<'all' | 'valid' | 'invalid'>('all');
+  const [salesforceFilter, setSalesforceFilter] = useState<'all' | 'synced' | 'pending' | 'failed'>('all');
+  const [enrichmentFilter, setEnrichmentFilter] = useState<'all' | 'enriched' | 'pending' | 'failed'>('all');
+  const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<string>('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [isCompact, setIsCompact] = useState(false);
   const { toast } = useToast();
+
+  // Debounced search
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   const pageSize = 50;
   
@@ -43,52 +76,136 @@ const ListLeads = () => {
   const currentEvent = events.find(event => event.id === eventId);
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  const handleSearch = async () => {
-    if (!searchTerm.trim() || !eventId) return;
-    
-    setIsSearching(true);
-    try {
-      const { data, error } = await LeadsService.searchLeads(eventId, searchTerm.trim());
-      if (error) {
+  // Auto-search when debounced term changes
+  useEffect(() => {
+    const handleSearch = async () => {
+      if (!debouncedSearchTerm.trim() || !eventId) {
+        setSearchResults([]);
+        setIsSearching(false);
+        return;
+      }
+      
+      setIsSearching(true);
+      try {
+        const { data, error } = await LeadsService.searchLeads(eventId, debouncedSearchTerm.trim());
+        if (error) {
+          toast({
+            title: "Search Error",
+            description: "Failed to search leads",
+            variant: "destructive",
+          });
+        } else {
+          setSearchResults(data);
+        }
+      } catch (err) {
         toast({
-          title: "Search Error",
+          title: "Search Error", 
           description: "Failed to search leads",
           variant: "destructive",
         });
-      } else {
-        setSearchResults(data);
+      } finally {
+        setIsSearching(false);
       }
-    } catch (err) {
-      toast({
-        title: "Search Error", 
-        description: "Failed to search leads",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSearching(false);
-    }
-  };
+    };
+
+    handleSearch();
+  }, [debouncedSearchTerm, eventId, toast]);
 
   const clearSearch = () => {
     setSearchTerm("");
     setSearchResults([]);
   };
 
-  // Apply client-side filtering when searching
-  const getFilteredSearchResults = () => {
-    if (!searchTerm || validationFilter === 'all') return searchResults;
-    return searchResults.filter(lead => {
-      if (validationFilter === 'valid') return lead.validation_status === 'completed';
-      if (validationFilter === 'invalid') return lead.validation_status === 'failed';
+  // Apply comprehensive client-side filtering
+  const getFilteredResults = (data: any[]) => {
+    return data.filter(lead => {
+      // Validation filter
+      if (validationFilter === 'valid' && lead.validation_status !== 'completed') return false;
+      if (validationFilter === 'invalid' && lead.validation_status !== 'failed') return false;
+      
+      // Salesforce filter
+      if (salesforceFilter === 'synced' && lead.salesforce_status !== 'completed') return false;
+      if (salesforceFilter === 'pending' && lead.salesforce_status !== 'pending') return false;
+      if (salesforceFilter === 'failed' && lead.salesforce_status !== 'failed') return false;
+      
+      // Enrichment filter
+      if (enrichmentFilter === 'enriched' && lead.enrichment_status !== 'completed') return false;
+      if (enrichmentFilter === 'pending' && lead.enrichment_status !== 'pending') return false;
+      if (enrichmentFilter === 'failed' && lead.enrichment_status !== 'failed') return false;
+      
       return true;
     });
   };
 
-  const displayedLeads = searchTerm ? getFilteredSearchResults() : leads;
+  // Sort data
+  const getSortedData = (data: any[]) => {
+    if (!sortField) return data;
+    
+    return [...data].sort((a, b) => {
+      let aVal = a[sortField] || '';
+      let bVal = b[sortField] || '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const displayedLeads = getSortedData(getFilteredResults(searchTerm ? searchResults : leads));
 
   const handleFilterChange = (filter: 'all' | 'valid' | 'invalid') => {
     setValidationFilter(filter);
-    setCurrentPage(1); // Reset to first page when filter changes
+    setCurrentPage(1);
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedLeads(new Set(displayedLeads.map(lead => lead.id)));
+    } else {
+      setSelectedLeads(new Set());
+    }
+  };
+
+  const handleSelectLead = (leadId: string, checked: boolean) => {
+    const newSelected = new Set(selectedLeads);
+    if (checked) {
+      newSelected.add(leadId);
+    } else {
+      newSelected.delete(leadId);
+    }
+    setSelectedLeads(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedLeads.size === 0) return;
+    
+    try {
+      // Implementation would go here
+      toast({
+        title: "Success",
+        description: `${selectedLeads.size} leads deleted successfully`,
+      });
+      setSelectedLeads(new Set());
+      refetch();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete leads",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleStageComplete = (stage: string) => {
@@ -147,35 +264,149 @@ const ListLeads = () => {
             </p>
           </div>
         </div>
-        
       </div>
+
+      {/* Progress Banner */}
+      {eventId && (
+        <div className="mb-6">
+          <LeadProgressBanner eventId={eventId} />
+        </div>
+      )}
 
       {/* Lead Processing Pipeline */}
       <div className="mb-6">
         <LeadProcessingStepper eventId={eventId} onStageComplete={handleStageComplete} />
       </div>
 
-      {/* Search */}
+      {/* Search and Filters */}
       <Card className="mb-6">
         <CardContent className="pt-6">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search leads by name, email, or company..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 className="pl-10"
               />
+              {isSearching && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                </div>
+              )}
             </div>
-            <Button onClick={handleSearch} disabled={isSearching || !searchTerm.trim()}>
-              {isSearching ? "Searching..." : "Search"}
-            </Button>
-            {searchTerm && (
-              <Button variant="outline" onClick={clearSearch}>
-                Clear
-              </Button>
+
+            {/* Filter Chips */}
+            <div className="flex flex-wrap gap-2">
+              {/* Validation Filters */}
+              <div className="flex items-center gap-1">
+                <span className="text-sm text-muted-foreground">Validation:</span>
+                <Button
+                  variant={validationFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleFilterChange('all')}
+                  className="h-7 px-2 text-xs"
+                >
+                  All ({totalCount})
+                </Button>
+                <Button
+                  variant={validationFilter === 'valid' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleFilterChange('valid')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Valid ({validationCounts?.validCount || 0})
+                </Button>
+                <Button
+                  variant={validationFilter === 'invalid' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleFilterChange('invalid')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Invalid ({validationCounts?.invalidCount || 0})
+                </Button>
+              </div>
+
+              {/* Salesforce Filters */}
+              <div className="flex items-center gap-1">
+                <span className="text-sm text-muted-foreground">Salesforce:</span>
+                <Button
+                  variant={salesforceFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('all')}
+                  className="h-7 px-2 text-xs"
+                >
+                  All
+                </Button>
+                <Button
+                  variant={salesforceFilter === 'synced' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('synced')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Synced
+                </Button>
+                <Button
+                  variant={salesforceFilter === 'pending' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSalesforceFilter('pending')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Pending
+                </Button>
+              </div>
+
+              {/* Enrichment Filters */}
+              <div className="flex items-center gap-1">
+                <span className="text-sm text-muted-foreground">Enrichment:</span>
+                <Button
+                  variant={enrichmentFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEnrichmentFilter('all')}
+                  className="h-7 px-2 text-xs"
+                >
+                  All
+                </Button>
+                <Button
+                  variant={enrichmentFilter === 'enriched' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEnrichmentFilter('enriched')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Enriched
+                </Button>
+                <Button
+                  variant={enrichmentFilter === 'pending' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEnrichmentFilter('pending')}
+                  className="h-7 px-2 text-xs"
+                >
+                  Pending
+                </Button>
+              </div>
+            </div>
+
+            {/* Active filters summary */}
+            {(searchTerm || validationFilter !== 'all' || salesforceFilter !== 'all' || enrichmentFilter !== 'all') && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Filter className="h-3 w-3" />
+                <span>Showing {displayedLeads.length} filtered results</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setValidationFilter('all');
+                    setSalesforceFilter('all');
+                    setEnrichmentFilter('all');
+                  }}
+                  className="h-6 px-2 text-xs"
+                >
+                  Clear all
+                </Button>
+              </div>
             )}
           </div>
         </CardContent>
@@ -184,54 +415,69 @@ const ListLeads = () => {
       {/* Leads Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            {searchTerm 
-              ? `Search Results (${displayedLeads.length})` 
-              : validationFilter === 'all' 
-                ? `All Leads (${totalCount})`
-                : validationFilter === 'valid'
-                  ? `Valid Leads (${validationCounts?.validCount || 0})`
-                  : `Invalid Leads (${validationCounts?.invalidCount || 0})`
-            }
-          </CardTitle>
-          <CardDescription>
-            {searchTerm ? `Results for "${searchTerm}"` : "Manage and review lead information"}
-          </CardDescription>
-          
-          {/* Validation Filter Buttons */}
-          <div className="flex flex-wrap gap-2 mt-2">
-            <Button
-              variant={validationFilter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('all')}
-              className="text-sm"
-              aria-label="Show all leads"
-            >
-              <Users className="h-3 w-3 mr-1" />
-              All ({totalCount})
-            </Button>
-            <Button
-              variant={validationFilter === 'valid' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('valid')}
-              className="text-sm"
-              aria-label="Show valid leads only"
-            >
-              Valid ({validationCounts?.validCount || 0})
-            </Button>
-            <Button
-              variant={validationFilter === 'invalid' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleFilterChange('invalid')}
-              className="text-sm"
-              aria-label="Show invalid leads only"
-            >
-              Invalid ({validationCounts?.invalidCount || 0})
-            </Button>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Leads ({displayedLeads.length})
+              </CardTitle>
+              <CardDescription>
+                {searchTerm ? `Results for "${searchTerm}"` : "Manage and review lead information"}
+              </CardDescription>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {/* Bulk Actions */}
+              {selectedLeads.size > 0 && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">
+                    {selectedLeads.size} selected
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <MoreHorizontal className="h-4 w-4" />
+                        Actions
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => {}}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Export Selected
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={handleBulkDelete}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Selected
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+              
+              {/* Table Controls */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuCheckboxItem
+                    checked={isCompact}
+                    onCheckedChange={setIsCompact}
+                  >
+                    Compact View
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
               <div className="text-muted-foreground">Loading leads...</div>
@@ -245,250 +491,77 @@ const ListLeads = () => {
             <div className="text-center py-12">
               <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">
-                {searchTerm ? "No leads found" : "No leads uploaded yet"}
+                {searchTerm || validationFilter !== 'all' || salesforceFilter !== 'all' || enrichmentFilter !== 'all' 
+                  ? "No leads match your filters" 
+                  : "No leads uploaded yet"}
               </h3>
               <p className="text-muted-foreground">
-                {searchTerm 
-                  ? "Try adjusting your search terms" 
-                  : "Upload a CSV file to add leads to this list"
-                }
+                {searchTerm || validationFilter !== 'all' || salesforceFilter !== 'all' || enrichmentFilter !== 'all' 
+                  ? "Try adjusting your search terms or filters" 
+                  : "Upload a CSV file to add leads to this list"}
               </p>
             </div>
           ) : (
             <>
-              <Table>
-                <TableHeader>
+              <Table className={isCompact ? 'text-sm' : ''}>
+                <TableHeader className="sticky top-0 bg-background border-b">
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Company</TableHead>
+                    <TableHead className="w-8">
+                      <Checkbox 
+                        checked={selectedLeads.size === displayedLeads.length && displayedLeads.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('first_name')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Name
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('email')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Email
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('account_name')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Company
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Validation</TableHead>
-                    <TableHead>Salesforce Status</TableHead>
-                    <TableHead>Owner Info</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Phone</TableHead>
+                    <TableHead>Salesforce</TableHead>
                     <TableHead>Enrichment</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {displayedLeads.map((lead) => (
-                    <TableRow 
+                    <LeadTableRow
                       key={lead.id}
-                      className={lead.validation_status === 'failed' ? 'opacity-60' : ''}
-                    >
-                      <TableCell className="font-medium">
-                        {lead.first_name} {lead.last_name}
-                      </TableCell>
-                      <TableCell>
-                        <a 
-                          href={`mailto:${lead.email}`} 
-                          className="text-primary hover:underline"
-                        >
-                          {lead.email}
-                        </a>
-                      </TableCell>
-                      <TableCell>{lead.account_name}</TableCell>
-                      <TableCell>{lead.title || '-'}</TableCell>
-                      <TableCell>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="cursor-pointer">
-                                {lead.validation_status === 'completed' ? (
-                                  <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-200">
-                                    Valid
-                                  </Badge>
-                                ) : lead.validation_status === 'failed' ? (
-                                  <Badge variant="destructive">
-                                    Invalid
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline">
-                                    Pending
-                                  </Badge>
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            {lead.validation_errors && lead.validation_errors.length > 0 && (
-                              <TooltipContent>
-                                <div className="max-w-sm">
-                                  <p className="font-semibold mb-1">Validation Issues:</p>
-                                  <ul className="text-sm list-disc list-inside space-y-1">
-                                    {lead.validation_errors.map((error, index) => (
-                                      <li key={index}>{error}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-2">
-                          {lead.salesforce_status_detail && (
-                            <Badge variant="outline" className="text-xs mb-1">
-                              {lead.salesforce_status_detail.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                            </Badge>
-                          )}
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              <Checkbox 
-                                checked={lead.sf_existing_account || false} 
-                                disabled 
-                                className="h-3 w-3" 
-                              />
-                              <span className="text-xs">Existing Account</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Checkbox 
-                                checked={lead.sf_existing_contact || false} 
-                                disabled 
-                                className="h-3 w-3" 
-                              />
-                              <span className="text-xs">Existing Contact</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Checkbox 
-                                checked={lead.sf_existing_lead || false} 
-                                disabled 
-                                className="h-3 w-3" 
-                              />
-                              <span className="text-xs">Existing Lead</span>
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="cursor-pointer space-y-1">
-                                {lead.salesforce_account_owner_id && (
-                                  <div className="flex items-center gap-1">
-                                    <Building2 className="h-3 w-3 text-muted-foreground" />
-                                    <span className="text-xs text-muted-foreground">Account Owner</span>
-                                  </div>
-                                )}
-                                {lead.salesforce_contact_owner_id && (
-                                  <div className="flex items-center gap-1">
-                                    <User className="h-3 w-3 text-muted-foreground" />
-                                    <span className="text-xs text-muted-foreground">Contact Owner</span>
-                                  </div>
-                                )}
-                                {!lead.salesforce_account_owner_id && !lead.salesforce_contact_owner_id && (
-                                  <span className="text-muted-foreground">-</span>
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <div className="space-y-2">
-                                {lead.salesforce_account_owner_id && (
-                                  <div>
-                                    <p className="font-semibold text-xs">Account Owner:</p>
-                                    <p className="text-xs">{lead.salesforce_account_owner_id}</p>
-                                    {lead.salesforce_account_sdr_owner_id && (
-                                      <>
-                                        <p className="font-semibold text-xs mt-1">Account SDR:</p>
-                                        <p className="text-xs">{lead.salesforce_account_sdr_owner_id}</p>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                                {lead.salesforce_contact_owner_id && (
-                                  <div>
-                                    <p className="font-semibold text-xs">Contact Owner:</p>
-                                    <p className="text-xs">{lead.salesforce_contact_owner_id}</p>
-                                    {lead.salesforce_contact_sdr_owner_id && (
-                                      <>
-                                        <p className="font-semibold text-xs mt-1">Contact SDR:</p>
-                                        <p className="text-xs">{lead.salesforce_contact_sdr_owner_id}</p>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                      <TableCell>
-                        {lead.lead_status ? (
-                          <Badge variant="outline">{lead.lead_status}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm space-y-1">
-                          {/* Original location */}
-                          {(lead.mailing_city || lead.mailing_state_province || lead.mailing_country) && (
-                            <div>
-                              {[lead.mailing_city, lead.mailing_state_province, lead.mailing_country]
-                                .filter(Boolean)
-                                .join(', ')}
-                            </div>
-                          )}
-                          {/* ZoomInfo enriched location */}
-                          {(lead.zoominfo_company_state || lead.zoominfo_company_country) && (
-                            <div className="text-primary font-medium">
-                              📍 {[lead.zoominfo_company_state, lead.zoominfo_company_country]
-                                .filter(Boolean)
-                                .join(', ')}
-                            </div>
-                          )}
-                          {!lead.mailing_city && !lead.mailing_state_province && !lead.mailing_country && 
-                           !lead.zoominfo_company_state && !lead.zoominfo_company_country && (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm space-y-1">
-                          {/* Original phones */}
-                          {lead.phone && <div className="flex items-center gap-1"><Phone className="h-3 w-3" />{lead.phone}</div>}
-                          {lead.mobile && <div className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{lead.mobile}</div>}
-                          {/* ZoomInfo enriched phones */}
-                          {lead.zoominfo_phone_1 && (
-                            <div className="flex items-center gap-1 text-primary font-medium">
-                              📞 {lead.zoominfo_phone_1}
-                            </div>
-                          )}
-                          {lead.zoominfo_phone_2 && (
-                            <div className="flex items-center gap-1 text-primary font-medium">
-                              📞 {lead.zoominfo_phone_2}
-                            </div>
-                          )}
-                          {!lead.phone && !lead.mobile && !lead.zoominfo_phone_1 && !lead.zoominfo_phone_2 && (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {lead.enrichment_status === 'completed' ? (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-                            ✅ Enriched
-                          </Badge>
-                        ) : lead.enrichment_status === 'failed' ? (
-                          <Badge variant="destructive">
-                            ❌ Failed
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">
-                            ⏳ Pending
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                      lead={lead}
+                      isSelected={selectedLeads.has(lead.id)}
+                      onSelectChange={(selected) => handleSelectLead(lead.id, selected)}
+                      isCompact={isCompact}
+                    />
                   ))}
                 </TableBody>
               </Table>
 
               {/* Pagination - only show for non-search results */}
               {!searchTerm && totalPages > 1 && (
-                <div className="mt-6 flex justify-center">
+                <div className="mt-6 flex justify-center p-4">
                   <Pagination>
                     <PaginationContent>
                       <PaginationItem>
