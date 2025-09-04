@@ -191,6 +191,7 @@ const EventManagement = () => {
       latest_lead_source_details: selectedEvent.latest_lead_source_details || '',
       lead_exclusion_field: row[mappingLookup['lead_exclusion_field']] || '',
       email_opt_out: row[mappingLookup['email_opt_out']]?.toLowerCase() === 'true' || false,
+      manual_owner_email: row[mappingLookup['manual_owner_email']] || '',
     }));
 
     // Filter out invalid rows (must have required fields)
@@ -251,6 +252,7 @@ const EventManagement = () => {
         'Account Name': 'ACME Corp',
         'Title': 'Sales Manager',
         'Lead Exclusion Field': '',
+        'Manual Owner Email': 'john.owner@example.com',
         'Mailing Street': '123 Main St',
         'Mailing City': 'Anytown',
         'Mailing State / Province': 'CA',

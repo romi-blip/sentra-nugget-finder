@@ -74,6 +74,7 @@ export interface CreateLeadPayload {
   linkedin?: string;
   latest_lead_source?: string;
   latest_lead_source_details?: string;
+  manual_owner_email?: string;
 }
 
 export interface UpdateLeadPayload {
@@ -96,6 +97,7 @@ export interface UpdateLeadPayload {
   linkedin?: string;
   latest_lead_source?: string;
   latest_lead_source_details?: string;
+  manual_owner_email?: string;
 }
 
 export class LeadsService {

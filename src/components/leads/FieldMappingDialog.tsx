@@ -42,6 +42,7 @@ const SYSTEM_FIELDS = [
   { key: 'latest_lead_source_details', label: 'Latest Lead Source Details', required: false },
   { key: 'lead_exclusion_field', label: 'Lead Exclusion Field', required: false },
   { key: 'email_opt_out', label: 'Email Opt Out', required: false },
+  { key: 'manual_owner_email', label: 'Manual Owner Email', required: false },
 ];
 
 export const FieldMappingDialog: React.FC<FieldMappingDialogProps> = ({
