@@ -122,7 +122,7 @@ const ListLeads = () => {
 
   // Auto-refresh when Salesforce job completes
   useEffect(() => {
-    if (salesforceJob?.status === 'completed' && previousSalesforceStatus.current === 'processing') {
+    if (salesforceJob?.status === 'completed' && ['processing','running'].includes(previousSalesforceStatus.current as string)) {
       // Job just completed, refresh the data
       refetch();
       refetchCounts();
