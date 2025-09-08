@@ -72,6 +72,9 @@ const ListLeads = () => {
   const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId || "");
   const { data: salesforceJob } = useLeadProcessingJob(eventId || "", 'check_salesforce');
   
+  // Ref to track previous Salesforce job status
+  const previousSalesforceStatus = React.useRef(salesforceJob?.status);
+  
   const currentEvent = events.find(event => event.id === eventId);
   const totalPages = Math.ceil(totalCount / pageSize);
 
@@ -119,15 +122,13 @@ const ListLeads = () => {
 
   // Auto-refresh when Salesforce job completes
   useEffect(() => {
-    const previousStatus = React.useRef(salesforceJob?.status);
-    
-    if (salesforceJob?.status === 'completed' && previousStatus.current === 'processing') {
+    if (salesforceJob?.status === 'completed' && previousSalesforceStatus.current === 'processing') {
       // Job just completed, refresh the data
       refetch();
       refetchCounts();
     }
     
-    previousStatus.current = salesforceJob?.status;
+    previousSalesforceStatus.current = salesforceJob?.status;
   }, [salesforceJob?.status, refetch, refetchCounts]);
 
   const clearSearch = () => {
