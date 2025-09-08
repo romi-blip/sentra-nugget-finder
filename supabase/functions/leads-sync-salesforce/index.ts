@@ -12,18 +12,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { event_id } = await req.json()
-    console.log('Starting Salesforce sync for event:', event_id)
+    const { event_id, lead_ids } = await req.json()
+    console.log('Starting Salesforce sync for event:', event_id, 'with leads:', lead_ids)
 
-    // Get Salesforce credentials
-    const salesforceUrl = Deno.env.get('SALESFORCE_URL')
-    const salesforceUsername = Deno.env.get('SALESFORCE_USERNAME')
-    const salesforcePassword = Deno.env.get('SALESFORCE_PASSWORD')
-    const salesforceToken = Deno.env.get('SALESFORCE_SECURITY_TOKEN')
-
-    if (!salesforceUrl || !salesforceUsername || !salesforcePassword || !salesforceToken) {
-      throw new Error('Missing Salesforce credentials')
-    }
+    // Get N8n webhook URL
+    const n8nWebhookUrl = 'https://sentra.app.n8n.cloud/webhook/57567e54-4e70-42d0-a694-d0a05711cce5'
 
     // Create processing job
     const { data: job, error: jobError } = await supabaseClient
@@ -39,13 +32,23 @@ Deno.serve(async (req) => {
 
     if (jobError) throw jobError
 
-    // Get leads that passed validation and enrichment
-    const { data: leads, error: leadsError } = await supabaseClient
+    // Get leads for sync - either specific leads or all qualified leads
+    let leadsQuery = supabaseClient
       .from('event_leads')
       .select('*')
       .eq('event_id', event_id)
-      .eq('validation_status', 'completed')
-      .eq('enrichment_status', 'completed')
+
+    // If specific lead IDs provided, filter by them
+    if (lead_ids && lead_ids.length > 0) {
+      leadsQuery = leadsQuery.in('id', lead_ids)
+    } else {
+      // Otherwise, get all leads that passed validation and enrichment
+      leadsQuery = leadsQuery
+        .eq('validation_status', 'completed')
+        .eq('enrichment_status', 'completed')
+    }
+
+    const { data: leads, error: leadsError } = await leadsQuery
 
     if (leadsError) throw leadsError
 
@@ -55,150 +58,48 @@ Deno.serve(async (req) => {
       .update({ total_leads: leads?.length || 0 })
       .eq('id', job.id)
 
-    // Authenticate with Salesforce
-    const authResponse = await fetch(`${salesforceUrl}/services/oauth2/token`, {
+    // Trigger N8n webhook for Salesforce sync
+    const webhookPayload = {
+      event_id,
+      lead_ids: lead_ids || null,
+      job_id: job.id,
+      leads_count: leads?.length || 0
+    }
+
+    console.log('Triggering N8n webhook with payload:', webhookPayload)
+
+    const webhookResponse = await fetch(n8nWebhookUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/json'
       },
-      body: new URLSearchParams({
-        grant_type: 'password',
-        client_id: Deno.env.get('SALESFORCE_CLIENT_ID') ?? '',
-        client_secret: Deno.env.get('SALESFORCE_CLIENT_SECRET') ?? '',
-        username: salesforceUsername,
-        password: salesforcePassword + salesforceToken
-      })
+      body: JSON.stringify(webhookPayload)
     })
 
-    const authData = await authResponse.json()
-    if (!authResponse.ok) {
-      throw new Error(`Salesforce auth failed: ${authData.error_description}`)
+    if (!webhookResponse.ok) {
+      // Update job status to failed
+      await supabaseClient
+        .from('lead_processing_jobs')
+        .update({ 
+          status: 'failed', 
+          error_message: 'Failed to trigger N8n webhook',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', job.id)
+
+      const text = await webhookResponse.text()
+      console.error('N8n webhook error:', webhookResponse.status, text)
+      throw new Error(`N8n webhook failed: ${webhookResponse.status} ${text}`)
     }
 
-    const accessToken = authData.access_token
-    const instanceUrl = authData.instance_url
-    
-    let processedCount = 0
-    let failedCount = 0
-
-    // Sync each lead to Salesforce
-    for (const lead of leads || []) {
-      try {
-        let syncErrors = []
-
-        // Create or update account if needed
-        let accountId = lead.salesforce_account_id
-        if (!accountId) {
-          const accountData = {
-            Name: lead.account_name,
-            Type: 'Prospect'
-          }
-
-          const accountResponse = await fetch(`${instanceUrl}/services/data/v57.0/sobjects/Account`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(accountData)
-          })
-
-          const accountResult = await accountResponse.json()
-          if (accountResponse.ok) {
-            accountId = accountResult.id
-          } else {
-            syncErrors.push(`Account creation failed: ${accountResult[0]?.message}`)
-          }
-        }
-
-        // Create or update contact
-        let contactId = lead.salesforce_contact_id
-        if (accountId && !contactId) {
-          const contactData = {
-            FirstName: lead.first_name,
-            LastName: lead.last_name,
-            Email: lead.email,
-            AccountId: accountId,
-            Phone: lead.phone || lead.zoominfo_phone_1,
-            MobilePhone: lead.mobile || lead.zoominfo_phone_2,
-            MailingStreet: lead.mailing_street,
-            MailingCity: lead.mailing_city,
-            MailingState: lead.mailing_state_province || lead.zoominfo_company_state,
-            MailingPostalCode: lead.mailing_zip_postal_code,
-            MailingCountry: lead.mailing_country || lead.zoominfo_company_country,
-            Title: lead.title,
-            LeadSource: lead.latest_lead_source || 'Event',
-            Description: lead.notes
-          }
-
-          const contactResponse = await fetch(`${instanceUrl}/services/data/v57.0/sobjects/Contact`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(contactData)
-          })
-
-          const contactResult = await contactResponse.json()
-          if (contactResponse.ok) {
-            contactId = contactResult.id
-          } else {
-            syncErrors.push(`Contact creation failed: ${contactResult[0]?.message}`)
-          }
-        }
-
-        // Update lead with sync results
-        await supabaseClient
-          .from('event_leads')
-          .update({
-            salesforce_status: syncErrors.length > 0 ? 'failed' : 'synced',
-            sync_errors: syncErrors,
-            salesforce_account_id: accountId,
-            salesforce_contact_id: contactId
-          })
-          .eq('id', lead.id)
-
-        if (syncErrors.length > 0) {
-          failedCount++
-        } else {
-          processedCount++
-        }
-
-        console.log(`Synced lead ${lead.id}: ${syncErrors.length > 0 ? 'failed' : 'success'}`)
-
-      } catch (error) {
-        console.error(`Error syncing lead ${lead.id}:`, error)
-        await supabaseClient
-          .from('event_leads')
-          .update({
-            salesforce_status: 'failed',
-            sync_errors: [error.message]
-          })
-          .eq('id', lead.id)
-        failedCount++
-      }
-    }
-
-    // Update job completion
-    await supabaseClient
-      .from('lead_processing_jobs')
-      .update({
-        status: 'completed',
-        processed_leads: processedCount,
-        failed_leads: failedCount,
-        completed_at: new Date().toISOString()
-      })
-      .eq('id', job.id)
-
-    console.log(`Salesforce sync completed: ${processedCount} processed, ${failedCount} failed`)
+    console.log('N8n webhook triggered successfully')
 
     return new Response(
       JSON.stringify({
         success: true,
-        processed: processedCount,
-        failed: failedCount,
-        job_id: job.id
+        message: 'Salesforce sync initiated successfully',
+        job_id: job.id,
+        leads_count: leads?.length || 0
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -218,6 +218,35 @@ const ListLeads = () => {
     }
   };
 
+  const handleBulkSyncToSalesforce = async () => {
+    if (selectedLeads.size === 0) return;
+    
+    try {
+      const selectedLeadIds = Array.from(selectedLeads);
+      const response = await LeadsService.syncToSalesforce(eventId, selectedLeadIds);
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: `Salesforce sync started for ${selectedLeads.size} leads`,
+        });
+        setSelectedLeads(new Set());
+      } else {
+        toast({
+          title: "Error",
+          description: response.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to start Salesforce sync",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleStageComplete = (stage: string) => {
     if (stage === 'validate' || stage === 'salesforce') {
       refetchCounts();

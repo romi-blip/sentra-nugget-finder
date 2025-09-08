@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,10 +21,12 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   const [isValidating, setIsValidating] = useState(false);
   const [isCheckingSalesforce, setIsCheckingSalesforce] = useState(false);
   const [isEnriching, setIsEnriching] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId);
   const { data: salesforceJob } = useLeadProcessingJob(eventId, 'check_salesforce');
   const { data: enrichmentJob } = useLeadProcessingJob(eventId, 'enrich');
+  const { data: syncJob } = useLeadProcessingJob(eventId, 'sync');
 
   const handleValidateEmails = async () => {
     setIsValidating(true);
@@ -137,8 +138,47 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     }
   };
 
+  const handleSyncToSalesforce = async () => {
+    if (!hasEnrichmentCompleted) {
+      toast({
+        title: "Prerequisite not met",
+        description: "Please complete lead enrichment first to proceed with Salesforce sync.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const response = await LeadsService.syncToSalesforce(eventId);
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: response.message,
+        });
+        onStageComplete?.('sync');
+      } else {
+        toast({
+          title: "Error",
+          description: response.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to sync to Salesforce:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start Salesforce sync",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const hasValidLeads = validationCounts && validationCounts.validCount > 0;
   const hasSalesforceCompleted = salesforceJob?.status === 'completed';
+  const hasEnrichmentCompleted = enrichmentJob?.status === 'completed';
   const validationProgress = validationCounts ? 
     Math.round((validationCounts.validCount / (validationCounts.validCount + validationCounts.invalidCount)) * 100) : 0;
 
@@ -198,6 +238,34 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     return undefined;
   };
 
+  // Derive Sync step status from job data
+  const getSyncStepStatus = () => {
+    if (!syncJob) return 'pending';
+    
+    switch (syncJob.status) {
+      case 'completed': return 'completed';
+      case 'processing': return 'in-progress';
+      case 'failed': return 'failed';
+      default: return 'pending';
+    }
+  };
+
+  const getSyncProgress = () => {
+    if (!syncJob || syncJob.total_leads === 0) return undefined;
+    return Math.round((syncJob.processed_leads / syncJob.total_leads) * 100);
+  };
+
+  const getSyncStats = () => {
+    if (!syncJob) return undefined;
+    if (syncJob.status === 'completed') {
+      return `${syncJob.processed_leads} synced, ${syncJob.failed_leads} failed`;
+    }
+    if (syncJob.status === 'processing') {
+      return `${syncJob.processed_leads}/${syncJob.total_leads} processed`;
+    }
+    return undefined;
+  };
+
   const steps = [
     {
       id: 'upload',
@@ -248,10 +316,14 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     {
       id: 'sync',
       title: 'Sync to Salesforce',
-      description: 'Create leads/contacts in Salesforce',
-      icon: <CheckCircle className="h-5 w-5" />,
-      status: 'pending',
-      canStart: false,
+      description: 'Push qualified leads to Salesforce CRM',
+      icon: <Database className="h-5 w-5" />,
+      status: getSyncStepStatus(),
+      canStart: hasEnrichmentCompleted,
+      action: handleSyncToSalesforce,
+      isLoading: isSyncing || syncJob?.status === 'processing',
+      progress: getSyncProgress(),
+      stats: getSyncStats(),
       requiresPrevious: 'enrich'
     }
   ];
@@ -326,6 +398,18 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                      size="sm"
                      variant="outline"
                      onClick={() => window.open('https://supabase.com/dashboard/project/gmgrlphiopslkyxmuced/functions/leads-enrich/logs', '_blank')}
+                     className="w-full mb-2"
+                   >
+                     <ExternalLink className="h-4 w-4 mr-2" />
+                     View Logs
+                   </Button>
+                 )}
+
+                 {step.id === 'sync' && syncJob?.status === 'failed' && (
+                   <Button
+                     size="sm"
+                     variant="outline"
+                     onClick={() => window.open('https://supabase.com/dashboard/project/gmgrlphiopslkyxmuced/functions/leads-sync-salesforce/logs', '_blank')}
                      className="w-full mb-2"
                    >
                      <ExternalLink className="h-4 w-4 mr-2" />

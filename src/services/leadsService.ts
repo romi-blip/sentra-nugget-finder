@@ -331,4 +331,29 @@ export class LeadsService {
       return { success: false, message: 'Failed to start lead enrichment', error };
     }
   }
+
+  static async syncToSalesforce(eventId: string, leadIds?: string[]): Promise<{ success: boolean; message: string; job_id?: string; error?: any }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('leads-sync-salesforce', {
+        body: { 
+          event_id: eventId,
+          lead_ids: leadIds 
+        }
+      });
+
+      if (error) {
+        console.error('Salesforce sync failed:', error);
+        return { success: false, message: 'Failed to start Salesforce sync', error };
+      }
+
+      return {
+        success: true,
+        message: 'Salesforce sync started successfully',
+        job_id: data?.job_id
+      };
+    } catch (error) {
+      console.error('Salesforce sync failed:', error);
+      return { success: false, message: 'Failed to start Salesforce sync', error };
+    }
+  }
 }
