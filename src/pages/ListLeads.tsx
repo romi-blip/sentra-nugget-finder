@@ -49,25 +49,24 @@ import LeadProcessingStepper from "@/components/leads/LeadProcessingStepper";
 
 // Helper function to derive Salesforce status from boolean flags
 const deriveSalesforceStatus = (lead: any): string => {
-  // If not yet processed by Salesforce, return pending
-  if (lead.salesforce_status === 'pending') {
-    return 'pending';
-  }
-  
-  // Check boolean flags for classification
+  // Explicit failure takes priority
+  if (lead.salesforce_status === 'failed') return 'failed';
+
+  // If any existing flags are true, classify accordingly (even if raw status is pending)
   if (lead.sf_existing_customer) return 'existing_customer';
-  if (lead.sf_existing_opportunity) return 'existing_opportunity'; 
+  if (lead.sf_existing_opportunity) return 'existing_opportunity';
   if (lead.sf_existing_contact) return 'existing_contact';
   if (lead.sf_existing_account) return 'existing_account';
   if (lead.sf_existing_lead) return 'existing_lead';
-  
+
+  // If explicitly synced
+  if (lead.salesforce_status === 'synced') return 'synced';
+
   // If processed but none of the existing flags are true, it's net new
-  if (lead.salesforce_status === 'completed') {
-    return 'net_new';
-  }
-  
-  // For any other cases (like 'failed'), return the actual status
-  return lead.salesforce_status || 'pending';
+  if (lead.salesforce_status === 'completed') return 'net_new';
+
+  // Otherwise still pending
+  return 'pending';
 };
 
 const ListLeads = () => {
