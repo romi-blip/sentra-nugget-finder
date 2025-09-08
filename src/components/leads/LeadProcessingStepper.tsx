@@ -189,6 +189,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     switch (salesforceJob.status) {
       case 'completed': return 'completed';
       case 'running': return 'in-progress';
+      case 'processing': return 'in-progress';
       case 'failed': return 'failed';
       default: return 'pending';
     }
@@ -295,7 +296,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
       status: getSalesforceStepStatus(),
       canStart: hasValidLeads,
       action: handleCheckSalesforce,
-      isLoading: isCheckingSalesforce || salesforceJob?.status === 'running',
+      isLoading: isCheckingSalesforce || salesforceJob?.status === 'running' || salesforceJob?.status === 'processing',
       progress: getSalesforceProgress(),
       stats: getSalesforceStats(),
       requiresPrevious: 'validate'

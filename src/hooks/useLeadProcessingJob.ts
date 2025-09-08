@@ -37,8 +37,10 @@ export function useLeadProcessingJob(eventId: string, stage: string) {
     },
     enabled: !!eventId && !!stage,
     refetchInterval: (query) => {
-      // If job is still pending or running, poll every 2 seconds
-      if (query.state.data?.status === 'pending' || query.state.data?.status === 'running') {
+      // If job is still pending, running, or processing, poll every 2 seconds
+      if (query.state.data?.status === 'pending' || 
+          query.state.data?.status === 'running' || 
+          query.state.data?.status === 'processing') {
         return 2000;
       }
       // If completed, failed, or no data, don't poll

@@ -16,13 +16,21 @@ Deno.serve(async (req) => {
     const { event_id } = await req.json()
     console.log('Starting Salesforce check for event:', event_id)
 
+    // Get count of valid leads to set total_leads
+    const { count: validLeadsCount } = await supabaseClient
+      .from('event_leads')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_id', event_id)
+      .eq('validation_status', 'completed')
+
     // Create processing job
     const { data: job, error: jobError } = await supabaseClient
       .from('lead_processing_jobs')
       .insert({
         event_id,
         stage: 'check_salesforce',
-        status: 'processing',
+        status: 'running',
+        total_leads: validLeadsCount || 0,
         started_at: new Date().toISOString()
       })
       .select()

@@ -41,6 +41,7 @@ import {
 import { useEventLeads } from "@/hooks/useEventLeads";
 import { useEvents } from "@/hooks/useEvents";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
+import { useLeadProcessingJob } from "@/hooks/useLeadProcessingJob";
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
@@ -69,6 +70,7 @@ const ListLeads = () => {
   const { leads, totalCount, isLoading, error, refetch } = useEventLeads(eventId || "", currentPage, pageSize, validationFilter);
   const { events } = useEvents();
   const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId || "");
+  const { data: salesforceJob } = useLeadProcessingJob(eventId || "", 'check_salesforce');
   
   const currentEvent = events.find(event => event.id === eventId);
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -114,6 +116,19 @@ const ListLeads = () => {
 
     handleSearch();
   }, [debouncedSearch, eventId, toast]);
+
+  // Auto-refresh when Salesforce job completes
+  useEffect(() => {
+    const previousStatus = React.useRef(salesforceJob?.status);
+    
+    if (salesforceJob?.status === 'completed' && previousStatus.current === 'processing') {
+      // Job just completed, refresh the data
+      refetch();
+      refetchCounts();
+    }
+    
+    previousStatus.current = salesforceJob?.status;
+  }, [salesforceJob?.status, refetch, refetchCounts]);
 
   const clearSearch = () => {
     setSearchTerm("");
