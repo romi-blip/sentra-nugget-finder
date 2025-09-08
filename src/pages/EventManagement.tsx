@@ -208,38 +208,76 @@ const EventManagement = () => {
       return;
     }
 
-    if (validLeads.length !== leads.length) {
+    // Deduplicate leads by email (case-insensitive)
+    const emailSeen = new Set<string>();
+    const deduplicatedLeads = validLeads.filter(lead => {
+      const normalizedEmail = lead.email.toLowerCase().trim();
+      if (emailSeen.has(normalizedEmail)) {
+        return false;
+      }
+      emailSeen.add(normalizedEmail);
+      return true;
+    });
+
+    const duplicatesRemoved = validLeads.length - deduplicatedLeads.length;
+    const originalSkipped = leads.length - validLeads.length;
+
+    if (originalSkipped > 0 || duplicatesRemoved > 0) {
+      const messages = [];
+      if (originalSkipped > 0) {
+        messages.push(`${originalSkipped} leads skipped (missing required fields)`);
+      }
+      if (duplicatesRemoved > 0) {
+        messages.push(`${duplicatesRemoved} duplicates removed`);
+      }
+      
       toast({
-        title: "Some Leads Skipped",
-        description: `${leads.length - validLeads.length} leads were skipped due to missing required field values`,
+        title: "Leads Filtered",
+        description: messages.join(", "),
         variant: "destructive",
       });
     }
 
-    // Upload leads in batches
+    // Upload leads in batches sequentially
     const batchSize = 500;
     const batches = [];
-    for (let i = 0; i < validLeads.length; i += batchSize) {
-      batches.push(validLeads.slice(i, i + batchSize));
+    for (let i = 0; i < deduplicatedLeads.length; i += batchSize) {
+      batches.push(deduplicatedLeads.slice(i, i + batchSize));
     }
 
-    let processedBatches = 0;
-    const processBatch = async (batchIndex: number) => {
-      const batch = batches[batchIndex];
-      upsertLeads({ eventId: selectedEvent.id, leads: batch });
-      processedBatches++;
-      setUploadProgress((processedBatches / batches.length) * 100);
+    const processBatchesSequentially = async () => {
+      let totalProcessed = 0;
+      for (let i = 0; i < batches.length; i++) {
+        try {
+          const result = await upsertLeads({ eventId: selectedEvent.id, leads: batches[i] });
+          totalProcessed += batches[i].length;
+          setUploadProgress(((i + 1) / batches.length) * 100);
+        } catch (error) {
+          console.error(`Error processing batch ${i + 1}:`, error);
+          toast({
+            title: "Batch Failed",
+            description: `Failed to process batch ${i + 1} of ${batches.length}`,
+            variant: "destructive",
+          });
+          break; // Stop processing on error
+        }
+      }
+      
+      // Show final success message if all batches completed
+      if (totalProcessed > 0) {
+        toast({
+          title: "Upload Complete",
+          description: `Successfully processed ${totalProcessed} leads in ${batches.length} batches`,
+        });
+      }
     };
 
-    // Process first batch immediately
-    if (batches.length > 0) {
-      processBatch(0);
-    }
-
     toast({
-      title: "Upload Started",
-      description: `Processing ${validLeads.length} leads in ${batches.length} batches`,
+      title: "Upload Started", 
+      description: `Processing ${deduplicatedLeads.length} leads in ${batches.length} batches`,
     });
+
+    processBatchesSequentially();
   };
 
   const downloadTemplate = () => {

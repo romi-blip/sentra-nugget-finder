@@ -160,19 +160,20 @@ export class LeadsService {
   }
 
   static async upsertLeads(eventId: string, leads: CreateLeadPayload[]): Promise<{ data: Lead[] | null; error: any }> {
-    // Prepare leads with event_id
+    // Prepare leads with event_id and normalize emails
     const leadsWithEventId = leads.map(lead => ({
       ...lead,
       event_id: eventId,
+      email: lead.email.toLowerCase().trim(), // Normalize email for consistency
       email_opt_out: lead.email_opt_out ?? false,
     }));
 
-    // Use upsert with conflict resolution on (event_id, email)
+    // Use upsert with conflict resolution on (event_id, email) - ignore duplicates
     const { data, error } = await supabase
       .from('event_leads')
       .upsert(leadsWithEventId, { 
         onConflict: 'event_id,email',
-        ignoreDuplicates: false 
+        ignoreDuplicates: true // This will ignore conflicts instead of throwing errors
       })
       .select();
 

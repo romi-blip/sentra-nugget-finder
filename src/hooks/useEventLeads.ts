@@ -138,24 +138,31 @@ export function useEventLeads(eventId: string, page = 1, limit = 50, validationF
       LeadsService.upsertLeads(eventId, leads),
     onSuccess: (result) => {
       if (result.error) {
+        // Better error handling for common database issues
+        const errorMsg = result.error.message || "Failed to upload leads";
+        const isDuplicateError = errorMsg.includes('duplicate') || errorMsg.includes('conflict') || errorMsg.includes('unique constraint');
+        
         toast({
-          title: "Error",
-          description: result.error.message || "Failed to upload leads",
+          title: "Upload Error", 
+          description: isDuplicateError 
+            ? "Some leads already exist in this list. Try removing duplicates from your CSV first."
+            : errorMsg,
           variant: "destructive",
         });
       } else {
         queryClient.invalidateQueries({ queryKey: ['event-leads', eventId] });
         queryClient.invalidateQueries({ queryKey: ['events'] }); // Update lead count
-        toast({
-          title: "Success",
-          description: `Successfully uploaded ${result.data?.length || 0} leads`,
-        });
+        // Don't show success toast here - let the batch processing handle it
       }
     },
     onError: (error: any) => {
+      const isDuplicateError = error.message?.includes('duplicate') || error.message?.includes('conflict') || error.message?.includes('unique constraint');
+      
       toast({
-        title: "Error",
-        description: error.message || "Failed to upload leads",
+        title: "Upload Failed",
+        description: isDuplicateError
+          ? "Duplicate leads detected. Please remove duplicates from your CSV and try again."
+          : error.message || "Failed to upload leads",
         variant: "destructive",
       });
     },
@@ -171,7 +178,7 @@ export function useEventLeads(eventId: string, page = 1, limit = 50, validationF
     updateLead: updateLeadMutation.mutate,
     deleteLead: deleteLeadMutation.mutate,
     deleteLeads: deleteLeadsMutation.mutate,
-    upsertLeads: upsertLeadsMutation.mutate,
+    upsertLeads: upsertLeadsMutation.mutateAsync, // Export mutateAsync for sequential processing
     isCreating: createLeadMutation.isPending,
     isUpdating: updateLeadMutation.isPending,
     isDeleting: deleteLeadMutation.isPending,
