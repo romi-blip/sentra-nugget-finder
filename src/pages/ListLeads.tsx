@@ -47,6 +47,29 @@ import { useToast } from "@/hooks/use-toast";
 import SEO from "@/components/SEO";
 import LeadProcessingStepper from "@/components/leads/LeadProcessingStepper";
 
+// Helper function to derive Salesforce status from boolean flags
+const deriveSalesforceStatus = (lead: any): string => {
+  // If not yet processed by Salesforce, return pending
+  if (lead.salesforce_status === 'pending') {
+    return 'pending';
+  }
+  
+  // Check boolean flags for classification
+  if (lead.sf_existing_customer) return 'existing_customer';
+  if (lead.sf_existing_opportunity) return 'existing_opportunity'; 
+  if (lead.sf_existing_contact) return 'existing_contact';
+  if (lead.sf_existing_account) return 'existing_account';
+  if (lead.sf_existing_lead) return 'existing_lead';
+  
+  // If processed but none of the existing flags are true, it's net new
+  if (lead.salesforce_status === 'completed') {
+    return 'net_new';
+  }
+  
+  // For any other cases (like 'failed'), return the actual status
+  return lead.salesforce_status || 'pending';
+};
+
 const ListLeads = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const [currentPage, setCurrentPage] = useState(1);
@@ -143,16 +166,17 @@ const ListLeads = () => {
       if (validationFilter === 'valid' && lead.validation_status !== 'completed') return false;
       if (validationFilter === 'invalid' && lead.validation_status !== 'failed') return false;
       
-      // Salesforce filter
-      if (salesforceFilter === 'pending' && lead.salesforce_status !== 'pending') return false;
-      if (salesforceFilter === 'existing_customer' && lead.salesforce_status !== 'existing_customer') return false;
-      if (salesforceFilter === 'existing_opportunity' && lead.salesforce_status !== 'existing_opportunity') return false;
-      if (salesforceFilter === 'existing_contact' && lead.salesforce_status !== 'existing_contact') return false;
-      if (salesforceFilter === 'existing_account' && lead.salesforce_status !== 'existing_account') return false;
-      if (salesforceFilter === 'existing_lead' && lead.salesforce_status !== 'existing_lead') return false;
-      if (salesforceFilter === 'net_new' && lead.salesforce_status !== 'net_new') return false;
-      if (salesforceFilter === 'synced' && lead.salesforce_status !== 'synced') return false;
-      if (salesforceFilter === 'failed' && lead.salesforce_status !== 'failed') return false;
+      // Salesforce filter - use derived status
+      const derivedSalesforceStatus = deriveSalesforceStatus(lead);
+      if (salesforceFilter === 'pending' && derivedSalesforceStatus !== 'pending') return false;
+      if (salesforceFilter === 'existing_customer' && derivedSalesforceStatus !== 'existing_customer') return false;
+      if (salesforceFilter === 'existing_opportunity' && derivedSalesforceStatus !== 'existing_opportunity') return false;
+      if (salesforceFilter === 'existing_contact' && derivedSalesforceStatus !== 'existing_contact') return false;
+      if (salesforceFilter === 'existing_account' && derivedSalesforceStatus !== 'existing_account') return false;
+      if (salesforceFilter === 'existing_lead' && derivedSalesforceStatus !== 'existing_lead') return false;
+      if (salesforceFilter === 'net_new' && derivedSalesforceStatus !== 'net_new') return false;
+      if (salesforceFilter === 'synced' && derivedSalesforceStatus !== 'synced') return false;
+      if (salesforceFilter === 'failed' && derivedSalesforceStatus !== 'failed') return false;
       
       // Enrichment filter
       if (enrichmentFilter === 'enriched' && lead.enrichment_status !== 'completed') return false;
@@ -686,25 +710,28 @@ const ListLeads = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {lead.salesforce_status === 'synced' ? (
-                          <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">Synced</Badge>
-                        ) : lead.salesforce_status === 'existing_customer' ? (
-                          <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">Existing Customer</Badge>
-                        ) : lead.salesforce_status === 'existing_opportunity' ? (
-                          <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-200">Existing Opportunity</Badge>
-                        ) : lead.salesforce_status === 'existing_contact' ? (
-                          <Badge variant="secondary" className="bg-cyan-50 text-cyan-700 border-cyan-200">Existing Contact</Badge>
-                        ) : lead.salesforce_status === 'existing_account' ? (
-                          <Badge variant="secondary" className="bg-teal-50 text-teal-700 border-teal-200">Existing Account</Badge>
-                        ) : lead.salesforce_status === 'existing_lead' ? (
-                          <Badge variant="secondary" className="bg-yellow-50 text-yellow-700 border-yellow-200">Existing Lead</Badge>
-                        ) : lead.salesforce_status === 'net_new' ? (
-                          <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-200">Net New</Badge>
-                        ) : lead.salesforce_status === 'failed' ? (
-                          <Badge variant="destructive">Failed</Badge>
-                        ) : (
-                          <Badge variant="outline">Pending</Badge>
-                        )}
+                        {(() => {
+                          const derivedStatus = deriveSalesforceStatus(lead);
+                          if (derivedStatus === 'synced') {
+                            return <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">Synced</Badge>;
+                          } else if (derivedStatus === 'existing_customer') {
+                            return <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">Existing Customer</Badge>;
+                          } else if (derivedStatus === 'existing_opportunity') {
+                            return <Badge variant="secondary" className="bg-orange-50 text-orange-700 border-orange-200">Existing Opportunity</Badge>;
+                          } else if (derivedStatus === 'existing_contact') {
+                            return <Badge variant="secondary" className="bg-cyan-50 text-cyan-700 border-cyan-200">Existing Contact</Badge>;
+                          } else if (derivedStatus === 'existing_account') {
+                            return <Badge variant="secondary" className="bg-teal-50 text-teal-700 border-teal-200">Existing Account</Badge>;
+                          } else if (derivedStatus === 'existing_lead') {
+                            return <Badge variant="secondary" className="bg-yellow-50 text-yellow-700 border-yellow-200">Existing Lead</Badge>;
+                          } else if (derivedStatus === 'net_new') {
+                            return <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-200">Net New</Badge>;
+                          } else if (derivedStatus === 'failed') {
+                            return <Badge variant="destructive">Failed</Badge>;
+                          } else {
+                            return <Badge variant="outline">Pending</Badge>;
+                          }
+                        })()}
                       </TableCell>
                       <TableCell>
                         {lead.enrichment_status === 'completed' ? (
