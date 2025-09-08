@@ -8,6 +8,8 @@ import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
 import { useLeadProcessingJob } from "@/hooks/useLeadProcessingJob";
+import { useLeadsCount } from "@/hooks/useLeadsCount";
+import { useSalesforceStatusCounts } from "@/hooks/useSalesforceStatusCounts";
 
 interface LeadProcessingStepperProps {
   eventId: string;
@@ -27,6 +29,8 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   const { data: salesforceJob } = useLeadProcessingJob(eventId, 'check_salesforce');
   const { data: enrichmentJob } = useLeadProcessingJob(eventId, 'enrich');
   const { data: syncJob } = useLeadProcessingJob(eventId, 'sync');
+  const { data: leadsCount } = useLeadsCount(eventId);
+  const { data: salesforceStatusCounts } = useSalesforceStatusCounts(eventId);
 
   const handleValidateEmails = async () => {
     setIsValidating(true);
@@ -201,14 +205,27 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   };
 
   const getSalesforceStats = () => {
-    if (!salesforceJob) return undefined;
-    if (salesforceJob.status === 'completed') {
-      return `${salesforceJob.processed_leads} processed, ${salesforceJob.failed_leads} failed`;
-    }
-    if (salesforceJob.status === 'running') {
-      return `${salesforceJob.processed_leads}/${salesforceJob.total_leads} processed`;
-    }
-    return undefined;
+    if (!salesforceStatusCounts) return undefined;
+    
+    const total = Object.values(salesforceStatusCounts).reduce((sum, count) => sum + count, 0);
+    if (total === 0) return undefined;
+
+    const statusLabels = {
+      existing_customer: 'Existing Customer',
+      existing_opportunity: 'Existing Opportunity', 
+      existing_contact: 'Existing Contact',
+      existing_account: 'Existing Account',
+      existing_lead: 'Existing Lead',
+      net_new: 'Net New',
+      failed: 'Failed'
+    };
+
+    const nonZeroCounts = Object.entries(salesforceStatusCounts)
+      .filter(([key, count]) => count > 0 && key !== 'pending')
+      .map(([key, count]) => `${count} ${statusLabels[key as keyof typeof statusLabels] || key}`)
+      .join(', ');
+
+    return nonZeroCounts || `${salesforceStatusCounts.pending} pending`;
   };
 
   // Derive Enrichment step status from job data
@@ -274,7 +291,8 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
       description: 'Import leads from CSV file',
       icon: <FileCheck className="h-5 w-5" />,
       status: 'completed',
-      canStart: true
+      canStart: true,
+      stats: leadsCount ? `${leadsCount} leads uploaded` : undefined
     },
     {
       id: 'validate',
@@ -392,6 +410,13 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                 
                  {step.stats && (
                    <p className="text-xs text-muted-foreground mb-3">{step.stats}</p>
+                 )}
+
+                 {/* Show special "Synced" badge for completed sync step */}
+                 {step.id === 'sync' && step.status === 'completed' && (
+                   <Badge className="mb-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0">
+                     ✨ Synced to Salesforce
+                   </Badge>
                  )}
                  
                  {step.id === 'enrich' && enrichmentJob?.status === 'failed' && (
