@@ -7,6 +7,7 @@ export interface Event {
   end_date: string;
   details?: string;
   salesforce_campaign_url?: string;
+  salesforce_campaign_id?: string;
   latest_lead_source?: string;
   latest_lead_source_details?: string;
   created_by: string;

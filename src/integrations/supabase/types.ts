@@ -478,6 +478,7 @@ export type Database = {
           latest_lead_source_details: string | null
           lead_exclusion_field: string | null
           lead_status: string | null
+          leandata_exclusion: boolean | null
           linkedin: string | null
           mailing_city: string | null
           mailing_country: string | null
@@ -530,6 +531,7 @@ export type Database = {
           latest_lead_source_details?: string | null
           lead_exclusion_field?: string | null
           lead_status?: string | null
+          leandata_exclusion?: boolean | null
           linkedin?: string | null
           mailing_city?: string | null
           mailing_country?: string | null
@@ -582,6 +584,7 @@ export type Database = {
           latest_lead_source_details?: string | null
           lead_exclusion_field?: string | null
           lead_status?: string | null
+          leandata_exclusion?: boolean | null
           linkedin?: string | null
           mailing_city?: string | null
           mailing_country?: string | null
@@ -640,6 +643,7 @@ export type Database = {
           latest_lead_source: string | null
           latest_lead_source_details: string | null
           name: string
+          salesforce_campaign_id: string | null
           salesforce_campaign_url: string | null
           start_date: string
           updated_at: string
@@ -653,6 +657,7 @@ export type Database = {
           latest_lead_source?: string | null
           latest_lead_source_details?: string | null
           name: string
+          salesforce_campaign_id?: string | null
           salesforce_campaign_url?: string | null
           start_date: string
           updated_at?: string
@@ -666,6 +671,7 @@ export type Database = {
           latest_lead_source?: string | null
           latest_lead_source_details?: string | null
           name?: string
+          salesforce_campaign_id?: string | null
           salesforce_campaign_url?: string | null
           start_date?: string
           updated_at?: string
