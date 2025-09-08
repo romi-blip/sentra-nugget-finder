@@ -67,6 +67,12 @@ const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
                       User Management
                     </Link>
                     <Link 
+                      to="/analytics" 
+                      className="text-sm font-medium transition-colors hover:text-primary"
+                    >
+                      Analytics
+                    </Link>
+                    <Link 
                       to="/admin/settings" 
                       className="text-sm font-medium transition-colors hover:text-primary"
                     >
