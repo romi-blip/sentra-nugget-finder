@@ -72,6 +72,10 @@ Deno.serve(async (req) => {
     'temp-mail.org', 'throwaway.email', 'maildrop.cc'
   ]
   
+  const blockedDomainKeywords = [
+    'sentra', 'cyera', 'varonis', 'bigid'
+  ]
+  
   const roleBasedEmails = [
     'admin', 'administrator', 'info', 'support', 'contact', 'sales', 'marketing',
     'webmaster', 'noreply', 'no-reply', 'postmaster', 'root', 'mail', 'email'
@@ -102,6 +106,11 @@ Deno.serve(async (req) => {
       // Disposable email domain check
       if (disposableEmailDomains.includes(emailDomain)) {
         errors.push('Disposable email domain not allowed')
+      }
+      
+      // Blocked domain keywords check (competitors)
+      if (blockedDomainKeywords.some(keyword => emailDomain.includes(keyword))) {
+        errors.push('Competitor domain not allowed')
       }
       
       // Role-based email check
