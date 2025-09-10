@@ -15,17 +15,12 @@ interface Lead {
 }
 
 interface TrueListBatchResponse {
-  batch_id: string
-  status: string
-  total_emails: number
-  completed_emails?: number
-  results?: Array<{
-    email: string
-    status: string
-    result: string
-    score: number
-    reason: string
-  }>
+  id: string
+  batch_state: string
+  email_count: number
+  processed_count?: number
+  annotated_csv_url?: string
+  safest_bet_csv_url?: string
 }
 
 Deno.serve(async (req) => {
@@ -276,14 +271,19 @@ async function performEmailValidation(
 
     // Submit batch validation request
     console.log('🚀 Submitting batch validation request to TrueList...')
-    const batchResponse = await fetch('https://api.truelist.io/batch', {
+    
+    // Format emails as required by TrueList API: [["email1"], ["email2"], ...]
+    const emailData = uniqueEmails.map(email => [email])
+    console.log(`📧 Formatted ${emailData.length} emails for TrueList batch API`)
+    
+    const batchResponse = await fetch('https://api.truelist.io/api/v1/batches', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${truelistApiKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify({
-        emails: uniqueEmails
+      body: new URLSearchParams({
+        data: JSON.stringify(emailData)
       })
     })
 
@@ -301,9 +301,9 @@ async function performEmailValidation(
 
     const batchData: TrueListBatchResponse = await batchResponse.json()
     console.log('✅ Batch submission successful:', {
-      batch_id: batchData.batch_id,
-      status: batchData.status,
-      total_emails: batchData.total_emails
+      batch_id: batchData.id,
+      status: batchData.batch_state,
+      total_emails: batchData.email_count
     })
 
     // Poll for results
@@ -317,8 +317,8 @@ async function performEmailValidation(
       
       await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
 
-      console.log(`📡 Checking batch status for ID: ${batchData.batch_id}`)
-      const statusResponse = await fetch(`https://api.truelist.io/batch/${batchData.batch_id}`, {
+      console.log(`📡 Checking batch status for ID: ${batchData.id}`)
+      const statusResponse = await fetch(`https://api.truelist.io/api/v1/batches/${batchData.id}`, {
         headers: {
           'Authorization': `Bearer ${truelistApiKey}`
         }
@@ -336,55 +336,81 @@ async function performEmailValidation(
 
       const statusData: TrueListBatchResponse = await statusResponse.json()
       console.log(`📊 Batch progress:`, {
-        status: statusData.status,
-        completed: statusData.completed_emails,
-        total: statusData.total_emails,
-        progress: statusData.completed_emails && statusData.total_emails ? 
-          `${Math.round((statusData.completed_emails / statusData.total_emails) * 100)}%` : 'N/A'
+        status: statusData.batch_state,
+        completed: statusData.processed_count,
+        total: statusData.email_count,
+        progress: statusData.processed_count && statusData.email_count ? 
+          `${Math.round((statusData.processed_count / statusData.email_count) * 100)}%` : 'N/A'
       })
 
-      if (statusData.status === 'completed' && statusData.results) {
-        console.log('🎉 Email validation completed! Processing results...')
-        console.log(`📈 Results summary: ${statusData.results.length} results received`)
+      if (statusData.batch_state === 'completed' && statusData.annotated_csv_url) {
+        console.log('🎉 Email validation completed! Downloading results...')
+        console.log(`📈 CSV URL: ${statusData.annotated_csv_url}`)
         
-        // Log sample results
-        const sampleResults = statusData.results.slice(0, 3)
-        console.log('📋 Sample results:', sampleResults.map(r => ({
-          email: r.email,
-          result: r.result,
-          score: r.score,
-          reason: r.reason
-        })))
+        // Download and parse the CSV results
+        const csvResponse = await fetch(statusData.annotated_csv_url, {
+          headers: {
+            'Authorization': `Bearer ${truelistApiKey}`
+          }
+        })
         
-        // Update leads with validation results
+        if (!csvResponse.ok) {
+          console.error('❌ Failed to download CSV results:', csvResponse.statusText)
+          throw new Error(`Failed to download CSV results: ${csvResponse.statusText}`)
+        }
+        
+        const csvText = await csvResponse.text()
+        console.log('📁 Downloaded CSV results, parsing...')
+        
+        // Parse CSV (simple parsing for comma-separated values)
+        const lines = csvText.split('\n').filter(line => line.trim())
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+        console.log('📋 CSV headers:', headers)
+        
         let updateCount = 0
         let updateErrors = 0
         
-        for (const result of statusData.results) {
+        // Process each row (skip header)
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
+          if (values.length < headers.length) continue
+          
+          const row: any = {}
+          headers.forEach((header, index) => {
+            row[header] = values[index]
+          })
+          
+          // Extract email and validation status
+          const email = row[headers[0]] // First column should be email
+          const emailState = row['email_state'] || 'unknown'
+          const emailSubState = row['email_sub_state'] || 'unknown'
+          
+          if (!email) continue
+          
           try {
             const leadUpdates = {
-              email_validation_status: result.result === 'valid' ? 'valid' : 'invalid',
-              email_validation_result: result,
-              email_validation_score: result.score,
-              email_validation_reason: result.reason
+              email_validation_status: emailState === 'ok' ? 'valid' : 'invalid',
+              email_validation_result: row,
+              email_validation_score: emailState === 'ok' ? 100 : 0,
+              email_validation_reason: emailSubState
             }
 
             const { error: updateError } = await supabaseClient
               .from('event_leads')
               .update(leadUpdates)
-              .eq('email', result.email)
+              .eq('email', email)
 
             if (updateError) {
-              console.error(`❌ Failed to update lead for email ${result.email}:`, updateError)
+              console.error(`❌ Failed to update lead for email ${email}:`, updateError)
               updateErrors++
             } else {
               updateCount++
               if (updateCount <= 3) { // Log first few updates
-                console.log(`✅ Updated email validation for ${result.email}: ${result.result} (score: ${result.score})`)
+                console.log(`✅ Updated email validation for ${email}: ${emailState} (${emailSubState})`)
               }
             }
           } catch (updateErr) {
-            console.error(`❌ Exception updating email ${result.email}:`, updateErr)
+            console.error(`❌ Exception updating email ${email}:`, updateErr)
             updateErrors++
           }
         }
@@ -393,17 +419,17 @@ async function performEmailValidation(
         console.log('✅ TrueList email validation process completed successfully')
         return
         
-      } else if (statusData.status === 'failed') {
+      } else if (statusData.batch_state === 'failed') {
         console.error('❌ TrueList batch validation failed')
         throw new Error('TrueList batch validation failed')
       } else {
-        console.log(`⏳ Batch still processing... (status: ${statusData.status})`)
+        console.log(`⏳ Batch still processing... (status: ${statusData.batch_state})`)
       }
     }
 
     if (attempts >= maxAttempts) {
       console.warn('⚠️ Email validation timed out after 5 minutes, but continuing with other validations')
-      console.warn(`⚠️ Batch ID ${batchData.batch_id} may still be processing - check TrueList dashboard`)
+      console.warn(`⚠️ Batch ID ${batchData.id} may still be processing - check TrueList dashboard`)
     }
 
   } catch (error) {
