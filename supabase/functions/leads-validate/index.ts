@@ -8,6 +8,24 @@ interface Lead {
   first_name: string
   last_name: string
   account_name: string
+  email_validation_status?: string
+  email_validation_result?: any
+  email_validation_score?: number
+  email_validation_reason?: string
+}
+
+interface TrueListBatchResponse {
+  batch_id: string
+  status: string
+  total_emails: number
+  completed_emails?: number
+  results?: Array<{
+    email: string
+    status: string
+    result: string
+    score: number
+    reason: string
+  }>
 }
 
 Deno.serve(async (req) => {
@@ -20,6 +38,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
+
+    const truelistApiKey = Deno.env.get('TRUELIST_API_KEY')
+    if (!truelistApiKey) {
+      throw new Error('TRUELIST_API_KEY is not configured')
+    }
 
     const { event_id } = await req.json()
     console.log('Starting validation for event:', event_id)
@@ -61,7 +84,11 @@ Deno.serve(async (req) => {
     let processedCount = 0
     let failedCount = 0
 
-  // Define validation patterns
+    // Step 1: Email validation using TrueList API
+    console.log('Starting TrueList email validation...')
+    await performEmailValidation(supabaseClient, leads || [], truelistApiKey, job.id)
+
+    // Step 2: Basic validation patterns
   const genericEmailDomains = [
     'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
     'icloud.com', 'mail.com', 'protonmail.com', 'yandex.com'
@@ -220,3 +247,98 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+async function performEmailValidation(
+  supabaseClient: any,
+  leads: Lead[],
+  truelistApiKey: string,
+  jobId: string
+) {
+  try {
+    // Extract unique emails for validation
+    const uniqueEmails = [...new Set(leads.map(lead => lead.email).filter(Boolean))]
+    console.log(`Validating ${uniqueEmails.length} unique emails`)
+
+    if (uniqueEmails.length === 0) {
+      console.log('No emails to validate')
+      return
+    }
+
+    // Submit batch validation request
+    const batchResponse = await fetch('https://api.truelist.io/batch', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${truelistApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        emails: uniqueEmails
+      })
+    })
+
+    if (!batchResponse.ok) {
+      const errorText = await batchResponse.text()
+      console.error('TrueList batch submission failed:', errorText)
+      throw new Error(`TrueList API error: ${batchResponse.status} - ${errorText}`)
+    }
+
+    const batchData: TrueListBatchResponse = await batchResponse.json()
+    console.log(`Batch submitted with ID: ${batchData.batch_id}`)
+
+    // Poll for results
+    let attempts = 0
+    const maxAttempts = 30 // 5 minutes with 10-second intervals
+    
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
+      attempts++
+
+      const statusResponse = await fetch(`https://api.truelist.io/batch/${batchData.batch_id}`, {
+        headers: {
+          'Authorization': `Bearer ${truelistApiKey}`
+        }
+      })
+
+      if (!statusResponse.ok) {
+        console.error('Failed to check batch status:', statusResponse.statusText)
+        continue
+      }
+
+      const statusData: TrueListBatchResponse = await statusResponse.json()
+      console.log(`Batch status: ${statusData.status}, completed: ${statusData.completed_emails}/${statusData.total_emails}`)
+
+      if (statusData.status === 'completed' && statusData.results) {
+        console.log('Email validation completed, updating database...')
+        
+        // Update leads with validation results
+        for (const result of statusData.results) {
+          const leadUpdates = {
+            email_validation_status: result.result === 'valid' ? 'valid' : 'invalid',
+            email_validation_result: result,
+            email_validation_score: result.score,
+            email_validation_reason: result.reason
+          }
+
+          await supabaseClient
+            .from('event_leads')
+            .update(leadUpdates)
+            .eq('email', result.email)
+
+          console.log(`Updated email validation for ${result.email}: ${result.result}`)
+        }
+
+        break
+      } else if (statusData.status === 'failed') {
+        throw new Error('TrueList batch validation failed')
+      }
+    }
+
+    if (attempts >= maxAttempts) {
+      console.warn('Email validation timed out, but continuing with other validations')
+    }
+
+  } catch (error) {
+    console.error('Email validation error:', error)
+    // Don't throw - continue with other validations
+  }
+}

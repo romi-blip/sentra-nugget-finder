@@ -12,5 +12,6 @@ export function useLeadValidationCounts(eventId: string) {
       return result;
     },
     enabled: !!eventId,
+    refetchInterval: 5000, // Refresh every 5 seconds during validation
   });
 }

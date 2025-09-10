@@ -469,6 +469,10 @@ export type Database = {
           created_at: string
           email: string
           email_opt_out: boolean
+          email_validation_reason: string | null
+          email_validation_result: Json | null
+          email_validation_score: number | null
+          email_validation_status: string | null
           enrichment_status: string | null
           event_id: string
           first_name: string
@@ -522,6 +526,10 @@ export type Database = {
           created_at?: string
           email: string
           email_opt_out?: boolean
+          email_validation_reason?: string | null
+          email_validation_result?: Json | null
+          email_validation_score?: number | null
+          email_validation_status?: string | null
           enrichment_status?: string | null
           event_id: string
           first_name: string
@@ -575,6 +583,10 @@ export type Database = {
           created_at?: string
           email?: string
           email_opt_out?: boolean
+          email_validation_reason?: string | null
+          email_validation_result?: Json | null
+          email_validation_score?: number | null
+          email_validation_status?: string | null
           enrichment_status?: string | null
           event_id?: string
           first_name?: string

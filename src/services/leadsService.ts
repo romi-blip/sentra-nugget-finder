@@ -191,9 +191,15 @@ export class LeadsService {
     return { data: data as Lead[] || [], error };
   }
 
-  static async getValidationCounts(eventId: string): Promise<{ validCount: number; invalidCount: number; error: any }> {
+  static async getValidationCounts(eventId: string): Promise<{ 
+    validCount: number; 
+    invalidCount: number; 
+    emailValidCount: number;
+    emailInvalidCount: number;  
+    error: any 
+  }> {
     try {
-      const [validResult, invalidResult] = await Promise.all([
+      const [validResult, invalidResult, emailValidResult, emailInvalidResult] = await Promise.all([
         supabase
           .from('event_leads')
           .select('*', { count: 'exact', head: true })
@@ -203,19 +209,39 @@ export class LeadsService {
           .from('event_leads')
           .select('*', { count: 'exact', head: true })
           .eq('event_id', eventId)
-          .eq('validation_status', 'failed')
+          .eq('validation_status', 'failed'),
+        supabase
+          .from('event_leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', eventId)
+          .eq('email_validation_status', 'valid'),
+        supabase
+          .from('event_leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', eventId)
+          .eq('email_validation_status', 'invalid')
       ]);
 
       if (validResult.error) throw validResult.error;
       if (invalidResult.error) throw invalidResult.error;
+      if (emailValidResult.error) throw emailValidResult.error;
+      if (emailInvalidResult.error) throw emailInvalidResult.error;
 
       return {
         validCount: validResult.count || 0,
         invalidCount: invalidResult.count || 0,
+        emailValidCount: emailValidResult.count || 0,
+        emailInvalidCount: emailInvalidResult.count || 0,
         error: null
       };
     } catch (error) {
-      return { validCount: 0, invalidCount: 0, error };
+      return { 
+        validCount: 0, 
+        invalidCount: 0, 
+        emailValidCount: 0,
+        emailInvalidCount: 0,
+        error 
+      };
     }
   }
 

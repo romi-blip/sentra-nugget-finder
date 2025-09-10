@@ -185,6 +185,10 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   const hasEnrichmentCompleted = enrichmentJob?.status === 'completed';
   const validationProgress = validationCounts ? 
     Math.round((validationCounts.validCount / (validationCounts.validCount + validationCounts.invalidCount)) * 100) : 0;
+  
+  const emailValidationStats = validationCounts && (validationCounts.emailValidCount > 0 || validationCounts.emailInvalidCount > 0) ? 
+    `${validationCounts.emailValidCount} valid emails, ${validationCounts.emailInvalidCount} invalid emails` : 
+    '';
 
   // Derive Salesforce step status from job data
   const getSalesforceStepStatus = () => {
@@ -304,7 +308,9 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
       action: handleValidateEmails,
       isLoading: isValidating,
       progress: validationProgress,
-      stats: validationCounts ? `${validationCounts.validCount} valid, ${validationCounts.invalidCount} invalid` : undefined
+      stats: validationCounts ? 
+        `${validationCounts.validCount} valid, ${validationCounts.invalidCount} invalid${emailValidationStats ? ` • ${emailValidationStats}` : ''}` : 
+        undefined
     },
     {
       id: 'salesforce',
