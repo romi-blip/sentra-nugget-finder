@@ -705,9 +705,11 @@ const ListLeads = () => {
                         ) : lead.validation_status === 'failed' ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge variant="destructive" className="cursor-help">Invalid</Badge>
+                              <div className="cursor-help">
+                                <Badge variant="destructive">Invalid</Badge>
+                              </div>
                             </TooltipTrigger>
-                            <TooltipContent className="max-w-sm">
+                            <TooltipContent className="max-w-sm z-50">
                               <div className="text-xs space-y-1">
                                 {lead.validation_errors && Array.isArray(lead.validation_errors) && lead.validation_errors.length > 0 ? (
                                   <div>
