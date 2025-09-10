@@ -630,8 +630,7 @@ const ListLeads = () => {
               </p>
             </div>
           ) : (
-            <>
-            <TooltipProvider>
+            <TooltipProvider delayDuration={300}>
               <Table className={isCompact ? 'text-sm' : ''}>
                 <TableHeader className="sticky top-0 bg-background border-b">
                   <TableRow>
@@ -772,7 +771,6 @@ const ListLeads = () => {
                   ))}
                 </TableBody>
               </Table>
-            </TooltipProvider>
 
               {/* Pagination - only show for non-search results */}
               {!debouncedSearch && totalPages > 1 && (
@@ -849,7 +847,7 @@ const ListLeads = () => {
                   </Pagination>
                 </div>
               )}
-            </>
+            </TooltipProvider>
           )}
         </CardContent>
       </Card>
