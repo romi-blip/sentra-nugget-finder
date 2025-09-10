@@ -49,6 +49,10 @@ export interface Lead {
   zoominfo_company_state?: string;
   zoominfo_company_country?: string;
   sync_status?: string;
+  email_validation_status?: 'valid' | 'invalid' | 'pending';
+  email_validation_reason?: string;
+  email_validation_result?: any;
+  email_validation_score?: number;
   created_at: string;
   updated_at: string;
 }

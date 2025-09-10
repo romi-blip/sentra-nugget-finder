@@ -631,6 +631,7 @@ const ListLeads = () => {
             </div>
           ) : (
             <>
+            <TooltipProvider>
               <Table className={isCompact ? 'text-sm' : ''}>
                 <TableHeader className="sticky top-0 bg-background border-b">
                   <TableRow>
@@ -703,7 +704,33 @@ const ListLeads = () => {
                         {lead.validation_status === 'completed' ? (
                           <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">Valid</Badge>
                         ) : lead.validation_status === 'failed' ? (
-                          <Badge variant="destructive">Invalid</Badge>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="destructive" className="cursor-help">Invalid</Badge>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-sm">
+                              <div className="text-xs space-y-1">
+                                {lead.validation_errors && Array.isArray(lead.validation_errors) && lead.validation_errors.length > 0 ? (
+                                  <div>
+                                    <strong>Validation Errors:</strong>
+                                    <ul className="list-disc list-inside mt-1">
+                                      {lead.validation_errors.map((error: string, index: number) => (
+                                        <li key={index}>{error}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : null}
+                                {lead.email_validation_reason && (
+                                  <div>
+                                    <strong>TrueList:</strong> {lead.email_validation_reason}
+                                  </div>
+                                )}
+                                {(!lead.validation_errors || !Array.isArray(lead.validation_errors) || lead.validation_errors.length === 0) && !lead.email_validation_reason && (
+                                  <div>No details available</div>
+                                )}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
                         ) : (
                           <Badge variant="outline">Pending</Badge>
                         )}
@@ -745,6 +772,7 @@ const ListLeads = () => {
                   ))}
                 </TableBody>
               </Table>
+            </TooltipProvider>
 
               {/* Pagination - only show for non-search results */}
               {!debouncedSearch && totalPages > 1 && (
