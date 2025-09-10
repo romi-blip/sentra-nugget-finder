@@ -254,17 +254,28 @@ async function performEmailValidation(
   truelistApiKey: string,
   jobId: string
 ) {
+  console.log('=== STARTING TRUELIST EMAIL VALIDATION ===')
+  
   try {
     // Extract unique emails for validation
     const uniqueEmails = [...new Set(leads.map(lead => lead.email).filter(Boolean))]
-    console.log(`Validating ${uniqueEmails.length} unique emails`)
+    console.log(`📧 Found ${uniqueEmails.length} unique emails to validate`)
+    console.log(`📧 Sample emails: ${uniqueEmails.slice(0, 3).join(', ')}...`)
 
     if (uniqueEmails.length === 0) {
-      console.log('No emails to validate')
+      console.log('⚠️ No emails to validate - skipping TrueList API')
       return
     }
 
+    // Check API key
+    if (!truelistApiKey || truelistApiKey.trim() === '') {
+      console.error('❌ TRUELIST_API_KEY is missing or empty')
+      throw new Error('TrueList API key is not configured')
+    }
+    console.log('✅ TrueList API key is configured')
+
     // Submit batch validation request
+    console.log('🚀 Submitting batch validation request to TrueList...')
     const batchResponse = await fetch('https://api.truelist.io/batch', {
       method: 'POST',
       headers: {
@@ -276,69 +287,134 @@ async function performEmailValidation(
       })
     })
 
+    console.log(`📡 TrueList batch API response status: ${batchResponse.status} ${batchResponse.statusText}`)
+
     if (!batchResponse.ok) {
       const errorText = await batchResponse.text()
-      console.error('TrueList batch submission failed:', errorText)
+      console.error('❌ TrueList batch submission failed:', {
+        status: batchResponse.status,
+        statusText: batchResponse.statusText,
+        error: errorText
+      })
       throw new Error(`TrueList API error: ${batchResponse.status} - ${errorText}`)
     }
 
     const batchData: TrueListBatchResponse = await batchResponse.json()
-    console.log(`Batch submitted with ID: ${batchData.batch_id}`)
+    console.log('✅ Batch submission successful:', {
+      batch_id: batchData.batch_id,
+      status: batchData.status,
+      total_emails: batchData.total_emails
+    })
 
     // Poll for results
+    console.log('⏳ Starting polling for batch results...')
     let attempts = 0
     const maxAttempts = 30 // 5 minutes with 10-second intervals
     
     while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
       attempts++
+      console.log(`🔄 Polling attempt ${attempts}/${maxAttempts} - waiting 10 seconds...`)
+      
+      await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
 
+      console.log(`📡 Checking batch status for ID: ${batchData.batch_id}`)
       const statusResponse = await fetch(`https://api.truelist.io/batch/${batchData.batch_id}`, {
         headers: {
           'Authorization': `Bearer ${truelistApiKey}`
         }
       })
 
+      console.log(`📡 Status check response: ${statusResponse.status} ${statusResponse.statusText}`)
+
       if (!statusResponse.ok) {
-        console.error('Failed to check batch status:', statusResponse.statusText)
+        console.error(`❌ Failed to check batch status (attempt ${attempts}):`, {
+          status: statusResponse.status,
+          statusText: statusResponse.statusText
+        })
         continue
       }
 
       const statusData: TrueListBatchResponse = await statusResponse.json()
-      console.log(`Batch status: ${statusData.status}, completed: ${statusData.completed_emails}/${statusData.total_emails}`)
+      console.log(`📊 Batch progress:`, {
+        status: statusData.status,
+        completed: statusData.completed_emails,
+        total: statusData.total_emails,
+        progress: statusData.completed_emails && statusData.total_emails ? 
+          `${Math.round((statusData.completed_emails / statusData.total_emails) * 100)}%` : 'N/A'
+      })
 
       if (statusData.status === 'completed' && statusData.results) {
-        console.log('Email validation completed, updating database...')
+        console.log('🎉 Email validation completed! Processing results...')
+        console.log(`📈 Results summary: ${statusData.results.length} results received`)
+        
+        // Log sample results
+        const sampleResults = statusData.results.slice(0, 3)
+        console.log('📋 Sample results:', sampleResults.map(r => ({
+          email: r.email,
+          result: r.result,
+          score: r.score,
+          reason: r.reason
+        })))
         
         // Update leads with validation results
+        let updateCount = 0
+        let updateErrors = 0
+        
         for (const result of statusData.results) {
-          const leadUpdates = {
-            email_validation_status: result.result === 'valid' ? 'valid' : 'invalid',
-            email_validation_result: result,
-            email_validation_score: result.score,
-            email_validation_reason: result.reason
+          try {
+            const leadUpdates = {
+              email_validation_status: result.result === 'valid' ? 'valid' : 'invalid',
+              email_validation_result: result,
+              email_validation_score: result.score,
+              email_validation_reason: result.reason
+            }
+
+            const { error: updateError } = await supabaseClient
+              .from('event_leads')
+              .update(leadUpdates)
+              .eq('email', result.email)
+
+            if (updateError) {
+              console.error(`❌ Failed to update lead for email ${result.email}:`, updateError)
+              updateErrors++
+            } else {
+              updateCount++
+              if (updateCount <= 3) { // Log first few updates
+                console.log(`✅ Updated email validation for ${result.email}: ${result.result} (score: ${result.score})`)
+              }
+            }
+          } catch (updateErr) {
+            console.error(`❌ Exception updating email ${result.email}:`, updateErr)
+            updateErrors++
           }
-
-          await supabaseClient
-            .from('event_leads')
-            .update(leadUpdates)
-            .eq('email', result.email)
-
-          console.log(`Updated email validation for ${result.email}: ${result.result}`)
         }
 
-        break
+        console.log(`📊 Database update summary: ${updateCount} successful, ${updateErrors} failed`)
+        console.log('✅ TrueList email validation process completed successfully')
+        return
+        
       } else if (statusData.status === 'failed') {
+        console.error('❌ TrueList batch validation failed')
         throw new Error('TrueList batch validation failed')
+      } else {
+        console.log(`⏳ Batch still processing... (status: ${statusData.status})`)
       }
     }
 
     if (attempts >= maxAttempts) {
-      console.warn('Email validation timed out, but continuing with other validations')
+      console.warn('⚠️ Email validation timed out after 5 minutes, but continuing with other validations')
+      console.warn(`⚠️ Batch ID ${batchData.batch_id} may still be processing - check TrueList dashboard`)
     }
 
   } catch (error) {
-    console.error('Email validation error:', error)
+    console.error('💥 Email validation error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    })
     // Don't throw - continue with other validations
+    console.log('⚠️ Continuing with basic validation despite email validation failure')
   }
+  
+  console.log('=== TRUELIST EMAIL VALIDATION ENDED ===')
 }
