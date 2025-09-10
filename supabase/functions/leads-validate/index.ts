@@ -381,9 +381,9 @@ async function performEmailValidation(
           })
           
           // Extract email and validation status
-          const email = row[headers[0]] // First column should be email
-          const emailState = row['email_state'] || 'unknown'
-          const emailSubState = row['email_sub_state'] || 'unknown'
+          const email = row['Email Address'] || row[''] || row[headers[0]] // TrueList puts email in 'Email Address' or empty header
+          const emailState = row['Email State'] || 'unknown'
+          const emailSubState = row['Email Sub-State'] || 'unknown'
           
           if (!email) continue
           
