@@ -42,14 +42,17 @@ Deno.serve(async (req) => {
     const { event_id } = await req.json()
     console.log('Starting validation for event:', event_id)
 
-    // Create processing job
+    // Create processing job with detailed tracking
     const { data: job, error: jobError } = await supabaseClient
       .from('lead_processing_jobs')
       .insert({
         event_id,
         stage: 'validate',
         status: 'processing',
-        started_at: new Date().toISOString()
+        started_at: new Date().toISOString(),
+        current_stage: 'fetching_leads',
+        stage_progress: 0,
+        stage_description: 'Fetching leads from database...'
       })
       .select()
       .single()
@@ -70,10 +73,16 @@ Deno.serve(async (req) => {
       throw leadsError
     }
 
-    // Update job with total count
+    // Update job with total count and progress
     await supabaseClient
       .from('lead_processing_jobs')
-      .update({ total_leads: leads?.length || 0 })
+      .update({ 
+        total_leads: leads?.length || 0,
+        current_stage: 'submitting_to_api',
+        stage_progress: 10,
+        stage_description: `Submitting ${leads?.length || 0} unique emails to validation service...`,
+        estimated_completion_time: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes from now
+      })
       .eq('id', job.id)
 
     let processedCount = 0
@@ -82,6 +91,16 @@ Deno.serve(async (req) => {
     // Step 1: Email validation using TrueList API
     console.log('Starting TrueList email validation...')
     await performEmailValidation(supabaseClient, leads || [], truelistApiKey, job.id)
+    
+    // Update progress after API validation
+    await supabaseClient
+      .from('lead_processing_jobs')
+      .update({ 
+        current_stage: 'basic_validation',
+        stage_progress: 60,
+        stage_description: 'Running business rule validation...'
+      })
+      .eq('id', job.id)
 
     // Step 2: Basic validation patterns
   const genericEmailDomains = [
@@ -205,6 +224,20 @@ Deno.serve(async (req) => {
         .eq('id', lead.id)
 
       console.log(`Validated lead ${lead.id}: ${status}`)
+      
+      // Update progress periodically
+      if ((processedCount + failedCount) % 50 === 0) {
+        const progress = Math.round(((processedCount + failedCount) / (leads?.length || 1)) * 100);
+        await supabaseClient
+          .from('lead_processing_jobs')
+          .update({
+            processed_leads: processedCount,
+            failed_leads: failedCount,
+            stage_progress: Math.min(60 + (progress * 0.4), 100),
+            stage_description: `Validating leads... (${processedCount + failedCount}/${leads?.length || 0})`
+          })
+          .eq('id', job.id)
+      }
     }
 
     // Update job completion
@@ -214,7 +247,10 @@ Deno.serve(async (req) => {
         status: 'completed',
         processed_leads: processedCount,
         failed_leads: failedCount,
-        completed_at: new Date().toISOString()
+        completed_at: new Date().toISOString(),
+        current_stage: 'completed',
+        stage_progress: 100,
+        stage_description: `Validation completed: ${processedCount} valid, ${failedCount} invalid leads`
       })
       .eq('id', job.id)
 
@@ -252,6 +288,16 @@ async function performEmailValidation(
   console.log('=== STARTING TRUELIST EMAIL VALIDATION ===')
   
   try {
+    // Update job status
+    await supabaseClient
+      .from('lead_processing_jobs')
+      .update({ 
+        current_stage: 'submitting_to_api',
+        stage_progress: 15,
+        stage_description: 'Preparing emails for validation service...'
+      })
+      .eq('id', jobId)
+      
     // Extract unique emails for validation
     const uniqueEmails = [...new Set(leads.map(lead => lead.email).filter(Boolean))]
     console.log(`📧 Found ${uniqueEmails.length} unique emails to validate`)
@@ -271,6 +317,16 @@ async function performEmailValidation(
 
     // Submit batch validation request
     console.log('🚀 Submitting batch validation request to TrueList...')
+    
+    // Update job status
+    await supabaseClient
+      .from('lead_processing_jobs')
+      .update({ 
+        current_stage: 'submitting_to_api',
+        stage_progress: 20,
+        stage_description: `Submitting ${uniqueEmails.length} emails to validation service...`
+      })
+      .eq('id', jobId)
     
     // Format emails as required by TrueList API: [["email1"], ["email2"], ...]
     const emailData = uniqueEmails.map(email => [email])
@@ -311,9 +367,29 @@ async function performEmailValidation(
     let attempts = 0
     const maxAttempts = 30 // 5 minutes with 10-second intervals
     
+    // Update job to waiting status
+    await supabaseClient
+      .from('lead_processing_jobs')
+      .update({ 
+        current_stage: 'waiting_for_results',
+        stage_progress: 25,
+        stage_description: 'Waiting for validation service results...'
+      })
+      .eq('id', jobId)
+    
     while (attempts < maxAttempts) {
       attempts++
       console.log(`🔄 Polling attempt ${attempts}/${maxAttempts} - waiting 10 seconds...`)
+      
+      // Update progress during polling
+      const pollingProgress = 25 + Math.round((attempts / maxAttempts) * 30); // 25% to 55%
+      await supabaseClient
+        .from('lead_processing_jobs')
+        .update({ 
+          stage_progress: pollingProgress,
+          stage_description: `Waiting for validation results... (attempt ${attempts}/${maxAttempts})`
+        })
+        .eq('id', jobId)
       
       await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
 
@@ -346,6 +422,16 @@ async function performEmailValidation(
       if (statusData.batch_state === 'completed' && statusData.annotated_csv_url) {
         console.log('🎉 Email validation completed! Downloading results...')
         console.log(`📈 CSV URL: ${statusData.annotated_csv_url}`)
+        
+        // Update job to downloading status
+        await supabaseClient
+          .from('lead_processing_jobs')  
+          .update({ 
+            current_stage: 'downloading_results',
+            stage_progress: 55,
+            stage_description: 'Downloading validation results...'
+          })
+          .eq('id', jobId)
         
         // Download and parse the CSV results
         const csvResponse = await fetch(statusData.annotated_csv_url, {

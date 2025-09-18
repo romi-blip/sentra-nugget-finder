@@ -14,6 +14,10 @@ interface LeadProcessingJob {
   created_at: string;
   updated_at: string;
   error_message: string | null;
+  current_stage: string | null;
+  stage_progress: number | null;
+  estimated_completion_time: string | null;
+  stage_description: string | null;
 }
 
 export function useLeadProcessingJob(eventId: string, stage: string) {

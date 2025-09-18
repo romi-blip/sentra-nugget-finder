@@ -778,12 +778,16 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          current_stage: string | null
           error_message: string | null
+          estimated_completion_time: string | null
           event_id: string
           failed_leads: number
           id: string
           processed_leads: number
           stage: string
+          stage_description: string | null
+          stage_progress: number | null
           started_at: string | null
           status: string
           total_leads: number
@@ -792,12 +796,16 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
+          current_stage?: string | null
           error_message?: string | null
+          estimated_completion_time?: string | null
           event_id: string
           failed_leads?: number
           id?: string
           processed_leads?: number
           stage: string
+          stage_description?: string | null
+          stage_progress?: number | null
           started_at?: string | null
           status?: string
           total_leads?: number
@@ -806,12 +814,16 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
+          current_stage?: string | null
           error_message?: string | null
+          estimated_completion_time?: string | null
           event_id?: string
           failed_leads?: number
           id?: string
           processed_leads?: number
           stage?: string
+          stage_description?: string | null
+          stage_progress?: number | null
           started_at?: string | null
           status?: string
           total_leads?: number
@@ -1169,7 +1181,7 @@ export type Database = {
       }
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: unknown
+        Returns: string
       }
       match_documents_competitors: {
         Args: { filter?: Json; match_count?: number; query_embedding: string }

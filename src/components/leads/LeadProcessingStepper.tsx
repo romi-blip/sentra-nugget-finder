@@ -26,6 +26,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
   const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId);
+  const { data: validationJob } = useLeadProcessingJob(eventId, 'validate');
   const { data: salesforceJob } = useLeadProcessingJob(eventId, 'check_salesforce');
   const { data: enrichmentJob } = useLeadProcessingJob(eventId, 'enrich');
   const { data: syncJob } = useLeadProcessingJob(eventId, 'sync');
@@ -303,14 +304,21 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
       title: 'Validate Emails',
       description: 'Check email deliverability',
       icon: <Users className="h-5 w-5" />,
-      status: hasValidLeads ? 'completed' : validationCounts?.invalidCount > 0 ? 'in-progress' : 'pending',
+      status: validationJob?.status === 'completed' ? 'completed' : 
+              validationJob?.status === 'processing' ? 'in-progress' : 
+              validationJob?.status === 'failed' ? 'failed' : 'pending',
       canStart: true,
       action: handleValidateEmails,
-      isLoading: isValidating,
-      progress: validationProgress,
+      isLoading: isValidating || validationJob?.status === 'processing',
+      progress: validationJob?.stage_progress !== null ? validationJob.stage_progress : validationProgress,
       stats: validationCounts ? 
         `${validationCounts.validCount} valid, ${validationCounts.invalidCount} invalid${emailValidationStats ? ` • ${emailValidationStats}` : ''}` : 
-        undefined
+        undefined,
+      detailedProgress: validationJob && validationJob.status === 'processing' ? {
+        currentStage: validationJob.current_stage,
+        stageDescription: validationJob.stage_description,
+        estimatedCompletion: validationJob.estimated_completion_time
+      } : undefined
     },
     {
       id: 'salesforce',
@@ -405,14 +413,25 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                 <h3 className="text-sm font-medium mb-1">{step.title}</h3>
                 <p className="text-xs text-muted-foreground mb-3">{step.description}</p>
                 
-                {step.progress !== undefined && (
-                  <div className="space-y-1 mb-3">
-                    <Progress value={step.progress} className="h-2" />
-                    <p className="text-xs text-muted-foreground">
-                      {step.progress}% complete
-                    </p>
-                  </div>
-                )}
+                 {step.progress !== undefined && (
+                   <div className="space-y-1 mb-3">
+                     <Progress value={step.progress} className="h-2" />
+                     <p className="text-xs text-muted-foreground">
+                       {step.progress}% complete
+                     </p>
+                     {/* Show detailed progress for validation step */}
+                     {step.id === 'validate' && step.detailedProgress && (
+                       <div className="text-xs text-muted-foreground space-y-1">
+                         <p className="font-medium">{step.detailedProgress.stageDescription}</p>
+                         {step.detailedProgress.estimatedCompletion && (
+                           <p>
+                             Est. completion: {new Date(step.detailedProgress.estimatedCompletion).toLocaleTimeString()}
+                           </p>
+                         )}
+                       </div>
+                     )}
+                   </div>
+                 )}
                 
                  {step.stats && (
                    <p className="text-xs text-muted-foreground mb-3">{step.stats}</p>
