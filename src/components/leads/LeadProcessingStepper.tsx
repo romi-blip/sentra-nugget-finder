@@ -310,7 +310,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
       canStart: true,
       action: handleValidateEmails,
       isLoading: isValidating || validationJob?.status === 'processing',
-      progress: validationJob?.stage_progress !== null ? validationJob.stage_progress : validationProgress,
+      progress: validationJob?.stage_progress ?? validationProgress,
       stats: validationCounts ? 
         `${validationCounts.validCount} valid, ${validationCounts.invalidCount} invalid${emailValidationStats ? ` • ${emailValidationStats}` : ''}` : 
         undefined,
