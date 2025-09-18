@@ -102,6 +102,7 @@ export interface UpdateLeadPayload {
   latest_lead_source?: string;
   latest_lead_source_details?: string;
   manual_owner_email?: string;
+  validation_status?: string;
 }
 
 export class LeadsService {

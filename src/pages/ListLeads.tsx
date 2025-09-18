@@ -89,7 +89,7 @@ const ListLeads = () => {
 
   const pageSize = 50;
   
-  const { leads, totalCount, isLoading, error, refetch } = useEventLeads(eventId || "", currentPage, pageSize, validationFilter);
+  const { leads, totalCount, isLoading, error, refetch, updateLead } = useEventLeads(eventId || "", currentPage, pageSize, validationFilter);
   const { events } = useEvents();
   const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId || "");
   const { data: salesforceJob } = useLeadProcessingJob(eventId || "", 'check_salesforce');
@@ -290,6 +290,27 @@ const ListLeads = () => {
     if (stage === 'validate' || stage === 'salesforce') {
       refetchCounts();
       refetch();
+    }
+  };
+
+  const handleToggleValidationStatus = async (leadId: string, newStatus: 'completed' | 'failed') => {
+    try {
+      await updateLead({ id: leadId, payload: { validation_status: newStatus } });
+      
+      toast({
+        title: "Success",
+        description: `Lead marked as ${newStatus === 'completed' ? 'valid' : 'invalid'}`,
+      });
+      
+      // Refresh data
+      refetch();
+      refetchCounts();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update validation status",
+        variant: "destructive",
+      });
     }
   };
 
@@ -701,16 +722,32 @@ const ListLeads = () => {
                       <TableCell>{lead.manual_owner_email || '-'}</TableCell>
                       <TableCell>
                         {lead.validation_status === 'completed' ? (
-                          <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">Valid</Badge>
+                          <Badge 
+                            variant="secondary" 
+                            className="bg-green-50 text-green-700 border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+                            onClick={() => handleToggleValidationStatus(lead.id, 'failed')}
+                          >
+                            Valid
+                          </Badge>
                         ) : lead.validation_status === 'failed' ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div className="cursor-help">
-                                <Badge variant="destructive">Invalid</Badge>
+                                <Badge 
+                                  variant="destructive"
+                                  className="cursor-pointer hover:bg-destructive/90 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleValidationStatus(lead.id, 'completed');
+                                  }}
+                                >
+                                  Invalid
+                                </Badge>
                               </div>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-sm z-50">
                               <div className="text-xs space-y-1">
+                                <div className="text-blue-600 font-medium mb-2">Click to mark as valid</div>
                                 {lead.validation_errors && Array.isArray(lead.validation_errors) && lead.validation_errors.length > 0 ? (
                                   <div>
                                     <strong>Validation Errors:</strong>
