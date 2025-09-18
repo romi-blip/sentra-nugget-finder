@@ -41,14 +41,14 @@ export function useLeadProcessingJob(eventId: string, stage: string) {
     },
     enabled: !!eventId && !!stage,
     refetchInterval: (query) => {
-      // If job is still pending, running, or processing, poll every 2 seconds
-      if (query.state.data?.status === 'pending' || 
-          query.state.data?.status === 'running' || 
-          query.state.data?.status === 'processing') {
+      const status = query.state.data?.status;
+      // If no job found yet or job is pending/running/processing, poll every 2s
+      if (!status || status === 'pending' || status === 'running' || status === 'processing') {
         return 2000;
       }
-      // If completed, failed, or no data, don't poll
+      // If completed or failed, stop polling
       return false;
     },
+    refetchIntervalInBackground: true,
   });
 }

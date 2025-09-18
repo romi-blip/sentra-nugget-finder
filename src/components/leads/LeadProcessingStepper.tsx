@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, Clock, Play, AlertCircle, Database, Users, FileCheck, Building, UserPlus, ExternalLink } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { LeadsService } from "@/services/leadsService";
 import { useToast } from "@/hooks/use-toast";
 import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
@@ -25,6 +26,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   const [isEnriching, setIsEnriching] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: validationCounts, refetch: refetchCounts } = useLeadValidationCounts(eventId);
   const { data: validationJob } = useLeadProcessingJob(eventId, 'validate');
   const { data: salesforceJob } = useLeadProcessingJob(eventId, 'check_salesforce');
@@ -42,6 +44,8 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
           title: "Email Validation Started",
           description: result.message,
         });
+        // Kick off polling immediately
+        queryClient.invalidateQueries({ queryKey: ['lead-processing-job', eventId, 'validate'] });
         setTimeout(() => {
           refetchCounts();
           onStageComplete?.('validate');
