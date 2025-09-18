@@ -11,6 +11,7 @@ import { useLeadValidationCounts } from "@/hooks/useLeadValidationCounts";
 import { useLeadProcessingJob } from "@/hooks/useLeadProcessingJob";
 import { useLeadsCount } from "@/hooks/useLeadsCount";
 import { useSalesforceStatusCounts } from "@/hooks/useSalesforceStatusCounts";
+import { supabase } from "@/integrations/supabase/client";
 
 interface LeadProcessingStepperProps {
   eventId: string;
@@ -65,6 +66,36 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
       });
     } finally {
       setIsValidating(false);
+    }
+  };
+
+  const handleCancelValidation = async () => {
+    if (!validationJob) return;
+    
+    try {
+      const { error } = await supabase
+        .from('lead_processing_jobs')
+        .update({ 
+          status: 'failed',
+          error_message: 'Cancelled by user',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', validationJob.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Validation Cancelled",
+        description: "The validation job has been cancelled.",
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['lead-processing-job', eventId, 'validate'] });
+    } catch (error) {
+      toast({
+        title: "Cancel Failed",
+        description: "Failed to cancel validation job",
+        variant: "destructive",
+      });
     }
   };
 
@@ -190,6 +221,12 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
   const hasEnrichmentCompleted = enrichmentJob?.status === 'completed';
   const validationProgress = validationCounts ? 
     Math.round((validationCounts.validCount / (validationCounts.validCount + validationCounts.invalidCount)) * 100) : 0;
+  
+  // Check if validation job is stuck (past estimated completion time)
+  const isValidationStuck = validationJob && 
+    validationJob.status === 'processing' && 
+    validationJob.estimated_completion_time && 
+    new Date() > new Date(validationJob.estimated_completion_time);
   
   const emailValidationStats = validationCounts && (validationCounts.emailValidCount > 0 || validationCounts.emailInvalidCount > 0) ? 
     `${validationCounts.emailValidCount} valid emails, ${validationCounts.emailInvalidCount} invalid emails` : 
@@ -473,7 +510,7 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                  )}
               </div>
               
-              <div className="mt-auto">
+                 <div className="mt-auto space-y-2">
                 {step.action && (
                   <Button
                     size="sm"
@@ -490,7 +527,20 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                     {step.status === 'completed' ? 'Restart' : 'Start'}
                   </Button>
                 )}
-              </div>
+                
+                {/* Cancel button for stuck validation */}
+                {step.id === 'validate' && isValidationStuck && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleCancelValidation}
+                    className="w-full"
+                  >
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    Cancel Stuck Job
+                  </Button>
+                )}
+               </div>
             </div>
           ))}
         </div>
