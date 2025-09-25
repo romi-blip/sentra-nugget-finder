@@ -258,11 +258,11 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     validationJob.estimated_completion_time && 
     new Date() > new Date(validationJob.estimated_completion_time);
   
-  // Check if sync job is stuck (running for more than 30 minutes)
+  // Check if sync job is stuck (running for more than 5 minutes without progress)
   const isSyncStuck = syncJob && 
     syncJob.status === 'processing' && 
     syncJob.started_at && 
-    (new Date().getTime() - new Date(syncJob.started_at).getTime()) > 30 * 60 * 1000;
+    (new Date().getTime() - new Date(syncJob.started_at).getTime()) > 5 * 60 * 1000;
   
   const emailValidationStats = validationCounts && (validationCounts.emailValidCount > 0 || validationCounts.emailInvalidCount > 0) ? 
     `${validationCounts.emailValidCount} valid emails, ${validationCounts.emailInvalidCount} invalid emails` : 
@@ -577,18 +577,31 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                    </Button>
                  )}
                  
-                 {/* Cancel button for stuck sync */}
-                 {step.id === 'sync' && isSyncStuck && (
-                   <Button
-                     size="sm"
-                     variant="destructive"
-                     onClick={handleCancelSync}
-                     className="w-full"
-                   >
-                     <AlertCircle className="h-4 w-4 mr-2" />
-                     Cancel Stuck Sync
-                   </Button>
-                 )}
+                  {/* Cancel button for stuck sync */}
+                  {step.id === 'sync' && isSyncStuck && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleCancelSync}
+                      className="w-full"
+                    >
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      Cancel Stuck Sync
+                    </Button>
+                  )}
+                
+                  {/* Cancel button for any processing sync */}
+                  {step.id === 'sync' && syncJob?.status === 'processing' && !isSyncStuck && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelSync}
+                      className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      Cancel Sync
+                    </Button>
+                  )}
                </div>
             </div>
           ))}
