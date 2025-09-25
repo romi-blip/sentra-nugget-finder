@@ -388,11 +388,12 @@ const EventManagement = () => {
                     <SelectTrigger id="latest-lead-source">
                       <SelectValue placeholder="Select lead source" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Events">Events</SelectItem>
-                      <SelectItem value="Outbound">Outbound</SelectItem>
-                      <SelectItem value="3rd Party">3rd Party</SelectItem>
-                    </SelectContent>
+                     <SelectContent>
+                       <SelectItem value="Events">Events</SelectItem>
+                       <SelectItem value="Outbound">Outbound</SelectItem>
+                       <SelectItem value="3rd Party">3rd Party</SelectItem>
+                       <SelectItem value="Content Syndication">Content Syndication</SelectItem>
+                     </SelectContent>
                   </Select>
                 </div>
                 <div>
