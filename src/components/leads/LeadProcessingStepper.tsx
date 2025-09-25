@@ -99,6 +99,36 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     }
   };
 
+  const handleCancelSync = async () => {
+    if (!syncJob) return;
+    
+    try {
+      const { error } = await supabase
+        .from('lead_processing_jobs')
+        .update({ 
+          status: 'failed',
+          error_message: 'Cancelled by user',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', syncJob.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Sync Cancelled",
+        description: "The Salesforce sync job has been cancelled.",
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['lead-processing-job', eventId, 'sync'] });
+    } catch (error) {
+      toast({
+        title: "Cancel Failed",
+        description: "Failed to cancel sync job",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCheckSalesforce = async () => {
     if (!validationCounts?.validCount || validationCounts.validCount === 0) {
       toast({
@@ -227,6 +257,12 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
     validationJob.status === 'processing' && 
     validationJob.estimated_completion_time && 
     new Date() > new Date(validationJob.estimated_completion_time);
+  
+  // Check if sync job is stuck (running for more than 30 minutes)
+  const isSyncStuck = syncJob && 
+    syncJob.status === 'processing' && 
+    syncJob.started_at && 
+    (new Date().getTime() - new Date(syncJob.started_at).getTime()) > 30 * 60 * 1000;
   
   const emailValidationStats = validationCounts && (validationCounts.emailValidCount > 0 || validationCounts.emailInvalidCount > 0) ? 
     `${validationCounts.emailValidCount} valid emails, ${validationCounts.emailInvalidCount} invalid emails` : 
@@ -528,18 +564,31 @@ const LeadProcessingStepper: React.FC<LeadProcessingStepperProps> = ({
                   </Button>
                 )}
                 
-                {/* Cancel button for stuck validation */}
-                {step.id === 'validate' && isValidationStuck && (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={handleCancelValidation}
-                    className="w-full"
-                  >
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    Cancel Stuck Job
-                  </Button>
-                )}
+                 {/* Cancel button for stuck validation */}
+                 {step.id === 'validate' && isValidationStuck && (
+                   <Button
+                     size="sm"
+                     variant="destructive"
+                     onClick={handleCancelValidation}
+                     className="w-full"
+                   >
+                     <AlertCircle className="h-4 w-4 mr-2" />
+                     Cancel Stuck Job
+                   </Button>
+                 )}
+                 
+                 {/* Cancel button for stuck sync */}
+                 {step.id === 'sync' && isSyncStuck && (
+                   <Button
+                     size="sm"
+                     variant="destructive"
+                     onClick={handleCancelSync}
+                     className="w-full"
+                   >
+                     <AlertCircle className="h-4 w-4 mr-2" />
+                     Cancel Stuck Sync
+                   </Button>
+                 )}
                </div>
             </div>
           ))}
