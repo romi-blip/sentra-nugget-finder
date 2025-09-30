@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Copy, RotateCcw } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Copy, RotateCcw, User, Bot } from "lucide-react";
 import { Message } from "@/types/chatSession";
 import { toast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { normalizeAiContent } from "@/lib/normalizeAiContent";
+import { cn } from "@/lib/utils";
 
 interface ChatMessageListProps {
   messages: Message[];
@@ -39,8 +40,8 @@ useEffect(() => {
   };
 
   return (
-    <ScrollArea ref={scrollRootRef} className="flex-1">
-      <div className="p-4 pb-28 space-y-1">
+    <ScrollArea ref={scrollRootRef} className="flex-1 smooth-scroll">
+      <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto">
         {messages.map((message, idx) => {
           const isUser = message.role === "user";
           const prev = messages[idx - 1];
@@ -49,39 +50,71 @@ useEffect(() => {
           const isLastInGroup = !next || next.role !== message.role;
           const isTyping = typeof message.id === "string" && message.id.includes("typing");
           const isStreaming = isTyping && message.content && message.content !== "⚡ AI is thinking...";
+          const showTimestamp = idx === 0 || 
+            (prev && prev.role !== message.role) ||
+            (prev && message.timestamp.getTime() - prev.timestamp.getTime() > 300000);
 
           return (
             <div
               key={message.id}
-              className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+              className={cn(
+                "flex gap-3 group chat-message-enter",
+                isUser ? "flex-row-reverse" : "flex-row"
+              )}
             >
-              {!isUser && isLastInGroup && (
-                <div className="shrink-0">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback aria-label="Assistant avatar">AI</AvatarFallback>
-                  </Avatar>
-                </div>
+              {/* Avatar - only show for last message in group */}
+              {((isUser && isLastInGroup) || (!isUser && isLastInGroup)) && (
+                <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+                  {isUser ? (
+                    <>
+                      <AvatarImage src="/placeholder.svg" />
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </>
+                  ) : (
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                      <Bot className="h-4 w-4" />
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+              )}
+              {/* Spacer when avatar is not shown */}
+              {((isUser && !isLastInGroup) || (!isUser && !isLastInGroup)) && (
+                <div className="h-9 w-9 shrink-0" />
               )}
 
-              <div
-                className={`group relative rounded-lg px-4 py-3 max-w-[80%] animate-fade-in ${
-                  isUser ? "bg-primary text-primary-foreground" : "bg-card border shadow-sm"
-                } ${isFirstInGroup ? "mt-3" : "mt-1"} ${isLastInGroup ? "mb-3" : "mb-1"}`}
-              >
-                {message.role === "assistant" ? (
-                  isTyping && !isStreaming ? (
-                    <div className="flex items-center gap-1" aria-live="polite" aria-label="Assistant is typing">
-                      <span className="w-2 h-2 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:-0.3s]"></span>
-                      <span className="w-2 h-2 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:-0.15s]"></span>
-                      <span className="w-2 h-2 rounded-full bg-muted-foreground/60 animate-bounce"></span>
+              {/* Message content */}
+              <div className={cn(
+                "flex flex-col gap-1.5 max-w-[85%] md:max-w-[75%]",
+                isUser ? "items-end" : "items-start"
+              )}>
+                {showTimestamp && (
+                  <span className="text-xs text-muted-foreground/70 px-2 font-medium">
+                    {formatTime(message.timestamp)}
+                  </span>
+                )}
+                
+                <div className={cn(
+                  "relative rounded-2xl px-4 py-3 shadow-sm transition-all duration-200",
+                  isUser 
+                    ? "bg-[hsl(var(--chat-bubble-user))] text-[hsl(var(--chat-text-user))]" 
+                    : "bg-[hsl(var(--chat-bubble-assistant))] text-[hsl(var(--chat-text-assistant))] border border-[hsl(var(--chat-border))]",
+                  "hover:shadow-md",
+                  isFirstInGroup ? "mt-0" : "mt-1"
+                )}>
+                  {isTyping && !isStreaming ? (
+                    <div className="flex gap-1.5 items-center py-1">
+                      <div className="w-2 h-2 rounded-full bg-current animate-pulse-soft [animation-delay:-0.3s]" />
+                      <div className="w-2 h-2 rounded-full bg-current animate-pulse-soft [animation-delay:-0.15s]" />
+                      <div className="w-2 h-2 rounded-full bg-current animate-pulse-soft" />
                     </div>
                   ) : (
-                    <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-a:text-primary prose-a:underline hover:prose-a:text-primary/80">
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
                           a: ({ href, children, ...props }) => {
-                            // Security: Only allow safe protocols
                             const safeProtocols = ['http:', 'https:', 'mailto:'];
                             const url = href || '';
                             const protocol = url.split(':')[0] + ':';
@@ -95,99 +128,66 @@ useEffect(() => {
                                 href={href}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-primary underline hover:text-primary/80 transition-colors"
+                                className={cn(
+                                  "underline underline-offset-2 transition-colors",
+                                  isUser ? "text-white hover:text-white/80" : "text-primary hover:text-primary/80"
+                                )}
                                 {...props}
                               >
                                 {children}
                               </a>
                             );
                           },
+                          p: ({ children, ...props }) => (
+                            <p {...props} className="mb-2 last:mb-0 leading-relaxed">
+                              {children}
+                            </p>
+                          ),
+                          code: ({ children, ...props }) => (
+                            <code 
+                              {...props} 
+                              className={cn(
+                                "px-1.5 py-0.5 rounded text-sm font-mono",
+                                isUser ? "bg-white/20" : "bg-muted"
+                              )}
+                            >
+                              {children}
+                            </code>
+                          ),
                         }}
                       >
                         {normalizeAiContent(message.content)}
                       </ReactMarkdown>
                     </div>
-                  )
-                ) : (
-                  <div className="text-sm whitespace-pre-wrap">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        a: ({ href, children, ...props }) => {
-                          // Security: Only allow safe protocols
-                          const safeProtocols = ['http:', 'https:', 'mailto:'];
-                          const url = href || '';
-                          const protocol = url.split(':')[0] + ':';
-                          
-                          if (!safeProtocols.includes(protocol)) {
-                            return <span>{children}</span>;
-                          }
-                          
-                          return (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary-foreground underline hover:text-primary-foreground/80 transition-colors"
-                              {...props}
-                            >
-                              {children}
-                            </a>
-                          );
-                        },
-                        p: ({ children }) => <span>{children}</span>,
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Message actions */}
-                {!isTyping && (
-                  <div className="absolute -top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <div className="flex items-center gap-1 bg-background border rounded-md shadow-md p-1">
+                {/* Message actions - only for assistant messages */}
+                {!isUser && !isTyping && (
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(message.content)}
+                      className="h-8 px-2 hover:bg-[hsl(var(--chat-hover))]"
+                      aria-label="Copy message"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                    {onRegenerateMessage && idx === messages.length - 1 && (
                       <Button
                         variant="ghost"
-                        size="icon"
-                        onClick={() => copyToClipboard(message.content)}
-                        className="h-6 w-6"
-                        title="Copy message"
-                        aria-label="Copy message"
+                        size="sm"
+                        onClick={() => onRegenerateMessage(message.id)}
+                        className="h-8 px-2 hover:bg-[hsl(var(--chat-hover))]"
+                        aria-label="Regenerate response"
                       >
-                        <Copy className="h-3 w-3" />
+                        <RotateCcw className="h-3.5 w-3.5" />
                       </Button>
-                      {message.role === "assistant" && onRegenerateMessage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onRegenerateMessage(message.id)}
-                          className="h-6 w-6"
-                          title="Regenerate response"
-                          aria-label="Regenerate response"
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Timestamp */}
-                {isLastInGroup && (
-                  <div className={`text-xs opacity-60 mt-2 ${isUser ? "text-primary-foreground/80" : ""}`}>
-                    {formatTime(message.timestamp)}
+                    )}
                   </div>
                 )}
               </div>
-
-              {isUser && isLastInGroup && (
-                <div className="shrink-0">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback aria-label="User avatar">U</AvatarFallback>
-                  </Avatar>
-                </div>
-              )}
             </div>
           );
         })}

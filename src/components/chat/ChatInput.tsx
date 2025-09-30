@@ -2,6 +2,7 @@ import { useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Loader2, Square } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
   onSend: (message: string) => Promise<void>;
@@ -40,38 +41,51 @@ export const ChatInput = ({
   };
 
   return (
-    <div className="sticky bottom-0 z-30 p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
-          <Textarea
-            aria-label="Message"
-            placeholder={placeholder}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={disabled || isLoading}
-            className="min-h-[60px] max-h-[200px] resize-none"
-            rows={1}
-          />
+    <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 md:p-6">
+      <div className="max-w-3xl mx-auto">
+        <div className="flex gap-3 items-end">
+          <div className="flex-1 relative">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              disabled={disabled || isLoading}
+              rows={1}
+              className="min-h-[56px] max-h-[200px] resize-none rounded-2xl px-4 py-3 pr-12 text-base shadow-sm transition-all duration-200 focus-visible:shadow-md focus-visible:ring-2"
+              aria-label="Message input"
+            />
+            {input.length > 0 && (
+              <div className="absolute bottom-2 right-2 text-xs text-muted-foreground/50 pointer-events-none">
+                {input.length} char{input.length !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+          <Button
+            onClick={isLoading && onStop ? onStop : handleSend}
+            disabled={disabled || isLoading || (!onStop && !input.trim())}
+            size="icon"
+            className={cn(
+              "h-14 w-14 rounded-full shrink-0 shadow-lg transition-all duration-200",
+              onStop 
+                ? "bg-destructive hover:bg-destructive/90" 
+                : "bg-primary hover:bg-primary/90 hover:scale-105"
+            )}
+            aria-label={onStop ? "Stop generation" : "Send message"}
+          >
+            {isLoading && !onStop ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : onStop ? (
+              <Square className="h-5 w-5 fill-current" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
+          </Button>
         </div>
-        <Button
-          onClick={isLoading && onStop ? onStop : handleSend}
-          disabled={(!input.trim() && !(isLoading && onStop)) || disabled}
-          size="sm"
-          className="px-4"
-          aria-label={isLoading && onStop ? "Stop generating" : "Send message"}
-          title={isLoading && onStop ? "Stop generating" : "Send message"}
-        >
-          {isLoading && onStop ? (
-            <Square className="h-4 w-4" />
-          ) : isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
+        <p className="text-xs text-muted-foreground/60 mt-2 text-center">
+          Press Enter to send, Shift+Enter for new line
+        </p>
       </div>
-      <div className="text-xs text-muted-foreground mt-1">Press Enter to send, Shift+Enter for new line</div>
     </div>
   );
 };

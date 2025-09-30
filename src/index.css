@@ -6,6 +6,18 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
+    
+    /* Chat-specific design tokens */
+    --chat-bubble-user: 221 83% 53%;
+    --chat-bubble-assistant: 0 0% 98%;
+    --chat-text-user: 0 0% 100%;
+    --chat-text-assistant: 222.2 84% 4.9%;
+    --chat-border: 214.3 31.8% 91.4%;
+    --chat-hover: 0 0% 96%;
+    
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-spring: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
@@ -59,6 +71,14 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
+    
+    /* Chat-specific design tokens for dark mode */
+    --chat-bubble-user: 221 83% 53%;
+    --chat-bubble-assistant: 217.2 32.6% 17.5%;
+    --chat-text-user: 0 0% 100%;
+    --chat-text-assistant: 210 40% 98%;
+    --chat-border: 217.2 32.6% 17.5%;
+    --chat-hover: 217.2 32.6% 20%;
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
@@ -104,6 +124,44 @@
 }
 
 @layer utilities {
+  /* Chat animations */
+  @keyframes slide-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes pulse-soft {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  
+  .animate-slide-in-up {
+    animation: slide-in-up 0.3s ease-out;
+  }
+  
+  .animate-pulse-soft {
+    animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .chat-message-enter {
+    animation: slide-in-up 0.3s ease-out;
+  }
+  
+  /* Smooth scrolling */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+  }
+  
   .glass-card {
     background: hsl(var(--glass-bg));
     backdrop-filter: blur(8px);

@@ -6,9 +6,10 @@ import { useChatSessions } from "@/hooks/useChatSessions";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { Trash2 } from "lucide-react";
+import { Trash2, Bot } from "lucide-react";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 import { useStreamingChat } from "@/hooks/useStreamingChat";
+import { cn } from "@/lib/utils";
 
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -158,64 +159,65 @@ const Chat = () => {
       />
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden bg-background">
         {/* Header */}
-        <header className="sticky top-16 z-40 border-b shadow-sm bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">AI Sales Copilot</h1>
-                <p className="text-sm text-muted-foreground">{getActiveSession()?.title || "New Chat"}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={clearActiveSession} disabled={!getActiveSession()}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear Chat
-                </Button>
-              </div>
+        <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 md:p-6 shadow-sm">
+          <div className="max-w-3xl mx-auto flex items-center justify-between">
+            <div>
+              <h1 className="text-xl md:text-2xl font-semibold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                {getActiveSession()?.title || "AI Sales Copilot"}
+              </h1>
+              {isStreaming && (
+                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse-soft"></span>
+                  Generating response...
+                </p>
+              )}
             </div>
+            {getActiveSession() && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={clearActiveSession}
+                className="hover:bg-[hsl(var(--chat-hover))]"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear
+              </Button>
+            )}
           </div>
         </header>
 
         {/* Chat Content */}
-        <div className="flex-1 min-h-0 flex flex-col">
-          {getActiveSession() ? (
-            <>
-              {getActiveSession()?.messages.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center p-6">
-                  <ChatSuggestions onPick={(text) => handleSendMessage(text)} />
+        {!getActiveSession() || getActiveSession()?.messages.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center p-6 md:p-8">
+            <div className="text-center space-y-8 max-w-3xl animate-fade-in">
+              <div className="space-y-4">
+                <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Bot className="h-8 w-8 text-white" />
                 </div>
-              ) : (
-                <ChatMessageList messages={getActiveSession()?.messages || []} />
-              )}
-              <ChatInput 
-                onSend={handleSendMessage} 
-                onStop={() => {
-                  if (isStreaming) {
-                    stopStreaming();
-                  }
-                }} 
-              />
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center p-6">
-              <div className="text-center space-y-6">
-                <div>
-                  <h2 className="text-xl font-semibold mb-2">Welcome to AI Sales Copilot</h2>
-                  <p className="text-muted-foreground mb-4">Get started with one of these suggestions or create a new chat</p>
-                </div>
-                <ChatSuggestions onPick={(text) => {
-                  createNewSession();
-                  // Small delay to ensure session is created before sending message
-                  setTimeout(() => handleSendMessage(text), 100);
-                }} />
-                <Button onClick={createNewSession} variant="outline">
-                  Start New Chat
-                </Button>
+                <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                  Welcome to AI Sales Copilot
+                </h2>
+                <p className="text-muted-foreground text-base md:text-lg max-w-xl mx-auto leading-relaxed">
+                  Your intelligent assistant for sales and customer engagement. Ask me anything or try one of the prompts below.
+                </p>
               </div>
+              <ChatSuggestions onPick={getActiveSession() ? handleSendMessage : (text) => {
+                createNewSession();
+                setTimeout(() => handleSendMessage(text), 100);
+              }} />
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <>
+            <ChatMessageList messages={getActiveSession()?.messages || []} />
+            <ChatInput 
+              onSend={handleSendMessage} 
+              onStop={isStreaming ? stopStreaming : undefined}
+            />
+          </>
+        )}
       </div>
     </div>
   );
