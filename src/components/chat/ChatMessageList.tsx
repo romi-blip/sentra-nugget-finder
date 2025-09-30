@@ -1,4 +1,4 @@
-import { useEffect, useRef, memo } from "react";
+import { memo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -99,7 +99,11 @@ export const ChatMessageList = memo(({ messages, isStreaming, onRegenerateMessag
                   "hover:shadow-md",
                   isFirstInGroup ? "mt-0" : "mt-1"
                 )}>
-                  {isTyping && !isStreamingThisMessage ? (
+                  {isUser ? (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                      {message.content}
+                    </p>
+                  ) : isTyping && !isStreamingThisMessage ? (
                     <TypingIndicator />
                   ) : isStreamingThisMessage ? (
                     <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -126,7 +130,7 @@ export const ChatMessageList = memo(({ messages, isStreaming, onRegenerateMessag
                                 rel="noopener noreferrer"
                                 className={cn(
                                   "underline underline-offset-2 transition-colors",
-                                  isUser ? "text-white hover:text-white/80" : "text-primary hover:text-primary/80"
+                                  "text-primary hover:text-primary/80"
                                 )}
                                 {...props}
                               >
@@ -144,7 +148,7 @@ export const ChatMessageList = memo(({ messages, isStreaming, onRegenerateMessag
                               {...props} 
                               className={cn(
                                 "px-1.5 py-0.5 rounded text-sm font-mono",
-                                isUser ? "bg-white/20" : "bg-muted"
+                                "bg-muted"
                               )}
                             >
                               {children}
@@ -188,18 +192,6 @@ export const ChatMessageList = memo(({ messages, isStreaming, onRegenerateMessag
             );
           })}
           
-          {showTypingIndicator && (
-            <div className="flex gap-3 animate-message-appear">
-              <Avatar className="h-9 w-9 shrink-0 shadow-sm">
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                  <Bot className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
-              <div className="rounded-2xl px-4 py-3 bg-[hsl(var(--chat-bubble-assistant))] border border-[hsl(var(--chat-border))] shadow-sm">
-                <TypingIndicator />
-              </div>
-            </div>
-          )}
           
           <div ref={endRef} aria-hidden="true" />
         </div>
