@@ -78,9 +78,12 @@ export const useStreamingChat = ({ onChunk, onComplete, onError }: UseStreamingC
                 throw new Error(parsed.error);
               }
               
-              // Handle different response formats from n8n
+              // Handle N8n streaming format: {"type":"item","content":"text chunk"}
               let textContent = '';
-              if (typeof parsed === 'string') {
+              if (parsed.type === 'item' && parsed.content) {
+                textContent = parsed.content;
+                console.log('📦 Extracted chunk:', textContent.substring(0, 50));
+              } else if (typeof parsed === 'string') {
                 textContent = parsed;
               } else if (parsed.output) {
                 textContent = parsed.output;
@@ -95,10 +98,12 @@ export const useStreamingChat = ({ onChunk, onComplete, onError }: UseStreamingC
               if (textContent) {
                 messageBufferRef.current += textContent;
                 onChunk(textContent);
+                console.log('✅ Chunk added to buffer, total length:', messageBufferRef.current.length);
               }
             } catch (parseError) {
               // If not JSON, treat as plain text
               if (data && data !== '') {
+                console.log('📝 Plain text chunk:', data.substring(0, 50));
                 messageBufferRef.current += data;
                 onChunk(data);
               }

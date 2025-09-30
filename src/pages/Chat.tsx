@@ -30,34 +30,36 @@ const Chat = () => {
   const streamingMessageRef = useRef<string>('');
   const typingIdRef = useRef<string>('');
 
+  const [streamingContent, setStreamingContent] = useState<string>('');
+  const [, forceUpdate] = useState({});
+
   const { isStreaming, sendMessage: sendStreamingMessage, stopStreaming } = useStreamingChat({
     onChunk: (chunk) => {
       if (!activeSessionId || !typingIdRef.current) return;
       
+      console.log('💬 Chunk received in Chat.tsx:', chunk.substring(0, 50));
       streamingMessageRef.current += chunk;
+      setStreamingContent(streamingMessageRef.current);
+      console.log('📊 Total content length:', streamingMessageRef.current.length);
       
-      // Update the message in place
+      // Update the message with the streaming content
       const session = getActiveSession();
       if (session) {
-        const messages = session.messages.map(msg => 
-          msg.id === typingIdRef.current 
-            ? { ...msg, content: streamingMessageRef.current }
-            : msg
-        );
-        
-        // Trigger a re-render by updating through the session manager
-        const updatedSession = { ...session, messages };
-        sessions.forEach((s, idx) => {
-          if (s.id === activeSessionId) {
-            sessions[idx] = updatedSession;
-          }
-        });
+        const messageIndex = session.messages.findIndex(msg => msg.id === typingIdRef.current);
+        if (messageIndex !== -1) {
+          // Update the message content directly
+          session.messages[messageIndex].content = streamingMessageRef.current;
+          // Force a re-render
+          forceUpdate({});
+          console.log('🔄 Updated message at index', messageIndex, 'with content length:', streamingMessageRef.current.length);
+        }
       }
     },
     onComplete: (fullMessage) => {
       if (!activeSessionId || !typingIdRef.current) return;
       
-      console.log('Stream complete, final message:', fullMessage.substring(0, 100));
+      console.log('✨ Stream complete, final message length:', fullMessage.length);
+      console.log('📄 First 100 chars:', fullMessage.substring(0, 100));
       
       // Replace typing indicator with final message
       removeMessage(activeSessionId, typingIdRef.current);
@@ -71,6 +73,7 @@ const Chat = () => {
       
       streamingMessageRef.current = '';
       typingIdRef.current = '';
+      setStreamingContent('');
     },
     onError: (error) => {
       if (!activeSessionId) return;
@@ -91,6 +94,7 @@ const Chat = () => {
       
       streamingMessageRef.current = '';
       typingIdRef.current = '';
+      setStreamingContent('');
       
       toast({
         title: "Streaming Failed",
@@ -124,10 +128,11 @@ const Chat = () => {
     addMessage(activeSessionId, typingMessage);
 
     try {
-      console.log("Chat: Starting streaming message");
+      console.log("🚀 Chat: Starting streaming message for session:", activeSessionId);
       await sendStreamingMessage(activeSessionId, text);
+      console.log("✅ Chat: Streaming completed");
     } catch (error) {
-      console.error("Chat: Streaming failed:", error);
+      console.error("❌ Chat: Streaming failed:", error);
     }
   };
 
