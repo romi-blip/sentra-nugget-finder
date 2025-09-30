@@ -48,6 +48,7 @@ useEffect(() => {
           const isFirstInGroup = !prev || prev.role !== message.role;
           const isLastInGroup = !next || next.role !== message.role;
           const isTyping = typeof message.id === "string" && message.id.includes("typing");
+          const isStreaming = isTyping && message.content && message.content !== "⚡ AI is thinking...";
 
           return (
             <div
@@ -68,7 +69,7 @@ useEffect(() => {
                 } ${isFirstInGroup ? "mt-3" : "mt-1"} ${isLastInGroup ? "mb-3" : "mb-1"}`}
               >
                 {message.role === "assistant" ? (
-                  isTyping ? (
+                  isTyping && !isStreaming ? (
                     <div className="flex items-center gap-1" aria-live="polite" aria-label="Assistant is typing">
                       <span className="w-2 h-2 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:-0.3s]"></span>
                       <span className="w-2 h-2 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:-0.15s]"></span>

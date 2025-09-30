@@ -8,10 +8,7 @@ import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { Trash2 } from "lucide-react";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
-import { webhookService, createChatJob } from "@/services/webhookService";
-import { normalizeAiContent, extractResponseContent } from "@/lib/normalizeAiContent";
-import { useChatJobPolling } from "@/hooks/useChatJobPolling";
-import { supabase } from "@/integrations/supabase/client";
+import { useStreamingChat } from "@/hooks/useStreamingChat";
 
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -30,84 +27,73 @@ const Chat = () => {
     bulkDeleteSessions,
   } = useChatSessions();
 
-  // Abort controller to allow stopping a generation
-  const abortRef = useRef<AbortController | null>(null);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const streamingMessageRef = useRef<string>('');
+  const typingIdRef = useRef<string>('');
 
-  // Job polling for async webhook responses
-  const { isPolling, stopPolling } = useChatJobPolling({
-    jobId: currentJobId,
-    onComplete: (result) => {
-      if (!activeSessionId) return;
+  const { isStreaming, sendMessage: sendStreamingMessage, stopStreaming } = useStreamingChat({
+    onChunk: (chunk) => {
+      if (!activeSessionId || !typingIdRef.current) return;
       
-      console.log("Chat: Job completed with result:", result);
+      streamingMessageRef.current += chunk;
       
-      // Remove typing indicator
-      const typingMessages = getActiveSession()?.messages.filter(m => m.content === "⚡ AI is thinking...");
-      if (typingMessages?.length) {
-        removeMessage(activeSessionId, typingMessages[typingMessages.length - 1].id);
-      }
-      
-      // Process and add the response
-      const responseContent = normalizeAiContent(extractResponseContent(result));
-      
-      // Robust deduplication: check recent assistant messages for exact content match
-      const activeSession = getActiveSession();
-      const recentAssistantMessages = activeSession?.messages
-        .filter(m => m.role === "assistant")
-        .slice(-3) // Check last 3 assistant messages
-        .filter(m => m.content === responseContent);
+      // Update the message in place
+      const session = getActiveSession();
+      if (session) {
+        const messages = session.messages.map(msg => 
+          msg.id === typingIdRef.current 
+            ? { ...msg, content: streamingMessageRef.current }
+            : msg
+        );
         
-      if (recentAssistantMessages && recentAssistantMessages.length > 0) {
-        console.log("Chat: Skipping duplicate assistant message - exact match found in recent messages");
-        setCurrentJobId(null);
-        abortRef.current = null;
-        return;
+        // Trigger a re-render by updating through the session manager
+        const updatedSession = { ...session, messages };
+        sessions.forEach((s, idx) => {
+          if (s.id === activeSessionId) {
+            sessions[idx] = updatedSession;
+          }
+        });
       }
+    },
+    onComplete: (fullMessage) => {
+      if (!activeSessionId || !typingIdRef.current) return;
       
-      // Also check if we're about to replace a typing indicator with the same content
-      const remainingTypingMessages = activeSession?.messages.filter(m => m.content === "⚡ AI is thinking...");
-      if (remainingTypingMessages?.length && activeSession?.messages[activeSession.messages.length - 1]?.content === responseContent) {
-        console.log("Chat: Response already exists, skipping duplicate");
-        setCurrentJobId(null);
-        abortRef.current = null;
-        return;
-      }
+      console.log('Stream complete, final message:', fullMessage.substring(0, 100));
+      
+      // Replace typing indicator with final message
+      removeMessage(activeSessionId, typingIdRef.current);
       
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
-        content: responseContent,
+        content: fullMessage,
       };
       addMessage(activeSessionId, reply);
       
-      setCurrentJobId(null);
-      abortRef.current = null;
+      streamingMessageRef.current = '';
+      typingIdRef.current = '';
     },
     onError: (error) => {
       if (!activeSessionId) return;
       
-      console.error("Chat: Job failed with error:", error);
+      console.error('Streaming error:', error);
       
       // Remove typing indicator
-      const typingMessages = getActiveSession()?.messages.filter(m => m.content === "⚡ AI is thinking...");
-      if (typingMessages?.length) {
-        removeMessage(activeSessionId, typingMessages[typingMessages.length - 1].id);
+      if (typingIdRef.current) {
+        removeMessage(activeSessionId, typingIdRef.current);
       }
       
-      // Show error message
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
-        content: `Sorry, I encountered an error: ${error}. Please try again or check your webhook configuration.`,
+        content: `Sorry, I encountered an error: ${error}. Please try again.`,
       };
       addMessage(activeSessionId, reply);
       
-      setCurrentJobId(null);
-      abortRef.current = null;
+      streamingMessageRef.current = '';
+      typingIdRef.current = '';
       
       toast({
-        title: "AI Processing Failed",
+        title: "Streaming Failed",
         description: error,
         variant: "destructive",
       });
@@ -125,237 +111,23 @@ const Chat = () => {
     };
     addMessage(activeSessionId, userMessage);
 
-    // Add typing indicator
+    // Add streaming indicator
     const typingId = `${Date.now()}typing`;
+    typingIdRef.current = typingId;
+    streamingMessageRef.current = '';
+    
     const typingMessage = {
       id: typingId,
       role: "assistant" as const,
-      content: "⚡ AI is thinking...",
+      content: "",
     };
     addMessage(activeSessionId, typingMessage);
 
-    // Track any global webhook error for better UX in fallback
-    let lastGlobalError: unknown = null;
-
-    // Try async job system first (preferred path)
     try {
-      console.log("Chat: Attempting to use async job system");
-      
-      const { jobId, error: jobError } = await createChatJob(activeSessionId, {
-        message: text,
-        timestamp: new Date().toISOString(),
-        sessionId: activeSessionId,
-        messageId: `msg_${Date.now()}`,
-      });
-
-      if (jobError) {
-        console.error("Chat: Job creation failed:", jobError);
-        throw new Error(`Job creation failed: ${jobError.message || 'Unknown error'}`);
-      }
-
-      if (jobId) {
-        console.log("Chat: Job created successfully, starting polling:", jobId);
-        setCurrentJobId(jobId);
-        abortRef.current = { abort: () => stopPolling() } as AbortController;
-        return; // Let the polling handle the response
-      }
-      
-      throw new Error("Job creation returned no job ID");
-    } catch (jobError) {
-      lastGlobalError = jobError;
-      console.error("Chat: Async job error:", jobError);
-      console.log("Chat: Async job failed, trying direct invoke-webhook fallback:", jobError);
-    }
-
-    // Fallback to direct invoke-webhook (will auto-create job)
-    try {
-      console.log("Chat: Attempting direct invoke-webhook fallback");
-      
-      const { data, error } = await supabase.functions.invoke('invoke-webhook', {
-        body: {
-          type: 'chat',
-          payload: {
-            message: text,
-            timestamp: new Date().toISOString(),
-            sessionId: activeSessionId,
-            messageId: `msg_${Date.now()}`,
-          }
-        }
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to invoke webhook');
-      }
-
-      // If we get a successful response, it means it's not using the job system
-      // Remove typing indicator and add response directly
-      removeMessage(activeSessionId, typingId);
-      
-      // Handle the invoke-webhook response structure properly
-      let extractedData = data;
-      if (data && typeof data === 'object' && data.data) {
-        extractedData = data.data; // Extract from wrapper if present
-      }
-      
-      console.log('Direct webhook response shape:', JSON.stringify(extractedData, null, 2));
-      const responseContent = normalizeAiContent(extractResponseContent(extractedData));
-      console.log('Extracted and normalized content length:', responseContent.length);
-      const reply = {
-        id: `${Date.now()}a`,
-        role: "assistant" as const,
-        content: responseContent,
-      };
-      addMessage(activeSessionId, reply);
-      abortRef.current = null;
-      return;
-    } catch (invokeError) {
-      lastGlobalError = invokeError;
-      console.error("Chat: Direct invoke-webhook error:", invokeError);
-      console.log("Chat: Direct invoke-webhook failed, trying legacy localStorage fallback:", invokeError);
-    }
-
-    // Final fallback to legacy localStorage webhook system (deprecated)
-    console.warn("Chat: All modern paths failed, falling back to deprecated localStorage webhook system");
-    const webhookData = localStorage.getItem("n8n_webhook_configs");
-    let chatWebhookUrl: string | null = null;
-
-    if (webhookData) {
-      try {
-        const { webhooks } = JSON.parse(webhookData);
-        const chatWebhook = webhooks.find((w: any) => w.type === "chat" && w.enabled && w.url);
-        chatWebhookUrl = chatWebhook?.url || null;
-      } catch (e) {
-        console.error("Failed to parse webhook config:", e);
-      }
-    }
-
-    // Additional legacy fallback
-    if (!chatWebhookUrl) {
-      chatWebhookUrl = localStorage.getItem("n8nWebhookUrl");
-    }
-
-    if (!chatWebhookUrl) {
-      console.error("Chat: All webhook methods failed. Showing comprehensive error message.");
-      removeMessage(activeSessionId, typingId);
-      const friendlyReason = lastGlobalError instanceof Error ? lastGlobalError.message : 'Unknown error';
-      const reply = {
-        id: `${Date.now()}a`,
-        role: "assistant" as const,
-        content:
-          `AI service error: ${friendlyReason}. Please verify your webhook settings in Settings. All fallback methods have been exhausted.`,
-      };
-      addMessage(activeSessionId, reply);
-      toast({
-        title: "AI service unavailable",
-        description: `All webhook methods failed: ${friendlyReason}`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      console.log("Chat: Sending request to legacy webhook:", chatWebhookUrl);
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      const response = await fetch(chatWebhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          message: text,
-          timestamp: new Date().toISOString(),
-          sessionId: activeSessionId, // keep same session for context
-          messageId: `msg_${Date.now()}`,
-        }),
-      });
-
-      console.log("Chat: Response status:", response.status);
-      console.log("Chat: Response headers:", Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // Get response as text first to check format
-      const responseText = await response.text();
-      console.log("Chat: Raw response text:", responseText);
-
-      if (!responseText || responseText.trim() === "") {
-        throw new Error("Webhook returned empty response");
-      }
-
-      let assistantResponse: string;
-
-      // Detect response format and handle accordingly
-      const trimmedResponse = responseText.trim();
-
-      if (trimmedResponse.startsWith("[") || trimmedResponse.startsWith("{")) {
-        // Looks like JSON, try to parse it
-        console.log("Chat: Detected JSON format response");
-        try {
-          const data = JSON.parse(responseText);
-          console.log("Chat: Successfully parsed JSON:", data);
-
-          // Extract and normalize the response content
-          const rawContent = extractResponseContent(data);
-          assistantResponse = normalizeAiContent(rawContent);
-        } catch (parseError) {
-          console.error("Chat: JSON parse error:", parseError);
-          throw new Error(
-            `Invalid JSON format from webhook. Expected JSON but got malformed data: ${responseText.substring(0, 100)}...`
-          );
-        }
-      } else {
-        // Plain text/markdown response - normalize using robust utility
-        console.log("Chat: Detected plain text/markdown format response");
-        assistantResponse = normalizeAiContent(responseText);
-
-        // Log a warning about inconsistent webhook format
-        console.warn(
-          "Chat: Webhook returned plain text instead of expected JSON format. Consider configuring your N8N workflow to return consistent JSON: [{\"output\": \"your message\"}]"
-        );
-      }
-
-      // Remove typing indicator and add real response
-      removeMessage(activeSessionId, typingId);
-      const reply = {
-        id: `${Date.now()}a`,
-        role: "assistant" as const,
-        content: assistantResponse,
-      };
-      addMessage(activeSessionId, reply);
-      abortRef.current = null;
-      return; // Successfully processed
+      console.log("Chat: Starting streaming message");
+      await sendStreamingMessage(activeSessionId, text);
     } catch (error) {
-      console.error("Chat: Full error details:", error);
-
-      // Remove typing indicator
-      removeMessage(activeSessionId, typingId);
-
-      // Handle user-initiated aborts gracefully
-      if (error instanceof DOMException && error.name === "AbortError") {
-        abortRef.current = null;
-        toast({ title: "Generation stopped" });
-        return;
-      }
-
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      const reply = {
-        id: `${Date.now()}a`,
-        role: "assistant" as const,
-        content: `Sorry, I encountered an error: ${errorMessage}. Please check your webhook configuration in Settings.`,
-      };
-      addMessage(activeSessionId, reply);
-
-      toast({
-        title: "Connection Failed",
-        description: "Failed to reach the chat webhook. Please check your configuration.",
-        variant: "destructive",
-      });
-      abortRef.current = null;
+      console.error("Chat: Streaming failed:", error);
     }
   };
 
@@ -414,11 +186,9 @@ const Chat = () => {
               <ChatInput 
                 onSend={handleSendMessage} 
                 onStop={() => {
-                  if (isPolling) {
-                    stopPolling();
-                    setCurrentJobId(null);
+                  if (isStreaming) {
+                    stopStreaming();
                   }
-                  abortRef.current?.abort();
                 }} 
               />
             </>
