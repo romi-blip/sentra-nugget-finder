@@ -1,34 +1,26 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, memo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Copy, RotateCcw, User, Bot } from "lucide-react";
+import { Copy, RotateCcw, User, Bot, ArrowDown } from "lucide-react";
 import { Message } from "@/types/chatSession";
 import { toast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { normalizeAiContent } from "@/lib/normalizeAiContent";
 import { cn } from "@/lib/utils";
+import { useAutoScroll } from "@/hooks/useAutoScroll";
+import { StreamingMessage } from "./StreamingMessage";
+import { TypingIndicator } from "./TypingIndicator";
 
 interface ChatMessageListProps {
   messages: Message[];
+  isStreaming: boolean;
   onRegenerateMessage?: (messageId: string) => void;
 }
 
-export const ChatMessageList = ({ messages, onRegenerateMessage }: ChatMessageListProps) => {
-  const scrollRootRef = useRef<HTMLDivElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
-
-useEffect(() => {
-  const root = scrollRootRef.current;
-  const viewport = root?.querySelector('[data-radix-scroll-area-viewport]') as HTMLDivElement | null;
-  if (!viewport) return;
-  requestAnimationFrame(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-    // Fallback in case scrollIntoView doesn't work in some contexts
-    viewport.scrollTop = viewport.scrollHeight;
-  });
-}, [messages]);
+export const ChatMessageList = memo(({ messages, isStreaming, onRegenerateMessage }: ChatMessageListProps) => {
+  const { scrollRef, endRef, isUserScrolled, scrollToBottom } = useAutoScroll([messages, isStreaming]);
 
   const copyToClipboard = (content: string) => {
     navigator.clipboard.writeText(content);
@@ -39,20 +31,24 @@ useEffect(() => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  const lastMessage = messages[messages.length - 1];
+  const showTypingIndicator = isStreaming && lastMessage?.role === "assistant" && !lastMessage.content;
+
   return (
-    <ScrollArea ref={scrollRootRef} className="flex-1 smooth-scroll">
-      <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto">
-        {messages.map((message, idx) => {
-          const isUser = message.role === "user";
-          const prev = messages[idx - 1];
-          const next = messages[idx + 1];
-          const isFirstInGroup = !prev || prev.role !== message.role;
-          const isLastInGroup = !next || next.role !== message.role;
-          const isTyping = typeof message.id === "string" && message.id.includes("typing");
-          const isStreaming = isTyping && message.content && message.content !== "⚡ AI is thinking...";
-          const showTimestamp = idx === 0 || 
-            (prev && prev.role !== message.role) ||
-            (prev && message.timestamp.getTime() - prev.timestamp.getTime() > 300000);
+    <div className="flex-1 relative">
+      <ScrollArea ref={scrollRef} className="h-full smooth-scroll">
+        <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto">
+          {messages.map((message, idx) => {
+            const isUser = message.role === "user";
+            const prev = messages[idx - 1];
+            const next = messages[idx + 1];
+            const isFirstInGroup = !prev || prev.role !== message.role;
+            const isLastInGroup = !next || next.role !== message.role;
+            const isTyping = typeof message.id === "string" && message.id.includes("typing");
+            const isStreamingThisMessage = isStreaming && idx === messages.length - 1 && !isUser && message.content;
+            const showTimestamp = idx === 0 || 
+              (prev && prev.role !== message.role) ||
+              (prev && message.timestamp.getTime() - prev.timestamp.getTime() > 300000);
 
           return (
             <div
@@ -103,11 +99,11 @@ useEffect(() => {
                   "hover:shadow-md",
                   isFirstInGroup ? "mt-0" : "mt-1"
                 )}>
-                  {isTyping && !isStreaming ? (
-                    <div className="flex gap-1.5 items-center py-1">
-                      <div className="w-2 h-2 rounded-full bg-current animate-pulse-soft [animation-delay:-0.3s]" />
-                      <div className="w-2 h-2 rounded-full bg-current animate-pulse-soft [animation-delay:-0.15s]" />
-                      <div className="w-2 h-2 rounded-full bg-current animate-pulse-soft" />
+                  {isTyping && !isStreamingThisMessage ? (
+                    <TypingIndicator />
+                  ) : isStreamingThisMessage ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <StreamingMessage content={message.content} isStreaming={true} />
                     </div>
                   ) : (
                     <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -189,10 +185,38 @@ useEffect(() => {
                 )}
               </div>
             </div>
-          );
-        })}
-        <div ref={endRef} aria-hidden="true" />
-      </div>
-    </ScrollArea>
+            );
+          })}
+          
+          {showTypingIndicator && (
+            <div className="flex gap-3 animate-message-appear">
+              <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                  <Bot className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="rounded-2xl px-4 py-3 bg-[hsl(var(--chat-bubble-assistant))] border border-[hsl(var(--chat-border))] shadow-sm">
+                <TypingIndicator />
+              </div>
+            </div>
+          )}
+          
+          <div ref={endRef} aria-hidden="true" />
+        </div>
+      </ScrollArea>
+      
+      {isUserScrolled && (
+        <Button
+          onClick={scrollToBottom}
+          size="icon"
+          className="absolute bottom-6 right-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 z-10 animate-slide-up"
+          variant="default"
+        >
+          <ArrowDown className="w-4 h-4" />
+        </Button>
+      )}
+    </div>
   );
-};
+});
+
+ChatMessageList.displayName = "ChatMessageList";

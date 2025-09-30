@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import SEO from "@/components/SEO";
 import { toast } from "@/hooks/use-toast";
@@ -9,7 +9,6 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { Trash2, Bot } from "lucide-react";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 import { useStreamingChat } from "@/hooks/useStreamingChat";
-import { cn } from "@/lib/utils";
 
 const Chat = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -23,6 +22,7 @@ const Chat = () => {
     deleteSession,
     renameSession,
     getActiveSession,
+    replaceMessage,
     removeMessage,
     clearActiveSession,
     bulkDeleteSessions,
@@ -31,38 +31,25 @@ const Chat = () => {
   const streamingMessageRef = useRef<string>('');
   const typingIdRef = useRef<string>('');
 
-  const [streamingContent, setStreamingContent] = useState<string>('');
-  const [, forceUpdate] = useState({});
-
   const { isStreaming, sendMessage: sendStreamingMessage, stopStreaming } = useStreamingChat({
-    onChunk: (chunk) => {
+    onChunk: useCallback((chunk) => {
       if (!activeSessionId || !typingIdRef.current) return;
       
-      console.log('💬 Chunk received in Chat.tsx:', chunk.substring(0, 50));
       streamingMessageRef.current += chunk;
-      setStreamingContent(streamingMessageRef.current);
-      console.log('📊 Total content length:', streamingMessageRef.current.length);
       
-      // Update the message with the streaming content
-      const session = getActiveSession();
-      if (session) {
-        const messageIndex = session.messages.findIndex(msg => msg.id === typingIdRef.current);
-        if (messageIndex !== -1) {
-          // Update the message content directly
-          session.messages[messageIndex].content = streamingMessageRef.current;
-          // Force a re-render
-          forceUpdate({});
-          console.log('🔄 Updated message at index', messageIndex, 'with content length:', streamingMessageRef.current.length);
-        }
-      }
-    },
-    onComplete: (fullMessage) => {
+      // Use replaceMessage to properly trigger re-render
+      replaceMessage(activeSessionId, typingIdRef.current, {
+        id: typingIdRef.current,
+        role: "assistant",
+        content: streamingMessageRef.current,
+      });
+    }, [activeSessionId, replaceMessage]),
+    onComplete: useCallback((fullMessage) => {
       if (!activeSessionId || !typingIdRef.current) return;
       
-      console.log('✨ Stream complete, final message length:', fullMessage.length);
-      console.log('📄 First 100 chars:', fullMessage.substring(0, 100));
+      console.log('✨ Stream complete, final length:', fullMessage.length);
       
-      // Replace typing indicator with final message
+      // Replace streaming message with final message
       removeMessage(activeSessionId, typingIdRef.current);
       
       const reply = {
@@ -74,14 +61,12 @@ const Chat = () => {
       
       streamingMessageRef.current = '';
       typingIdRef.current = '';
-      setStreamingContent('');
-    },
-    onError: (error) => {
+    }, [activeSessionId, removeMessage, addMessage]),
+    onError: useCallback((error) => {
       if (!activeSessionId) return;
       
       console.error('Streaming error:', error);
       
-      // Remove typing indicator
       if (typingIdRef.current) {
         removeMessage(activeSessionId, typingIdRef.current);
       }
@@ -95,14 +80,13 @@ const Chat = () => {
       
       streamingMessageRef.current = '';
       typingIdRef.current = '';
-      setStreamingContent('');
       
       toast({
         title: "Streaming Failed",
         description: error,
         variant: "destructive",
       });
-    },
+    }, [activeSessionId, removeMessage, addMessage, toast]),
   });
 
   const handleSendMessage = async (text: string) => {
@@ -211,7 +195,10 @@ const Chat = () => {
           </div>
         ) : (
           <>
-            <ChatMessageList messages={getActiveSession()?.messages || []} />
+            <ChatMessageList 
+              messages={getActiveSession()?.messages || []} 
+              isStreaming={isStreaming}
+            />
             <ChatInput 
               onSend={handleSendMessage} 
               onStop={isStreaming ? stopStreaming : undefined}
