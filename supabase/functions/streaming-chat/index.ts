@@ -48,13 +48,23 @@ serve(async (req) => {
 
     console.log('Using webhook URL:', webhook.url);
 
-    // Create readable stream for SSE
+    // Create readable stream for SSE with timeout protection
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
+        const WEBHOOK_TIMEOUT = 60000; // 60 seconds timeout
         
         try {
-          // Call the streaming webhook
+          // Create AbortController for timeout
+          const abortController = new AbortController();
+          const timeoutId = setTimeout(() => {
+            console.error('⏱️ Webhook timeout after 60 seconds');
+            abortController.abort();
+          }, WEBHOOK_TIMEOUT);
+
+          console.log('🚀 Calling webhook at:', new Date().toISOString());
+          
+          // Call the streaming webhook with timeout
           const response = await fetch(webhook.url, {
             method: 'POST',
             headers: {
@@ -66,10 +76,36 @@ serve(async (req) => {
               timestamp: new Date().toISOString(),
               userId: user.id,
             }),
+            signal: abortController.signal,
           });
 
+          // Clear timeout on successful response
+          clearTimeout(timeoutId);
+
+          console.log('📥 Webhook response status:', response.status);
+
           if (!response.ok) {
-            throw new Error(`Webhook returned ${response.status}`);
+            const errorText = await response.text().catch(() => 'No error details');
+            console.error('❌ Webhook error:', {
+              status: response.status,
+              statusText: response.statusText,
+              error: errorText,
+              url: webhook.url,
+            });
+            
+            // Provide user-friendly error messages
+            let errorMessage = 'The AI service encountered an error.';
+            if (response.status === 429) {
+              errorMessage = 'Too many requests. Please wait a moment and try again.';
+            } else if (response.status === 503) {
+              errorMessage = 'The AI service is temporarily unavailable. Please try again in a moment.';
+            } else if (response.status >= 500) {
+              errorMessage = `Service error (${response.status}). Our team has been notified.`;
+            } else if (response.status === 404) {
+              errorMessage = 'AI service configuration error. Please contact support.';
+            }
+            
+            throw new Error(errorMessage);
           }
 
           const reader = response.body?.getReader();
@@ -108,9 +144,21 @@ serve(async (req) => {
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (error) {
-          console.error('Streaming error:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`));
+          console.error('❌ Streaming error:', error);
+          
+          let userMessage = 'An unexpected error occurred.';
+          if (error instanceof Error) {
+            if (error.name === 'AbortError') {
+              userMessage = 'Request timed out. The question might be too complex. Please try a simpler query.';
+            } else if (error.message.includes('fetch')) {
+              userMessage = 'Network error. Please check your connection and try again.';
+            } else {
+              userMessage = error.message;
+            }
+          }
+          
+          console.error('📤 Sending error to client:', userMessage);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: userMessage })}\n\n`));
           controller.close();
         }
       },

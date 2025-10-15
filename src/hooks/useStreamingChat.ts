@@ -12,14 +12,18 @@ export const useStreamingChat = ({ onChunk, onComplete, onError }: UseStreamingC
   const abortControllerRef = useRef<AbortController | null>(null);
   const messageBufferRef = useRef<string>('');
 
-  const sendMessage = useCallback(async (conversationId: string, message: string) => {
-    setIsStreaming(true);
-    messageBufferRef.current = '';
-    
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
+  const sendMessageWithRetry = useCallback(async (
+    conversationId: string, 
+    message: string,
+    retryCount: number = 0
+  ): Promise<void> => {
+    const MAX_RETRIES = 2;
+    const RETRY_DELAYS = [1000, 2000]; // Exponential backoff: 1s, 2s
 
     try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('Not authenticated');
@@ -117,15 +121,45 @@ export const useStreamingChat = ({ onChunk, onComplete, onError }: UseStreamingC
       if (error instanceof Error && error.name === 'AbortError') {
         console.log('Stream aborted by user');
         onComplete(messageBufferRef.current);
-      } else {
-        console.error('Streaming error:', error);
-        onError(error instanceof Error ? error.message : 'Streaming failed');
+        setIsStreaming(false);
+        abortControllerRef.current = null;
+        return;
       }
-    } finally {
+
+      const errorMessage = error instanceof Error ? error.message : 'Streaming failed';
+      const isNetworkError = errorMessage.includes('Network') || 
+                            errorMessage.includes('fetch') ||
+                            errorMessage.includes('timeout') ||
+                            errorMessage.includes('HTTP 500') ||
+                            errorMessage.includes('HTTP 503');
+
+      // Retry only on network errors, not on 4xx errors
+      if (isNetworkError && retryCount < MAX_RETRIES) {
+        console.log(`🔄 Retry attempt ${retryCount + 1}/${MAX_RETRIES} after ${RETRY_DELAYS[retryCount]}ms`);
+        
+        setIsStreaming(false);
+        abortControllerRef.current = null;
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[retryCount]));
+        
+        // Recursive retry
+        return sendMessageWithRetry(conversationId, message, retryCount + 1);
+      }
+
+      // Max retries reached or non-retryable error
+      console.error('❌ Streaming error (no more retries):', error);
+      onError(errorMessage);
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
   }, [onChunk, onComplete, onError]);
+
+  const sendMessage = useCallback(async (conversationId: string, message: string) => {
+    setIsStreaming(true);
+    messageBufferRef.current = '';
+    return sendMessageWithRetry(conversationId, message, 0);
+  }, [sendMessageWithRetry]);
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

@@ -6,7 +6,7 @@ import { useChatSessions } from "@/hooks/useChatSessions";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { Trash2, Bot } from "lucide-react";
+import { Trash2, Bot, RefreshCw } from "lucide-react";
 import { ChatSuggestions } from "@/components/chat/ChatSuggestions";
 import { useStreamingChat } from "@/hooks/useStreamingChat";
 
@@ -30,6 +30,8 @@ const Chat = () => {
 
   const streamingMessageRef = useRef<string>('');
   const typingIdRef = useRef<string>('');
+  const lastUserMessageRef = useRef<string>('');
+  const [showRetryButton, setShowRetryButton] = useState(false);
 
   const { isStreaming, sendMessage: sendStreamingMessage, stopStreaming } = useStreamingChat({
     onChunk: useCallback((chunk) => {
@@ -74,23 +76,42 @@ const Chat = () => {
       const reply = {
         id: `${Date.now()}a`,
         role: "assistant" as const,
-        content: `Sorry, I encountered an error: ${error}. Please try again.`,
+        content: `Sorry, I encountered an error: ${error}`,
       };
       addMessage(activeSessionId, reply);
       
       streamingMessageRef.current = '';
       typingIdRef.current = '';
+      setShowRetryButton(true);
       
       toast({
-        title: "Streaming Failed",
+        title: "Error",
         description: error,
         variant: "destructive",
+        action: (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (lastUserMessageRef.current) {
+                handleSendMessage(lastUserMessageRef.current);
+              }
+            }}
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Retry
+          </Button>
+        ),
       });
     }, [activeSessionId, removeMessage, addMessage, toast]),
   });
 
   const handleSendMessage = async (text: string) => {
     if (!activeSessionId) return;
+
+    // Store last message for retry
+    lastUserMessageRef.current = text;
+    setShowRetryButton(false);
 
     // Add user message
     const userMessage = {
