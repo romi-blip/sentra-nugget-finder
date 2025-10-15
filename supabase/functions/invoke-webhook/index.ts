@@ -113,6 +113,7 @@ serve(async (req) => {
     }
 
     console.log(`Invoking webhook of type: ${type} for user: ${user.email}`)
+    console.log('Using service role client to fetch webhook configuration (bypasses RLS)')
 
     // Auto-create chat job if missing jobId for chat webhooks
     let enhancedPayload = payload || {};

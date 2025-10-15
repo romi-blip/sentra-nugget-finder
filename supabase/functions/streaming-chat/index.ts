@@ -12,6 +12,7 @@ serve(async (req) => {
   }
 
   try {
+    // User authentication client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -34,15 +35,24 @@ serve(async (req) => {
     
     console.log('Streaming chat request:', { conversationId, message: message.substring(0, 50) });
 
-    // Get webhook URL from global_webhooks
-    const { data: webhook } = await supabase
+    // Admin client to bypass RLS for webhook config (server-side only)
+    const adminSupabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    console.log('Using admin client to fetch webhook configuration for type: chat');
+
+    // Get webhook URL from global_webhooks using admin client
+    const { data: webhook, error: webhookError } = await adminSupabase
       .from('global_webhooks')
       .select('url')
       .eq('type', 'chat')
       .eq('enabled', true)
       .single();
 
-    if (!webhook?.url) {
+    if (webhookError || !webhook?.url) {
+      console.error('Failed to fetch webhook config:', webhookError);
       throw new Error('Chat webhook not configured');
     }
 
