@@ -1,4 +1,4 @@
-import { useState, KeyboardEvent } from "react";
+import { useState, KeyboardEvent, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Loader2, Square } from "lucide-react";
@@ -19,6 +19,19 @@ export const ChatInput = ({
 }: ChatInputProps) => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Dynamic textarea auto-resize
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    const scrollHeight = textarea.scrollHeight;
+    const maxHeight = 200; // max-h-[200px]
+    
+    textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+  }, [input]);
 
   const handleSend = async () => {
     const message = input.trim();
@@ -46,13 +59,15 @@ export const ChatInput = ({
         <div className="flex gap-3 items-end">
           <div className="flex-1 relative">
             <Textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
               disabled={disabled || isLoading}
               rows={1}
-              className="min-h-[56px] max-h-[200px] resize-none rounded-2xl px-4 py-3 pr-12 text-base shadow-sm transition-all duration-200 focus-visible:shadow-md focus-visible:ring-2"
+              className="min-h-[56px] resize-none rounded-2xl px-4 py-3 pr-12 text-base shadow-sm transition-all duration-200 focus-visible:shadow-md focus-visible:ring-2 overflow-hidden"
+              style={{ height: '56px' }}
               aria-label="Message input"
             />
             {input.length > 0 && (

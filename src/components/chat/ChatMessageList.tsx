@@ -35,9 +35,9 @@ export const ChatMessageList = memo(({ messages, isStreaming, onRegenerateMessag
   const showTypingIndicator = isStreaming && lastMessage?.role === "assistant" && !lastMessage.content;
 
   return (
-    <div className="flex-1 relative">
+    <div className="flex-1 min-h-0 relative">
       <ScrollArea ref={scrollRef} className="h-full smooth-scroll">
-        <div className="flex flex-col gap-6 p-6 max-w-3xl mx-auto">
+        <div className="flex flex-col gap-6 p-4 md:p-6 pb-4 max-w-3xl mx-auto">
           {messages.map((message, idx) => {
             const isUser = message.role === "user";
             const prev = messages[idx - 1];
@@ -94,7 +94,7 @@ export const ChatMessageList = memo(({ messages, isStreaming, onRegenerateMessag
                 <div className={cn(
                   "relative rounded-2xl px-4 py-3 shadow-sm transition-all duration-200",
                   isUser 
-                    ? "bg-[hsl(var(--chat-bubble-user))] text-[hsl(var(--chat-text-user))]" 
+                    ? "bg-primary text-primary-foreground shadow-md" 
                     : "bg-[hsl(var(--chat-bubble-assistant))] text-[hsl(var(--chat-text-assistant))] border border-[hsl(var(--chat-border))]",
                   "hover:shadow-md",
                   isFirstInGroup ? "mt-0" : "mt-1"

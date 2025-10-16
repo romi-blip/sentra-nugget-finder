@@ -11,6 +11,8 @@ export const useStreamingChat = ({ onChunk, onComplete, onError }: UseStreamingC
   const [isStreaming, setIsStreaming] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messageBufferRef = useRef<string>('');
+  const chunkBufferRef = useRef<string>('');
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const sendMessageWithRetry = useCallback(async (
     conversationId: string, 
@@ -101,7 +103,19 @@ export const useStreamingChat = ({ onChunk, onComplete, onError }: UseStreamingC
 
               if (textContent) {
                 messageBufferRef.current += textContent;
-                onChunk(textContent);
+                chunkBufferRef.current += textContent;
+                
+                // Debounce chunk updates (batch every 50ms)
+                if (debounceTimerRef.current) {
+                  clearTimeout(debounceTimerRef.current);
+                }
+                debounceTimerRef.current = setTimeout(() => {
+                  if (chunkBufferRef.current) {
+                    onChunk(chunkBufferRef.current);
+                    chunkBufferRef.current = '';
+                  }
+                }, 50);
+                
                 console.log('✅ Chunk added to buffer, total length:', messageBufferRef.current.length);
               }
             } catch (parseError) {
@@ -109,15 +123,40 @@ export const useStreamingChat = ({ onChunk, onComplete, onError }: UseStreamingC
               if (data && data !== '') {
                 console.log('📝 Plain text chunk:', data.substring(0, 50));
                 messageBufferRef.current += data;
-                onChunk(data);
+                chunkBufferRef.current += data;
+                
+                // Debounce chunk updates
+                if (debounceTimerRef.current) {
+                  clearTimeout(debounceTimerRef.current);
+                }
+                debounceTimerRef.current = setTimeout(() => {
+                  if (chunkBufferRef.current) {
+                    onChunk(chunkBufferRef.current);
+                    chunkBufferRef.current = '';
+                  }
+                }, 50);
               }
             }
           }
         }
       }
 
+      // Flush any remaining debounced chunks
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      if (chunkBufferRef.current) {
+        onChunk(chunkBufferRef.current);
+        chunkBufferRef.current = '';
+      }
+      
       onComplete(messageBufferRef.current);
     } catch (error) {
+      // Flush on error too
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      
       if (error instanceof Error && error.name === 'AbortError') {
         console.log('Stream aborted by user');
         onComplete(messageBufferRef.current);

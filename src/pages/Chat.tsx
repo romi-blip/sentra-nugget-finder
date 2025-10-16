@@ -164,9 +164,9 @@ const Chat = () => {
       />
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-background">
+      <div className="flex-1 flex flex-col h-screen bg-background">
         {/* Header */}
-        <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 md:p-6 shadow-sm">
+        <header className="shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 md:p-6 shadow-sm">
           <div className="max-w-3xl mx-auto flex items-center justify-between">
             <div>
               <h1 className="text-xl md:text-2xl font-semibold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
@@ -215,16 +215,18 @@ const Chat = () => {
             </div>
           </div>
         ) : (
-          <>
+          <div className="flex-1 min-h-0 flex flex-col">
             <ChatMessageList 
               messages={getActiveSession()?.messages || []} 
               isStreaming={isStreaming}
             />
-            <ChatInput 
-              onSend={handleSendMessage} 
-              onStop={isStreaming ? stopStreaming : undefined}
-            />
-          </>
+            <div className="shrink-0">
+              <ChatInput 
+                onSend={handleSendMessage} 
+                onStop={isStreaming ? stopStreaming : undefined}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>
