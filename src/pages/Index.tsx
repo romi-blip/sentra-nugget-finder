@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button";
 import SEO from "@/components/SEO";
 import { Link } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { Lightbulb } from "lucide-react";
 
 const PointerGlow = () => {
   useEffect(() => {
@@ -19,6 +21,37 @@ const PointerGlow = () => {
 
 const Index = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [isCreatingIdeas, setIsCreatingIdeas] = useState(false);
+
+  const handleCreateBlogIdeas = async () => {
+    setIsCreatingIdeas(true);
+    try {
+      const response = await fetch('https://sentra.app.n8n.cloud/webhook/d1c02680-8b93-4d0e-a6e0-e82fdfe1f7fa', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Success!",
+          description: "Blog post ideas are being generated.",
+        });
+      } else {
+        throw new Error('Failed to trigger webhook');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create blog post ideas. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingIdeas(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,6 +77,15 @@ const Index = () => {
             ) : (
               <Link to="/auth"><Button variant="secondary">Sign In to Chat</Button></Link>
             )}
+            <Button 
+              variant="outline" 
+              onClick={handleCreateBlogIdeas}
+              disabled={isCreatingIdeas}
+              className="gap-2"
+            >
+              <Lightbulb className="h-4 w-4" />
+              {isCreatingIdeas ? "Creating..." : "Create Blog Post Ideas"}
+            </Button>
           </div>
         </div>
       </header>
