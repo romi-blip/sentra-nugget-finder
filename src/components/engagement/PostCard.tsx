@@ -11,7 +11,10 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onClick }: PostCardProps) {
-  const review = post.post_reviews?.[0];
+  // Handle both object and array responses for post_reviews (one-to-one relationship)
+  const review = Array.isArray(post.post_reviews) 
+    ? post.post_reviews?.[0] 
+    : post.post_reviews;
   const reply = post.suggested_replies?.[0];
   const { analyzePost } = useRedditActions();
   
