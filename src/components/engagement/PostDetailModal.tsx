@@ -21,7 +21,10 @@ interface PostDetailModalProps {
 }
 
 export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalProps) {
-  const review = post?.post_reviews?.[0];
+  // Handle both object and array responses for post_reviews (one-to-one relationship)
+  const review = post?.post_reviews 
+    ? (Array.isArray(post.post_reviews) ? post.post_reviews[0] : post.post_reviews)
+    : null;
   const reply = post?.suggested_replies?.[0];
   const [editedReply, setEditedReply] = useState(reply?.edited_reply || reply?.suggested_reply || '');
   const { updateReply } = useSuggestedReplies();
