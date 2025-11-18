@@ -164,6 +164,18 @@ Content: ${post.content || post.content_snippet || 'No content'}`;
     const review = JSON.parse(toolCall.function.arguments);
     console.log('AI Review generated:', review);
 
+    // Skip creating review if recommendation is do_not_engage
+    if (review.recommendation === 'do_not_engage') {
+      console.log('Skipping review creation for do_not_engage post');
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Post marked as do_not_engage, no review created',
+        recommendation: 'do_not_engage'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Upsert review into database (update if exists, insert if new)
     const { data: insertedReview, error: insertError } = await supabase
       .from('post_reviews')
