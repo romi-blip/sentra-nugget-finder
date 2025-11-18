@@ -34,20 +34,29 @@ function decodeHtmlEntities(text: string): string {
 function cleanHtmlContent(html: string): string {
   if (!html) return '';
   
-  // Remove CDATA
+  // Remove CDATA wrapper
   let clean = html.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
   
-  // Remove script and style tags with content
-  clean = clean.replace(/<(script|style)[^>]*>.*?<\/(script|style)>/gis, '');
-  
-  // Remove HTML tags
-  clean = clean.replace(/<[^>]+>/g, ' ');
-  
-  // Decode HTML entities
+  // First decode HTML entities so tags/comments become real HTML
   clean = decodeHtmlEntities(clean);
   
-  // Clean up whitespace
+  // Remove HTML comments like <!-- SC_OFF -->, <!-- SC_ON -->
+  clean = clean.replace(/<!--.*?-->/gs, ' ');
+  
+  // Remove script and style tags with their content
+  clean = clean.replace(/<(script|style)[^>]*>.*?<\/\1>/gis, ' ');
+  
+  // Remove all remaining HTML tags
+  clean = clean.replace(/<[^>]+>/g, ' ');
+  
+  // Drop common Reddit footer starting with "submitted by"
+  clean = clean.replace(/submitted by.*$/i, ' ');
+  
+  // Final whitespace normalization
   clean = clean.replace(/\s+/g, ' ').trim();
+  
+  return clean;
+}
   
   return clean;
 }
