@@ -57,9 +57,6 @@ function cleanHtmlContent(html: string): string {
   
   return clean;
 }
-  
-  return clean;
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
