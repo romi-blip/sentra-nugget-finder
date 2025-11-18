@@ -137,13 +137,13 @@ Content: ${post.content || post.content_snippet || 'No content'}`;
     const review = JSON.parse(toolCall.function.arguments);
     console.log('AI Review generated:', review);
 
-    // Insert review into database
+    // Upsert review into database (update if exists, insert if new)
     const { data: insertedReview, error: insertError } = await supabase
       .from('post_reviews')
-      .insert({
+      .upsert({
         post_id,
         ...review
-      })
+      }, { onConflict: 'post_id' })
       .select()
       .single();
 
