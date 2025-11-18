@@ -17,6 +17,7 @@ import WebhookSettingsDialog from "@/components/settings/WebhookSettingsDialog";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import AdminSettings from "./pages/AdminSettings";
 import Analytics from "./pages/Analytics";
+import Engagement from "./pages/Engagement";
 
 const queryClient = new QueryClient();
 
@@ -85,6 +86,14 @@ const App = () => {
               element={
                 <ProtectedRoute requiredRoles={['super_admin']}>
                   <Analytics />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/engagement" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'super_admin', 'marketing']}>
+                  <Engagement />
                 </ProtectedRoute>
               } 
             />

@@ -1073,6 +1073,80 @@ export type Database = {
           },
         ]
       }
+      post_reviews: {
+        Row: {
+          audience_quality_score: number | null
+          created_at: string | null
+          engagement_approach: string | null
+          engagement_potential_score: number | null
+          estimated_effort: string | null
+          id: string
+          key_themes: string | null
+          post_id: string
+          problem_fit_score: number | null
+          reasoning: string | null
+          recommendation: string | null
+          relevance_score: number | null
+          risk_flags: string | null
+          sentra_angles: string | null
+          strategic_value_score: number | null
+          subreddit_context: string | null
+          suggested_tone: string | null
+          timing_score: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          audience_quality_score?: number | null
+          created_at?: string | null
+          engagement_approach?: string | null
+          engagement_potential_score?: number | null
+          estimated_effort?: string | null
+          id?: string
+          key_themes?: string | null
+          post_id: string
+          problem_fit_score?: number | null
+          reasoning?: string | null
+          recommendation?: string | null
+          relevance_score?: number | null
+          risk_flags?: string | null
+          sentra_angles?: string | null
+          strategic_value_score?: number | null
+          subreddit_context?: string | null
+          suggested_tone?: string | null
+          timing_score?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          audience_quality_score?: number | null
+          created_at?: string | null
+          engagement_approach?: string | null
+          engagement_potential_score?: number | null
+          estimated_effort?: string | null
+          id?: string
+          key_themes?: string | null
+          post_id?: string
+          problem_fit_score?: number | null
+          reasoning?: string | null
+          recommendation?: string | null
+          relevance_score?: number | null
+          risk_flags?: string | null
+          sentra_angles?: string | null
+          strategic_value_score?: number | null
+          subreddit_context?: string | null
+          suggested_tone?: string | null
+          timing_score?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_reviews_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "reddit_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -1102,6 +1176,59 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      reddit_posts: {
+        Row: {
+          author: string | null
+          content: string | null
+          content_snippet: string | null
+          created_at: string | null
+          id: string
+          iso_date: string | null
+          link: string
+          pub_date: string | null
+          reddit_id: string
+          subreddit_id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          author?: string | null
+          content?: string | null
+          content_snippet?: string | null
+          created_at?: string | null
+          id?: string
+          iso_date?: string | null
+          link: string
+          pub_date?: string | null
+          reddit_id: string
+          subreddit_id: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          author?: string | null
+          content?: string | null
+          content_snippet?: string | null
+          created_at?: string | null
+          id?: string
+          iso_date?: string | null
+          link?: string
+          pub_date?: string | null
+          reddit_id?: string
+          subreddit_id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reddit_posts_subreddit_id_fkey"
+            columns: ["subreddit_id"]
+            isOneToOne: false
+            referencedRelation: "tracked_subreddits"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sales_enablement_assets: {
         Row: {
@@ -1145,6 +1272,99 @@ export type Database = {
           mime_type?: string | null
           updated_at?: string | null
           version?: string | null
+        }
+        Relationships: []
+      }
+      suggested_replies: {
+        Row: {
+          created_at: string | null
+          edited_reply: string | null
+          id: string
+          notes: string | null
+          post_id: string
+          posted_at: string | null
+          posted_by: string | null
+          review_id: string | null
+          status: string | null
+          suggested_reply: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          edited_reply?: string | null
+          id?: string
+          notes?: string | null
+          post_id: string
+          posted_at?: string | null
+          posted_by?: string | null
+          review_id?: string | null
+          status?: string | null
+          suggested_reply: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          edited_reply?: string | null
+          id?: string
+          notes?: string | null
+          post_id?: string
+          posted_at?: string | null
+          posted_by?: string | null
+          review_id?: string | null
+          status?: string | null
+          suggested_reply?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suggested_replies_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suggested_replies_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "post_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tracked_subreddits: {
+        Row: {
+          created_at: string | null
+          fetch_frequency_minutes: number | null
+          id: string
+          is_active: boolean | null
+          last_fetched_at: string | null
+          rss_url: string
+          subreddit_name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          fetch_frequency_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_fetched_at?: string | null
+          rss_url: string
+          subreddit_name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          fetch_frequency_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_fetched_at?: string | null
+          rss_url?: string
+          subreddit_name?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
