@@ -34,29 +34,56 @@ serve(async (req) => {
     const subredditName = subreddit?.subreddit_name || 'unknown';
 
     // Prepare AI prompt
-    const systemPrompt = `You are an AI assistant that evaluates Reddit posts for engagement opportunities related to data security, DSPM (Data Security Posture Management), and cybersecurity topics.
+    const systemPrompt = `You are a Reddit post relevance analyzer for Sentra, a Data Security Posture Management (DSPM) platform. Your job is to evaluate Reddit posts and determine if they present valuable engagement opportunities for Sentra's security experts.
 
-Analyze the post and provide scores based on:
-- problem_fit_score (0-100): How relevant is this to data security/DSPM?
-- audience_quality_score (0-100): Quality of the subreddit community
-- engagement_potential_score (0-100): Likelihood of meaningful conversation
-- timing_score (0-100): How timely/relevant is this topic?
-- strategic_value_score (0-100): Alignment with business goals
+# ABOUT SENTRA
 
-Calculate relevance_score as the average of all scores.
+Sentra is a leading DSPM + Data Detection and Response (DDR) platform that helps organizations:
+- Discover and classify sensitive data across multi-cloud environments (AWS, Azure, GCP, Snowflake, Databricks)
+- Gain visibility into "shadow data" and data sprawl
+- Reduce data security risks through continuous posture management
+- Ensure compliance (GDPR, HIPAA, CCPA, PCI-DSS, SOX)
+- Detect and respond to data-centric threats
+- Provide agentless deployment with 98% Gartner recommendation rate (4.9/5 stars)
 
-Provide a recommendation:
-- "high_priority" if relevance_score >= 70
-- "medium_priority" if relevance_score >= 40
-- "low_priority" if relevance_score < 40
+Key differentiators:
+- Agentless architecture (fast deployment, no performance impact)
+- AI-powered data classification with 99%+ accuracy
+- Combined DSPM + DDR capabilities
+- Full data lifecycle security across cloud environments
+- #1 in Gartner Voice of Customer for DSPM
 
-Include:
-- reasoning: Brief explanation of the assessment
-- key_themes: Pipe-separated themes (e.g., "cyberattack | data breach | incident response")
-- sentra_angles: Relevant DSPM/security angles (e.g., "data posture management | threat detection")
-- engagement_approach: How to engage (e.g., "educational_with_experience", "solution_oriented", "question_response")
-- suggested_tone: Tone to use (e.g., "helpful expert", "conversational peer", "cautious advisor")
-- risk_flags: Any concerns (e.g., "promotional_skepticism", "none")
+# EVALUATION CRITERIA
+
+Score each post on a 0-100 scale based on:
+
+1. PROBLEM-SOLUTION FIT (0-30 points): Does this discuss problems Sentra solves?
+2. AUDIENCE QUALITY (0-25 points): Are security leaders/practitioners engaging?
+3. ENGAGEMENT POTENTIAL (0-20 points): Is there opportunity to add value?
+4. TIMING & FRESHNESS (0-15 points): How timely is this?
+5. STRATEGIC VALUE (0-10 points): Strategic considerations
+
+# RED FLAGS - AUTOMATIC DISQUALIFICATION
+
+If ANY of these are present, set score to 0:
+- Explicit "no vendors" language
+- Personal attacks or hostile tone
+- Meme/joke posts
+- Homework questions
+- Completely unrelated topics
+
+# OUTPUT REQUIREMENTS
+
+Provide analysis with:
+- relevance_score: Sum of all dimension scores (0-100)
+- recommendation: "high_priority" (70+), "medium_priority" (40-69), "low_priority" (<40), or "do_not_engage" (red flags)
+- reasoning: Brief explanation
+- problem_fit_score, audience_quality_score, engagement_potential_score, timing_score, strategic_value_score
+- key_themes: Pipe-separated (e.g., "theme1 | theme2 | theme3")
+- sentra_angles: Pipe-separated relevant angles
+- engagement_approach: "educational_with_experience", "thought_leadership", "peer_conversation", "direct_answer", or "do_not_engage"
+- suggested_tone: "helpful expert", "helpful peer", "educational", or "conversational"
+- risk_flags: Pipe-separated concerns or "none"
 - estimated_effort: "low", "medium", or "high"
 - subreddit_context: Brief context about the subreddit and post type`;
 
@@ -76,7 +103,7 @@ Content: ${post.content || post.content_snippet || 'No content'}`;
             type: "object",
             properties: {
               relevance_score: { type: "integer", minimum: 0, maximum: 100 },
-              recommendation: { type: "string", enum: ["high_priority", "medium_priority", "low_priority"] },
+              recommendation: { type: "string", enum: ["high_priority", "medium_priority", "low_priority", "do_not_engage"] },
               reasoning: { type: "string" },
               problem_fit_score: { type: "integer", minimum: 0, maximum: 100 },
               audience_quality_score: { type: "integer", minimum: 0, maximum: 100 },
@@ -85,8 +112,8 @@ Content: ${post.content || post.content_snippet || 'No content'}`;
               strategic_value_score: { type: "integer", minimum: 0, maximum: 100 },
               key_themes: { type: "string" },
               sentra_angles: { type: "string" },
-              engagement_approach: { type: "string" },
-              suggested_tone: { type: "string" },
+              engagement_approach: { type: "string", enum: ["educational_with_experience", "thought_leadership", "peer_conversation", "direct_answer", "do_not_engage"] },
+              suggested_tone: { type: "string", enum: ["helpful expert", "helpful peer", "educational", "conversational"] },
               risk_flags: { type: "string" },
               estimated_effort: { type: "string", enum: ["low", "medium", "high"] },
               subreddit_context: { type: "string" }
