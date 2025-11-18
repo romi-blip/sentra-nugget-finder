@@ -1,7 +1,8 @@
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, MessageSquare, CheckCircle } from 'lucide-react';
+import { ExternalLink, MessageSquare, CheckCircle, RefreshCw } from 'lucide-react';
+import { useRedditActions } from '@/hooks/useRedditActions';
 import { formatDistanceToNow } from 'date-fns';
 
 interface PostCardProps {
@@ -12,6 +13,7 @@ interface PostCardProps {
 export function PostCard({ post, onClick }: PostCardProps) {
   const review = post.post_reviews?.[0];
   const reply = post.suggested_replies?.[0];
+  const { analyzePost } = useRedditActions();
   
   const getPriorityColor = (recommendation: string) => {
     switch (recommendation) {
@@ -28,6 +30,11 @@ export function PostCard({ post, onClick }: PostCardProps) {
 
   const getPriorityLabel = (recommendation: string) => {
     return recommendation?.replace('_', ' ').toUpperCase() || 'UNREVIEWED';
+  };
+
+  const handleReanalyze = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    analyzePost.mutate({ postId: post.id, post });
   };
 
   return (
@@ -58,11 +65,24 @@ export function PostCard({ post, onClick }: PostCardProps) {
               <span>{post.pub_date && formatDistanceToNow(new Date(post.pub_date), { addSuffix: true })}</span>
             </div>
           </div>
-          <Button variant="ghost" size="icon" asChild onClick={(e) => e.stopPropagation()}>
-            <a href={post.link} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          </Button>
+          <div className="flex gap-1">
+            {review && (
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={handleReanalyze}
+                disabled={analyzePost.isPending}
+                title="Re-analyze post"
+              >
+                <RefreshCw className={`h-4 w-4 ${analyzePost.isPending ? 'animate-spin' : ''}`} />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" asChild onClick={(e) => e.stopPropagation()}>
+              <a href={post.link} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </Button>
+          </div>
         </div>
         
         {post.content_snippet && (
