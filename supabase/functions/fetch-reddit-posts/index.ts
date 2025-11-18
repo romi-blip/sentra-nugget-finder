@@ -6,6 +6,52 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Decode HTML entities
+function decodeHtmlEntities(text: string): string {
+  const entities: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#x27;': "'",
+    '&#x2F;': '/',
+    '&#32;': ' ',
+  };
+  
+  let decoded = text;
+  for (const [entity, char] of Object.entries(entities)) {
+    decoded = decoded.replaceAll(entity, char);
+  }
+  
+  // Handle numeric entities
+  decoded = decoded.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec));
+  decoded = decoded.replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  
+  return decoded;
+}
+
+// Strip HTML tags and decode entities
+function cleanHtmlContent(html: string): string {
+  if (!html) return '';
+  
+  // Remove CDATA
+  let clean = html.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
+  
+  // Remove script and style tags with content
+  clean = clean.replace(/<(script|style)[^>]*>.*?<\/(script|style)>/gis, '');
+  
+  // Remove HTML tags
+  clean = clean.replace(/<[^>]+>/g, ' ');
+  
+  // Decode HTML entities
+  clean = decodeHtmlEntities(clean);
+  
+  // Clean up whitespace
+  clean = clean.replace(/\s+/g, ' ').trim();
+  
+  return clean;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -45,48 +91,48 @@ serve(async (req) => {
         console.log(`Fetching RSS for r/${subreddit.subreddit_name}...`);
         
         // Fetch RSS feed
-        const rssResponse = await fetch(subreddit.rss_url);
+        const rssResponse = await fetch(subreddit.rss_url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)'
+          }
+        });
+        
         if (!rssResponse.ok) {
           throw new Error(`RSS fetch failed: ${rssResponse.status}`);
         }
 
         const rssText = await rssResponse.text();
         
-        // Parse RSS XML (simple regex approach for Reddit RSS)
+        // Parse RSS XML - limit to first 10 entries for performance
         const entryRegex = /<entry>(.*?)<\/entry>/gs;
-        const entries = [...rssText.matchAll(entryRegex)];
+        const allEntries = [...rssText.matchAll(entryRegex)];
+        const entries = allEntries.slice(0, 10); // Process only latest 10
         
         let newPostsCount = 0;
-        const postsToAnalyze = [];
 
         for (const entryMatch of entries) {
           const entry = entryMatch[1];
           
-          // Extract fields
-          const idMatch = entry.match(/<id>(.*?)<\/id>/);
-          const titleMatch = entry.match(/<title>(.*?)<\/title>/);
-          const linkMatch = entry.match(/<link href="(.*?)"/);
-          const authorMatch = entry.match(/<name>(.*?)<\/name>/);
-          const publishedMatch = entry.match(/<published>(.*?)<\/published>/);
+          // Extract fields with safer regex
+          const idMatch = entry.match(/<id>([^<]+)<\/id>/);
+          const titleMatch = entry.match(/<title>([^<]+)<\/title>/);
+          const linkMatch = entry.match(/<link href="([^"]+)"/);
+          const authorMatch = entry.match(/<name>([^<]+)<\/name>/);
+          const publishedMatch = entry.match(/<published>([^<]+)<\/published>/);
           const contentMatch = entry.match(/<content[^>]*>(.*?)<\/content>/s);
           
           if (!idMatch || !titleMatch || !linkMatch) continue;
           
           const redditId = idMatch[1].split('/comments/')[1]?.split('/')[0] || idMatch[1];
-          const title = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim();
+          const title = decodeHtmlEntities(titleMatch[1]);
           const link = linkMatch[1];
-          const author = authorMatch ? authorMatch[1] : null;
+          const author = authorMatch ? decodeHtmlEntities(authorMatch[1]) : null;
           const pubDate = publishedMatch ? publishedMatch[1] : null;
           
-          // Extract plain text from content HTML
-          let content = contentMatch ? contentMatch[1] : null;
-          if (content) {
-            content = content
-              .replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1')
-              .replace(/<[^>]+>/g, ' ')
-              .replace(/&[^;]+;/g, ' ')
-              .trim()
-              .substring(0, 5000);
+          // Clean content
+          let content = contentMatch ? cleanHtmlContent(contentMatch[1]) : null;
+          if (content && content.length > 5000) {
+            content = content.substring(0, 5000);
           }
 
           // Check if post already exists
@@ -94,12 +140,12 @@ serve(async (req) => {
             .from('reddit_posts')
             .select('id')
             .eq('reddit_id', redditId)
-            .single();
+            .maybeSingle();
 
           if (existing) continue;
 
           // Insert new post
-          const { data: newPost, error: insertError } = await supabase
+          const { error: insertError } = await supabase
             .from('reddit_posts')
             .insert({
               reddit_id: redditId,
@@ -111,9 +157,7 @@ serve(async (req) => {
               iso_date: pubDate,
               content,
               content_snippet: content ? content.substring(0, 500) : null,
-            })
-            .select()
-            .single();
+            });
 
           if (insertError) {
             console.error('Error inserting post:', insertError);
@@ -121,7 +165,6 @@ serve(async (req) => {
           }
 
           newPostsCount++;
-          postsToAnalyze.push(newPost);
         }
 
         // Update last_fetched_at
@@ -135,17 +178,6 @@ serve(async (req) => {
           newPosts: newPostsCount,
         });
 
-        // Trigger analysis for new posts
-        for (const post of postsToAnalyze) {
-          try {
-            await supabase.functions.invoke('analyze-reddit-post', {
-              body: { post_id: post.id, post },
-            });
-          } catch (err) {
-            console.error('Error triggering analysis:', err);
-          }
-        }
-
         console.log(`Processed r/${subreddit.subreddit_name}: ${newPostsCount} new posts`);
 
       } catch (err) {
@@ -157,7 +189,10 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ results }), {
+    return new Response(JSON.stringify({ 
+      results,
+      message: 'Posts fetched. Use Re-analyze button to analyze individual posts.'
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
