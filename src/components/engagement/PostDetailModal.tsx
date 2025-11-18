@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,11 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
   const reply = post?.suggested_replies?.[0];
   const [editedReply, setEditedReply] = useState(reply?.edited_reply || reply?.suggested_reply || '');
   const { updateReply } = useSuggestedReplies();
+
+  // Sync editedReply state when reply data changes
+  useEffect(() => {
+    setEditedReply(reply?.edited_reply || reply?.suggested_reply || '');
+  }, [reply?.edited_reply, reply?.suggested_reply]);
   const { analyzePost, generateReply } = useRedditActions();
   const { toast } = useToast();
 
