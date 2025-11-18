@@ -47,10 +47,14 @@ export function useRedditPosts(options: UseRedditPostsOptions = {}) {
       // Filter by priority and status if needed
       let filteredData = data;
       
+      // Normalize review to handle both object and array responses
       if (options.priority && options.priority !== 'all') {
-        filteredData = filteredData.filter((post: any) => 
-          post.post_reviews?.[0]?.recommendation === options.priority
-        );
+        filteredData = filteredData.filter((post: any) => {
+          const review = post.post_reviews
+            ? (Array.isArray(post.post_reviews) ? post.post_reviews[0] : post.post_reviews)
+            : null;
+          return review?.recommendation === options.priority;
+        });
       }
       
       if (options.status) {
