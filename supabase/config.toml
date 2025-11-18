@@ -76,3 +76,12 @@ verify_jwt = false
 
 [functions.leads-enrich]
 verify_jwt = false
+
+[functions.fetch-reddit-posts]
+verify_jwt = false
+
+[functions.analyze-reddit-post]
+verify_jwt = false
+
+[functions.generate-reddit-reply]
+verify_jwt = false
