@@ -358,6 +358,186 @@ export type Database = {
           },
         ]
       }
+      data_breach_articles: {
+        Row: {
+          ai_ml_involvement: string | null
+          attack_sophistication: string | null
+          attack_vector: string | null
+          author: string | null
+          author_page: string | null
+          business_continuity_impact: string | null
+          communication_strategy: string | null
+          competitive_impact: string | null
+          created_at: string
+          customer_base_impact: string | null
+          customer_trust_impact: string | null
+          data_sensitivity_level: string | null
+          data_types_exposed: string[] | null
+          description: string | null
+          downtime_duration: string | null
+          emerging_threat_patterns: string[] | null
+          estimated_direct_costs: number | null
+          external_assistance: string[] | null
+          geographic_scope: string | null
+          hq_location: string | null
+          id: number
+          implemented_improvements: string[] | null
+          incident_response_actions: string[] | null
+          industry_recommendations: string[] | null
+          industry_subsector: string | null
+          industry_wide_implications: string | null
+          insurance_coverage: string | null
+          key_takeaways: string[] | null
+          keywords: string[] | null
+          law_enforcement_involvelment: string[] | null
+          litigation_status: string | null
+          long_term_financial_impact: string | null
+          markdown_content: string | null
+          organization_name: string | null
+          organization_size: string | null
+          policy_changes: string[] | null
+          preventability_assessment: string | null
+          primary_industry: string | null
+          publish_date: string | null
+          recommended_controls: string[] | null
+          records_compromised: number | null
+          regulatory_fines: string | null
+          regulatory_framework: string[] | null
+          regulatory_scrutiny_level: string | null
+          reputational_damage_score: number | null
+          response_timeline: string | null
+          security_gaps_identifued: string[] | null
+          stock_price_impact: string | null
+          supply_chain_element: boolean | null
+          systems_affected: string[] | null
+          technology_solutions_deployed: string[] | null
+          threat_actor_name: string | null
+          threat_actor_type: string | null
+          title: string
+          url: string
+          vulnerability_type: string | null
+          zero_day_exploited: boolean | null
+        }
+        Insert: {
+          ai_ml_involvement?: string | null
+          attack_sophistication?: string | null
+          attack_vector?: string | null
+          author?: string | null
+          author_page?: string | null
+          business_continuity_impact?: string | null
+          communication_strategy?: string | null
+          competitive_impact?: string | null
+          created_at?: string
+          customer_base_impact?: string | null
+          customer_trust_impact?: string | null
+          data_sensitivity_level?: string | null
+          data_types_exposed?: string[] | null
+          description?: string | null
+          downtime_duration?: string | null
+          emerging_threat_patterns?: string[] | null
+          estimated_direct_costs?: number | null
+          external_assistance?: string[] | null
+          geographic_scope?: string | null
+          hq_location?: string | null
+          id?: number
+          implemented_improvements?: string[] | null
+          incident_response_actions?: string[] | null
+          industry_recommendations?: string[] | null
+          industry_subsector?: string | null
+          industry_wide_implications?: string | null
+          insurance_coverage?: string | null
+          key_takeaways?: string[] | null
+          keywords?: string[] | null
+          law_enforcement_involvelment?: string[] | null
+          litigation_status?: string | null
+          long_term_financial_impact?: string | null
+          markdown_content?: string | null
+          organization_name?: string | null
+          organization_size?: string | null
+          policy_changes?: string[] | null
+          preventability_assessment?: string | null
+          primary_industry?: string | null
+          publish_date?: string | null
+          recommended_controls?: string[] | null
+          records_compromised?: number | null
+          regulatory_fines?: string | null
+          regulatory_framework?: string[] | null
+          regulatory_scrutiny_level?: string | null
+          reputational_damage_score?: number | null
+          response_timeline?: string | null
+          security_gaps_identifued?: string[] | null
+          stock_price_impact?: string | null
+          supply_chain_element?: boolean | null
+          systems_affected?: string[] | null
+          technology_solutions_deployed?: string[] | null
+          threat_actor_name?: string | null
+          threat_actor_type?: string | null
+          title: string
+          url: string
+          vulnerability_type?: string | null
+          zero_day_exploited?: boolean | null
+        }
+        Update: {
+          ai_ml_involvement?: string | null
+          attack_sophistication?: string | null
+          attack_vector?: string | null
+          author?: string | null
+          author_page?: string | null
+          business_continuity_impact?: string | null
+          communication_strategy?: string | null
+          competitive_impact?: string | null
+          created_at?: string
+          customer_base_impact?: string | null
+          customer_trust_impact?: string | null
+          data_sensitivity_level?: string | null
+          data_types_exposed?: string[] | null
+          description?: string | null
+          downtime_duration?: string | null
+          emerging_threat_patterns?: string[] | null
+          estimated_direct_costs?: number | null
+          external_assistance?: string[] | null
+          geographic_scope?: string | null
+          hq_location?: string | null
+          id?: number
+          implemented_improvements?: string[] | null
+          incident_response_actions?: string[] | null
+          industry_recommendations?: string[] | null
+          industry_subsector?: string | null
+          industry_wide_implications?: string | null
+          insurance_coverage?: string | null
+          key_takeaways?: string[] | null
+          keywords?: string[] | null
+          law_enforcement_involvelment?: string[] | null
+          litigation_status?: string | null
+          long_term_financial_impact?: string | null
+          markdown_content?: string | null
+          organization_name?: string | null
+          organization_size?: string | null
+          policy_changes?: string[] | null
+          preventability_assessment?: string | null
+          primary_industry?: string | null
+          publish_date?: string | null
+          recommended_controls?: string[] | null
+          records_compromised?: number | null
+          regulatory_fines?: string | null
+          regulatory_framework?: string[] | null
+          regulatory_scrutiny_level?: string | null
+          reputational_damage_score?: number | null
+          response_timeline?: string | null
+          security_gaps_identifued?: string[] | null
+          stock_price_impact?: string | null
+          supply_chain_element?: boolean | null
+          systems_affected?: string[] | null
+          technology_solutions_deployed?: string[] | null
+          threat_actor_name?: string | null
+          threat_actor_type?: string | null
+          title?: string
+          url?: string
+          vulnerability_type?: string | null
+          zero_day_exploited?: boolean | null
+        }
+        Relationships: []
+      }
       documents_competitors: {
         Row: {
           content: string | null
@@ -1060,10 +1240,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      binary_quantize: {
-        Args: { "": string } | { "": unknown }
-        Returns: unknown
-      }
       calculate_icp_score: {
         Args: {
           p_annual_revenue: string
@@ -1073,12 +1249,18 @@ export type Database = {
         }
         Returns: number
       }
-      generate_chat_title: {
-        Args: Record<PropertyKey, never>
-        Returns: string
+      documents_news: {
+        Args: { filter: Json; match_count: number; query_embedding: string }
+        Returns: {
+          content: string
+          id: number
+          metadata: Json
+          similarity: number
+        }[]
       }
+      generate_chat_title: { Args: never; Returns: string }
       get_breach_summary: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           avg_icp_score: number
           breach_date: string
@@ -1092,7 +1274,7 @@ export type Database = {
         }[]
       }
       get_high_priority_prospects: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           annual_revenue: string
           breach_article_url: string
@@ -1112,7 +1294,7 @@ export type Database = {
         }[]
       }
       get_user_profiles_with_roles: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           department: string
@@ -1124,64 +1306,12 @@ export type Database = {
           user_id: string
         }[]
       }
-      halfvec_avg: {
-        Args: { "": number[] }
-        Returns: unknown
-      }
-      halfvec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      halfvec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      halfvec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
-      }
-      hnsw_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnsw_sparsevec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      hnswhandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_bit_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflat_halfvec_support: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ivfflathandler: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      l2_norm: {
-        Args: { "": unknown } | { "": unknown }
-        Returns: number
-      }
-      l2_normalize: {
-        Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: string
       }
       match_documents_competitors: {
         Args: { filter?: Json; match_count?: number; query_embedding: string }
@@ -1227,42 +1357,6 @@ export type Database = {
           metadata: Json
           similarity: number
         }[]
-      }
-      sparsevec_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      sparsevec_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      sparsevec_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
-      }
-      vector_avg: {
-        Args: { "": number[] }
-        Returns: string
-      }
-      vector_dims: {
-        Args: { "": string } | { "": unknown }
-        Returns: number
-      }
-      vector_norm: {
-        Args: { "": string }
-        Returns: number
-      }
-      vector_out: {
-        Args: { "": string }
-        Returns: unknown
-      }
-      vector_send: {
-        Args: { "": string }
-        Returns: string
-      }
-      vector_typmod_in: {
-        Args: { "": unknown[] }
-        Returns: number
       }
     }
     Enums: {
