@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Settings, LogOut } from 'lucide-react';
+import { Settings, LogOut, MessageSquarePlus } from 'lucide-react';
 
 interface NavbarProps {
   onOpenSettings: () => void;
@@ -42,6 +42,15 @@ const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
                 >
                   Chat
                 </Link>
+                {(hasRole('admin') || hasRole('super_admin') || hasRole('marketing')) && (
+                  <Link 
+                    to="/engagement" 
+                    className="text-sm font-medium transition-colors hover:text-primary flex items-center gap-1"
+                  >
+                    <MessageSquarePlus className="h-4 w-4" />
+                    Engagement
+                  </Link>
+                )}
                 {(hasRole('admin') || hasRole('super_admin')) && (
                   <Link 
                     to="/lists" 
