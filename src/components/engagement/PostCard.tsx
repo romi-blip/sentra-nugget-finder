@@ -66,17 +66,15 @@ export function PostCard({ post, onClick }: PostCardProps) {
             </div>
           </div>
           <div className="flex gap-1">
-            {review && (
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={handleReanalyze}
-                disabled={analyzePost.isPending}
-                title="Re-analyze post"
-              >
-                <RefreshCw className={`h-4 w-4 ${analyzePost.isPending ? 'animate-spin' : ''}`} />
-              </Button>
-            )}
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={handleReanalyze}
+              disabled={analyzePost.isPending}
+              title={review ? "Re-analyze post" : "Analyze post"}
+            >
+              <RefreshCw className={`h-4 w-4 ${analyzePost.isPending ? 'animate-spin' : ''}`} />
+            </Button>
             <Button variant="ghost" size="icon" asChild onClick={(e) => e.stopPropagation()}>
               <a href={post.link} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4" />
