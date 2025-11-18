@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ExternalLink, MessageSquare, CheckCircle, RefreshCw } from 'lucide-react';
 import { useRedditActions } from '@/hooks/useRedditActions';
 import { formatDistanceToNow } from 'date-fns';
@@ -8,15 +9,22 @@ import { formatDistanceToNow } from 'date-fns';
 interface PostCardProps {
   post: any;
   onClick: () => void;
+  isSelected?: boolean;
+  onSelectChange?: (selected: boolean) => void;
+  selectionMode?: boolean;
 }
 
-export function PostCard({ post, onClick }: PostCardProps) {
+export function PostCard({ post, onClick, isSelected, onSelectChange, selectionMode }: PostCardProps) {
   // Handle both object and array responses for post_reviews (one-to-one relationship)
   const review = Array.isArray(post.post_reviews) 
     ? post.post_reviews?.[0] 
     : post.post_reviews;
   const reply = post.suggested_replies?.[0];
   const { analyzePost } = useRedditActions();
+
+  const handleCheckboxChange = (checked: boolean) => {
+    onSelectChange?.(checked);
+  };
   
   const getPriorityColor = (recommendation: string) => {
     switch (recommendation) {
@@ -44,6 +52,14 @@ export function PostCard({ post, onClick }: PostCardProps) {
     <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={onClick}>
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-4">
+          {selectionMode && (
+            <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+              <Checkbox 
+                checked={isSelected} 
+                onCheckedChange={handleCheckboxChange}
+              />
+            </div>
+          )}
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               {review && (

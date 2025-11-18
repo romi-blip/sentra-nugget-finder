@@ -2,6 +2,7 @@ import { useState } from 'react';
 import SEO from '@/components/SEO';
 import { useTrackedSubreddits } from '@/hooks/useTrackedSubreddits';
 import { useRedditPosts } from '@/hooks/useRedditPosts';
+import { useRedditActions } from '@/hooks/useRedditActions';
 import { SubredditManager } from '@/components/engagement/SubredditManager';
 import { SubredditCard } from '@/components/engagement/SubredditCard';
 import { PostCard } from '@/components/engagement/PostCard';
@@ -14,7 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card } from '@/components/ui/card';
-import { MessageSquarePlus, TrendingUp, Clock, CheckCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MessageSquarePlus, TrendingUp, Clock, CheckCircle, CheckSquare, Square } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const Engagement = () => {
   const { 
@@ -29,6 +32,11 @@ const Engagement = () => {
   const [priority, setPriority] = useState<string>('all');
   const [status, setStatus] = useState<string>('all');
   const [selectedPost, setSelectedPost] = useState<any>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedPosts, setSelectedPosts] = useState<Set<string>>(new Set());
+  
+  const { analyzePost } = useRedditActions();
+  const { toast } = useToast();
 
   const { posts, isLoading: isLoadingPosts } = useRedditPosts({
     subredditIds: selectedSubreddits.length > 0 ? selectedSubreddits : undefined,
@@ -46,6 +54,53 @@ const Engagement = () => {
 
   const handleRemoveSubreddit = (id: string) => {
     removeSubreddit.mutate(id);
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    if (selectionMode) {
+      setSelectedPosts(new Set());
+    }
+  };
+
+  const handlePostSelection = (postId: string, selected: boolean) => {
+    const newSelected = new Set(selectedPosts);
+    if (selected) {
+      newSelected.add(postId);
+    } else {
+      newSelected.delete(postId);
+    }
+    setSelectedPosts(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPosts.size === posts.length) {
+      setSelectedPosts(new Set());
+    } else {
+      setSelectedPosts(new Set(posts.map((p: any) => p.id)));
+    }
+  };
+
+  const handleBulkAnalyze = async () => {
+    const postsToAnalyze = posts.filter((p: any) => selectedPosts.has(p.id));
+    toast({
+      title: "Analyzing posts",
+      description: `Starting analysis of ${postsToAnalyze.length} posts...`,
+    });
+
+    for (const post of postsToAnalyze) {
+      try {
+        await analyzePost.mutateAsync({ postId: post.id, post });
+      } catch (error) {
+        console.error(`Failed to analyze post ${post.id}:`, error);
+      }
+    }
+
+    toast({
+      title: "Analysis complete",
+      description: `Finished analyzing ${postsToAnalyze.length} posts.`,
+    });
+    setSelectedPosts(new Set());
   };
 
   const activeSubreddits = subreddits.filter(s => s.is_active).length;
@@ -140,6 +195,14 @@ const Engagement = () => {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">Posts Feed</h2>
             <div className="flex gap-2">
+              <Button 
+                variant={selectionMode ? "default" : "outline"}
+                onClick={toggleSelectionMode}
+              >
+                {selectionMode ? <CheckSquare className="h-4 w-4 mr-2" /> : <Square className="h-4 w-4 mr-2" />}
+                {selectionMode ? 'Exit Selection' : 'Select Posts'}
+              </Button>
+              
               <Select value={priority} onValueChange={setPriority}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Filter by priority" />
@@ -166,6 +229,25 @@ const Engagement = () => {
             </div>
           </div>
 
+          {selectionMode && selectedPosts.size > 0 && (
+            <Card className="p-4 mb-4 bg-primary/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <p className="font-medium">{selectedPosts.size} post{selectedPosts.size !== 1 ? 's' : ''} selected</p>
+                  <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                    {selectedPosts.size === posts.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
+                <Button 
+                  onClick={handleBulkAnalyze}
+                  disabled={analyzePost.isPending}
+                >
+                  Analyze Selected
+                </Button>
+              </div>
+            </Card>
+          )}
+
           {isLoadingPosts ? (
             <p className="text-center text-muted-foreground py-8">Loading posts...</p>
           ) : posts.length === 0 ? (
@@ -180,7 +262,10 @@ const Engagement = () => {
                 <PostCard
                   key={post.id}
                   post={post}
-                  onClick={() => setSelectedPost(post)}
+                  onClick={() => !selectionMode && setSelectedPost(post)}
+                  selectionMode={selectionMode}
+                  isSelected={selectedPosts.has(post.id)}
+                  onSelectChange={(selected) => handlePostSelection(post.id, selected)}
                 />
               ))}
             </div>
