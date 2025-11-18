@@ -1,0 +1,95 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+export function useRedditActions() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const refreshPosts = useMutation({
+    mutationFn: async (subredditId?: string) => {
+      const { data, error } = await supabase.functions.invoke('fetch-reddit-posts', {
+        body: { subreddit_id: subredditId }
+      });
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      queryClient.invalidateQueries({ queryKey: ['tracked-subreddits'] });
+      toast({
+        title: "Posts refreshed",
+        description: "Successfully fetched latest posts.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to refresh posts",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const analyzePost = useMutation({
+    mutationFn: async ({ postId, post }: { postId: string; post: any }) => {
+      const { data, error } = await supabase.functions.invoke('analyze-reddit-post', {
+        body: { post_id: postId, post }
+      });
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      toast({
+        title: "Post analyzed",
+        description: "Successfully analyzed post.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to analyze post",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const generateReply = useMutation({
+    mutationFn: async ({ postId, reviewId, post, review }: { 
+      postId: string; 
+      reviewId: string;
+      post: any;
+      review: any;
+    }) => {
+      const { data, error } = await supabase.functions.invoke('generate-reddit-reply', {
+        body: { post_id: postId, review_id: reviewId, post, review }
+      });
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      toast({
+        title: "Reply generated",
+        description: "Successfully generated new reply.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate reply",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return {
+    refreshPosts,
+    analyzePost,
+    generateReply,
+  };
+}

@@ -9,8 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, Copy, CheckCircle } from 'lucide-react';
+import { ExternalLink, Copy, CheckCircle, RefreshCw } from 'lucide-react';
 import { useSuggestedReplies } from '@/hooks/useSuggestedReplies';
+import { useRedditActions } from '@/hooks/useRedditActions';
 import { useToast } from '@/hooks/use-toast';
 
 interface PostDetailModalProps {
@@ -24,6 +25,7 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
   const reply = post?.suggested_replies?.[0];
   const [editedReply, setEditedReply] = useState(reply?.edited_reply || reply?.suggested_reply || '');
   const { updateReply } = useSuggestedReplies();
+  const { analyzePost, generateReply } = useRedditActions();
   const { toast } = useToast();
 
   if (!post) return null;
@@ -55,6 +57,21 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
     }
   };
 
+  const handleReanalyze = () => {
+    analyzePost.mutate({ postId: post.id, post });
+  };
+
+  const handleRegenerateReply = () => {
+    if (review) {
+      generateReply.mutate({
+        postId: post.id,
+        reviewId: review.id,
+        post,
+        review
+      });
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -66,6 +83,18 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
                 <ExternalLink className="h-4 w-4" />
               </a>
             </Button>
+            {review && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={handleReanalyze}
+                disabled={analyzePost.isPending}
+                title="Re-analyze post"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${analyzePost.isPending ? 'animate-spin' : ''}`} />
+                Re-analyze
+              </Button>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -164,6 +193,14 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
                       <Button onClick={handleCopyReply} variant="outline">
                         <Copy className="h-4 w-4 mr-2" />
                         Copy to Clipboard
+                      </Button>
+                      <Button 
+                        onClick={handleRegenerateReply}
+                        variant="outline"
+                        disabled={generateReply.isPending}
+                      >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${generateReply.isPending ? 'animate-spin' : ''}`} />
+                        Regenerate Reply
                       </Button>
                       {reply.status !== 'approved' && reply.status !== 'posted' && (
                         <Button onClick={handleApprove}>

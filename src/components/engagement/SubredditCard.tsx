@@ -2,8 +2,9 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, ExternalLink } from 'lucide-react';
+import { Trash2, ExternalLink, RefreshCw } from 'lucide-react';
 import { TrackedSubreddit } from '@/hooks/useTrackedSubreddits';
+import { useRedditActions } from '@/hooks/useRedditActions';
 import { formatDistanceToNow } from 'date-fns';
 
 interface SubredditCardProps {
@@ -13,6 +14,7 @@ interface SubredditCardProps {
 }
 
 export function SubredditCard({ subreddit, onToggleActive, onRemove }: SubredditCardProps) {
+  const { refreshPosts } = useRedditActions();
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-4">
@@ -42,6 +44,15 @@ export function SubredditCard({ subreddit, onToggleActive, onRemove }: Subreddit
             checked={subreddit.is_active}
             onCheckedChange={(checked) => onToggleActive(subreddit.id, checked)}
           />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => refreshPosts.mutate(subreddit.id)}
+            disabled={refreshPosts.isPending}
+            title="Refresh posts now"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshPosts.isPending ? 'animate-spin' : ''}`} />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
