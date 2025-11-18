@@ -219,7 +219,18 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No reply suggested yet.</p>
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">No reply generated yet.</p>
+                    {review && (
+                      <Button 
+                        onClick={handleRegenerateReply}
+                        disabled={generateReply.isPending}
+                      >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${generateReply.isPending ? 'animate-spin' : ''}`} />
+                        Generate Reply
+                      </Button>
+                    )}
+                  </div>
                 )}
               </TabsContent>
             </Tabs>
