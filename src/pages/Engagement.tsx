@@ -93,6 +93,13 @@ const Engagement = () => {
     }
   };
 
+  const handleSelectUnanalyzed = () => {
+    const unanalyzedPosts = posts.filter((p: any) => 
+      !p.post_reviews || (Array.isArray(p.post_reviews) && p.post_reviews.length === 0)
+    );
+    setSelectedPosts(new Set(unanalyzedPosts.map((p: any) => p.id)));
+  };
+
   const handleBulkAnalyze = async () => {
     const postsToAnalyze = posts.filter((p: any) => selectedPosts.has(p.id));
     toast({
@@ -290,9 +297,14 @@ const Engagement = () => {
                       : 'No posts selected'
                     }
                   </p>
-                  <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                    {selectedPosts.size === posts.length && posts.length > 0 ? 'Deselect All' : 'Select All'}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                      {selectedPosts.size === posts.length && posts.length > 0 ? 'Deselect All' : 'Select All'}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleSelectUnanalyzed}>
+                      Select Unanalyzed
+                    </Button>
+                  </div>
                 </div>
                 {selectedPosts.size > 0 && (
                   <Button 
