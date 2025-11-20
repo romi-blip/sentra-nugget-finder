@@ -53,8 +53,9 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Construct JSON API URL
-        const jsonUrl = `${post.link}.json`;
+        // Construct JSON API URL using api.reddit.com (less strict than www)
+        const originalUrl = new URL(post.link);
+        const jsonUrl = `https://api.reddit.com${originalUrl.pathname}.json`;
         console.log(`Fetching comments from: ${jsonUrl}`);
 
         // Add delay to respect rate limits (1 request per second)
