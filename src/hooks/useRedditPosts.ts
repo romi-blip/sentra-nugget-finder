@@ -79,6 +79,10 @@ export function useRedditPosts(options: UseRedditPostsOptions = {}) {
             post.suggested_replies && post.suggested_replies.length > 0 && 
             post.suggested_replies[0]?.status === 'posted'
           );
+        } else if (options.status === 'high_engagement') {
+          filteredData = filteredData.filter((post: any) => 
+            post.comment_count >= 50
+          );
         }
       }
       

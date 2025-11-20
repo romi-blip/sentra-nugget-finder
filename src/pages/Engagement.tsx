@@ -39,6 +39,7 @@ const Engagement = () => {
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
   const [priority, setPriority] = useState<string>('all');
   const [status, setStatus] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('recent');
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<Set<string>>(new Set());
@@ -48,12 +49,30 @@ const Engagement = () => {
   const { analyzePost } = useRedditActions();
   const { toast } = useToast();
 
-  const { posts, totalCount, isLoading: isLoadingPosts } = useRedditPosts({
+  const { posts: rawPosts, totalCount, isLoading: isLoadingPosts } = useRedditPosts({
     subredditIds: selectedSubreddits.length > 0 ? selectedSubreddits : undefined,
     priority: priority !== 'all' ? priority : undefined,
     status: status !== 'all' ? status : undefined,
     page: currentPage,
     pageSize: pageSize,
+  });
+
+  // Apply client-side sorting
+  const posts = [...rawPosts].sort((a: any, b: any) => {
+    switch (sortBy) {
+      case 'comments':
+        return (b.comment_count || 0) - (a.comment_count || 0);
+      case 'priority':
+        const priorityOrder = { high_priority: 3, medium_priority: 2, low_priority: 1 };
+        const aReview = Array.isArray(a.post_reviews) ? a.post_reviews[0] : a.post_reviews;
+        const bReview = Array.isArray(b.post_reviews) ? b.post_reviews[0] : b.post_reviews;
+        const aPriority = priorityOrder[aReview?.recommendation as keyof typeof priorityOrder] || 0;
+        const bPriority = priorityOrder[bReview?.recommendation as keyof typeof priorityOrder] || 0;
+        return bPriority - aPriority;
+      case 'recent':
+      default:
+        return new Date(b.pub_date || 0).getTime() - new Date(a.pub_date || 0).getTime();
+    }
   });
 
   const handleAddSubreddit = (name: string) => {
@@ -126,6 +145,7 @@ const Engagement = () => {
     setSelectedSubreddits([]);
     setPriority('all');
     setStatus('all');
+    setSortBy('recent');
     setCurrentPage(1);
   };
 
@@ -275,6 +295,18 @@ const Engagement = () => {
                   <SelectItem value="no_reply">No Reply</SelectItem>
                   <SelectItem value="has_reply">Has Reply</SelectItem>
                   <SelectItem value="posted">Posted</SelectItem>
+                  <SelectItem value="high_engagement">High Engagement (50+ comments)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Most Recent</SelectItem>
+                  <SelectItem value="comments">Most Comments</SelectItem>
+                  <SelectItem value="priority">Highest Priority</SelectItem>
                 </SelectContent>
               </Select>
 

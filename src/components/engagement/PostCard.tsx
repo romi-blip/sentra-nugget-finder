@@ -82,6 +82,15 @@ export function PostCard({ post, onClick, isSelected, onSelectChange, selectionM
               <span>{post.author || 'Unknown'}</span>
               <span>•</span>
               <span>{post.pub_date && formatDistanceToNow(new Date(post.pub_date), { addSuffix: true })}</span>
+              {post.comment_count > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <MessageSquare className="h-3 w-3" />
+                    {post.comment_count} {post.comment_count === 1 ? 'comment' : 'comments'}
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="flex gap-1">

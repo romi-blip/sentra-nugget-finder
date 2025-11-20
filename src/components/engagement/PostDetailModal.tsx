@@ -12,7 +12,10 @@ import { Badge } from '@/components/ui/badge';
 import { ExternalLink, Copy, CheckCircle, RefreshCw } from 'lucide-react';
 import { useSuggestedReplies } from '@/hooks/useSuggestedReplies';
 import { useRedditActions } from '@/hooks/useRedditActions';
+import { useRedditComments } from '@/hooks/useRedditComments';
 import { useToast } from '@/hooks/use-toast';
+import { Card } from '@/components/ui/card';
+import { formatDistanceToNow } from 'date-fns';
 
 interface PostDetailModalProps {
   post: any;
@@ -34,6 +37,7 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
     setEditedReply(reply?.edited_reply || reply?.suggested_reply || '');
   }, [reply?.edited_reply, reply?.suggested_reply]);
   const { analyzePost, generateReply } = useRedditActions();
+  const { fetchComments } = useRedditComments();
   const { toast } = useToast();
 
   if (!post) return null;
@@ -78,6 +82,10 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
         review
       });
     }
+  };
+
+  const handleRefreshComments = () => {
+    fetchComments.mutate({ postId: post.id });
   };
 
   return (
@@ -126,6 +134,9 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
                 <TabsTrigger value="scores">Scores</TabsTrigger>
                 <TabsTrigger value="strategy">Strategy</TabsTrigger>
                 <TabsTrigger value="reply">Reply</TabsTrigger>
+                <TabsTrigger value="comments">
+                  Comments ({post.comment_count || 0})
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-4">
@@ -236,6 +247,52 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
                       </Button>
                     )}
                   </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="comments" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-semibold">Comments</h4>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleRefreshComments}
+                    disabled={fetchComments.isPending}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${fetchComments.isPending ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                </div>
+                
+                {post.top_comments && post.top_comments.length > 0 ? (
+                  <div className="space-y-3">
+                    {post.top_comments.map((comment: any, idx: number) => (
+                      <Card key={idx} className="p-3">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-medium text-sm">u/{comment.author}</span>
+                          <Badge variant="secondary">{comment.score} upvotes</Badge>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{comment.body}</p>
+                        <span className="text-xs text-muted-foreground mt-2 block">
+                          {formatDistanceToNow(new Date(comment.created_utc * 1000), { addSuffix: true })}
+                        </span>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">
+                      {post.comment_count === 0 
+                        ? 'No comments on this post yet.'
+                        : 'Comments not fetched yet. Click refresh to load comments.'}
+                    </p>
+                  </div>
+                )}
+                
+                {post.comments_fetched_at && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Last updated: {formatDistanceToNow(new Date(post.comments_fetched_at), { addSuffix: true })}
+                  </p>
                 )}
               </TabsContent>
             </Tabs>
