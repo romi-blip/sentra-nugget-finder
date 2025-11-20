@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MessageSquarePlus, TrendingUp, Clock, CheckCircle, CheckSquare, Square } from 'lucide-react';
+import { MessageSquarePlus, TrendingUp, Clock, CheckCircle, CheckSquare, Square, FilterX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Engagement = () => {
@@ -102,6 +102,14 @@ const Engagement = () => {
     });
     setSelectedPosts(new Set());
   };
+
+  const handleClearFilters = () => {
+    setSelectedSubreddits([]);
+    setPriority('all');
+    setStatus('all');
+  };
+
+  const hasActiveFilters = selectedSubreddits.length > 0 || priority !== 'all' || status !== 'all';
 
   const activeSubreddits = subreddits.filter(s => s.is_active).length;
   const postsToday = posts.filter((p: any) => {
@@ -243,6 +251,13 @@ const Engagement = () => {
                   <SelectItem value="posted">Posted</SelectItem>
                 </SelectContent>
               </Select>
+
+              {hasActiveFilters && (
+                <Button variant="outline" onClick={handleClearFilters}>
+                  <FilterX className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
             </div>
           </div>
 
