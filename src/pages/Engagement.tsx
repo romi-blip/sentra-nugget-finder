@@ -202,6 +202,23 @@ const Engagement = () => {
                 {selectionMode ? <CheckSquare className="h-4 w-4 mr-2" /> : <Square className="h-4 w-4 mr-2" />}
                 {selectionMode ? 'Exit Selection' : 'Select Posts'}
               </Button>
+
+              <Select 
+                value={selectedSubreddits.length === 0 ? 'all' : selectedSubreddits[0]} 
+                onValueChange={(value) => setSelectedSubreddits(value === 'all' ? [] : [value])}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by subreddit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Subreddits</SelectItem>
+                  {subreddits.map((subreddit) => (
+                    <SelectItem key={subreddit.id} value={subreddit.id}>
+                      r/{subreddit.subreddit_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               
               <Select value={priority} onValueChange={setPriority}>
                 <SelectTrigger className="w-[180px]">
