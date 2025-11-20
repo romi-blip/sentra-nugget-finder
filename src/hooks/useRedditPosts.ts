@@ -20,27 +20,34 @@ interface UseRedditPostsOptions {
   subredditIds?: string[];
   priority?: string;
   status?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export function useRedditPosts(options: UseRedditPostsOptions = {}) {
-  const { data: posts, isLoading } = useQuery({
+  const { data: postsData, isLoading } = useQuery({
     queryKey: ['reddit-posts', options],
     queryFn: async () => {
+      const page = options.page || 1;
+      const pageSize = options.pageSize || 25;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
       let query = supabase
         .from('reddit_posts')
         .select(`
           *,
           post_reviews (*),
           suggested_replies (*)
-        `)
+        `, { count: 'exact' })
         .order('pub_date', { ascending: false })
-        .limit(50);
+        .range(from, to);
 
       if (options.subredditIds && options.subredditIds.length > 0) {
         query = query.in('subreddit_id', options.subredditIds);
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       
       if (error) throw error;
       
@@ -75,12 +82,16 @@ export function useRedditPosts(options: UseRedditPostsOptions = {}) {
         }
       }
       
-      return filteredData;
+      return {
+        posts: filteredData,
+        totalCount: count || 0
+      };
     },
   });
 
   return {
-    posts: posts || [],
+    posts: postsData?.posts || [],
+    totalCount: postsData?.totalCount || 0,
     isLoading,
   };
 }

@@ -14,6 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MessageSquarePlus, TrendingUp, Clock, CheckCircle, CheckSquare, Square, FilterX } from 'lucide-react';
@@ -34,14 +42,18 @@ const Engagement = () => {
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   
   const { analyzePost } = useRedditActions();
   const { toast } = useToast();
 
-  const { posts, isLoading: isLoadingPosts } = useRedditPosts({
+  const { posts, totalCount, isLoading: isLoadingPosts } = useRedditPosts({
     subredditIds: selectedSubreddits.length > 0 ? selectedSubreddits : undefined,
     priority: priority !== 'all' ? priority : undefined,
     status: status !== 'all' ? status : undefined,
+    page: currentPage,
+    pageSize: pageSize,
   });
 
   const handleAddSubreddit = (name: string) => {
@@ -107,9 +119,16 @@ const Engagement = () => {
     setSelectedSubreddits([]);
     setPriority('all');
     setStatus('all');
+    setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (newSize: string) => {
+    setPageSize(Number(newSize));
+    setCurrentPage(1);
   };
 
   const hasActiveFilters = selectedSubreddits.length > 0 || priority !== 'all' || status !== 'all';
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const activeSubreddits = subreddits.filter(s => s.is_active).length;
   const postsToday = posts.filter((p: any) => {
@@ -289,18 +308,85 @@ const Engagement = () => {
               </p>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {posts.map((post: any) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onClick={() => !selectionMode && setSelectedPost(post)}
-                  selectionMode={selectionMode}
-                  isSelected={selectedPosts.has(post.id)}
-                  onSelectChange={(selected) => handlePostSelection(post.id, selected)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-4">
+                {posts.map((post: any) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    onClick={() => !selectionMode && setSelectedPost(post)}
+                    selectionMode={selectionMode}
+                    isSelected={selectedPosts.has(post.id)}
+                    onSelectChange={(selected) => handlePostSelection(post.id, selected)}
+                  />
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Rows per page:</span>
+                    <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="25">25</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-sm text-muted-foreground">
+                      Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
+                    </span>
+                  </div>
+
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      
+                      {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <PaginationItem key={pageNum}>
+                            <PaginationLink
+                              onClick={() => setCurrentPage(pageNum)}
+                              isActive={currentPage === pageNum}
+                              className="cursor-pointer"
+                            >
+                              {pageNum}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      })}
+
+                      <PaginationItem>
+                        <PaginationNext 
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
