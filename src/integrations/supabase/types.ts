@@ -1180,6 +1180,8 @@ export type Database = {
       reddit_posts: {
         Row: {
           author: string | null
+          comment_count: number | null
+          comments_fetched_at: string | null
           content: string | null
           content_snippet: string | null
           created_at: string | null
@@ -1190,10 +1192,13 @@ export type Database = {
           reddit_id: string
           subreddit_id: string
           title: string
+          top_comments: Json | null
           updated_at: string | null
         }
         Insert: {
           author?: string | null
+          comment_count?: number | null
+          comments_fetched_at?: string | null
           content?: string | null
           content_snippet?: string | null
           created_at?: string | null
@@ -1204,10 +1209,13 @@ export type Database = {
           reddit_id: string
           subreddit_id: string
           title: string
+          top_comments?: Json | null
           updated_at?: string | null
         }
         Update: {
           author?: string | null
+          comment_count?: number | null
+          comments_fetched_at?: string | null
           content?: string | null
           content_snippet?: string | null
           created_at?: string | null
@@ -1218,6 +1226,7 @@ export type Database = {
           reddit_id?: string
           subreddit_id?: string
           title?: string
+          top_comments?: Json | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1335,6 +1344,7 @@ export type Database = {
       tracked_subreddits: {
         Row: {
           created_at: string | null
+          fetch_comments: boolean | null
           fetch_frequency_minutes: number | null
           id: string
           is_active: boolean | null
@@ -1346,6 +1356,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          fetch_comments?: boolean | null
           fetch_frequency_minutes?: number | null
           id?: string
           is_active?: boolean | null
@@ -1357,6 +1368,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          fetch_comments?: boolean | null
           fetch_frequency_minutes?: number | null
           id?: string
           is_active?: boolean | null
