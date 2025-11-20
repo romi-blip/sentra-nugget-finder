@@ -280,21 +280,28 @@ const Engagement = () => {
             </div>
           </div>
 
-          {selectionMode && selectedPosts.size > 0 && (
+          {selectionMode && (
             <Card className="p-4 mb-4 bg-primary/10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <p className="font-medium">{selectedPosts.size} post{selectedPosts.size !== 1 ? 's' : ''} selected</p>
+                  <p className="font-medium">
+                    {selectedPosts.size > 0 
+                      ? `${selectedPosts.size} post${selectedPosts.size !== 1 ? 's' : ''} selected`
+                      : 'No posts selected'
+                    }
+                  </p>
                   <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                    {selectedPosts.size === posts.length ? 'Deselect All' : 'Select All'}
+                    {selectedPosts.size === posts.length && posts.length > 0 ? 'Deselect All' : 'Select All'}
                   </Button>
                 </div>
-                <Button 
-                  onClick={handleBulkAnalyze}
-                  disabled={analyzePost.isPending}
-                >
-                  Analyze Selected
-                </Button>
+                {selectedPosts.size > 0 && (
+                  <Button 
+                    onClick={handleBulkAnalyze}
+                    disabled={analyzePost.isPending}
+                  >
+                    Analyze Selected
+                  </Button>
+                )}
               </div>
             </Card>
           )}
