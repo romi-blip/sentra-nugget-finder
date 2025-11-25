@@ -88,3 +88,6 @@ verify_jwt = false
 
 [functions.fetch-reddit-comments]
 verify_jwt = false
+
+[functions.refresh-high-priority-posts]
+verify_jwt = false

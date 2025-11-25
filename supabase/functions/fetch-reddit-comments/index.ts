@@ -132,12 +132,36 @@ Deno.serve(async (req) => {
         const comments = await itemsResponse.json();
         console.log(`Fetched ${comments.length} comments from Apify`);
 
-        // Extract post upvotes from the first item (Apify often includes post data)
+        // Try to fetch post upvotes from Reddit JSON API
         let postUpvotes = null;
-        if (comments.length > 0 && comments[0].post_score !== undefined) {
-          postUpvotes = Number(comments[0].post_score || comments[0].postScore || 0);
-        } else if (comments.length > 0 && comments[0].post) {
-          postUpvotes = Number(comments[0].post.score || comments[0].post.upvotes || 0);
+        try {
+          const jsonUrl = post.link.endsWith('/') ? `${post.link}.json` : `${post.link}/.json`;
+          console.log(`Fetching post data from: ${jsonUrl}`);
+          
+          const postResponse = await fetch(jsonUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)'
+            }
+          });
+          
+          console.log(`Reddit JSON API response status: ${postResponse.status}`);
+          
+          if (postResponse.ok) {
+            const postData = await postResponse.json();
+            console.log(`Reddit JSON API response structure:`, JSON.stringify(postData).substring(0, 200));
+            
+            // Reddit JSON structure: [post_data, comments_data]
+            if (postData && postData[0]?.data?.children?.[0]?.data?.ups) {
+              postUpvotes = postData[0].data.children[0].data.ups;
+              console.log(`Extracted post upvotes: ${postUpvotes}`);
+            } else {
+              console.log(`Could not extract upvotes from Reddit response`);
+            }
+          } else {
+            console.log(`Reddit JSON API returned non-OK status: ${postResponse.status}`);
+          }
+        } catch (e) {
+          console.error('Error fetching post upvotes from Reddit JSON:', e);
         }
 
         // Map Apify comments to our schema
