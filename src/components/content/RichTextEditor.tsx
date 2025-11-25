@@ -53,7 +53,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[400px] p-4',
+        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none',
       },
     },
   });
@@ -109,9 +109,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   );
 
   return (
-    <div className="border rounded-lg overflow-hidden bg-background">
+    <div className="border rounded-lg overflow-hidden bg-background flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/50">
+      <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/50 shrink-0">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           isActive={editor.isActive('bold')}
@@ -208,8 +208,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </ToolbarButton>
       </div>
 
-      {/* Editor */}
-      <EditorContent editor={editor} className="min-h-[400px]" />
+      {/* Editor - scrollable container */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 };
