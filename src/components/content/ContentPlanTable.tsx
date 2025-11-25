@@ -122,7 +122,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                 </div>
               </TableCell>
               <TableCell>
-                <Badge className={statusColors[item.status] || statusColors.draft}>
+                <Badge className={`${statusColors[item.status] || statusColors.draft} ${item.status === 'researching' ? 'animate-pulse' : ''}`}>
                   {statusLabels[item.status] || item.status}
                 </Badge>
               </TableCell>
