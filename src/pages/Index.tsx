@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import SEO from "@/components/SEO";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRoles } from "@/hooks/useUserRoles";
 import { useToast } from "@/hooks/use-toast";
-import { Lightbulb } from "lucide-react";
+import { Lightbulb, MessageSquare, MessageSquarePlus, BookOpen, List } from "lucide-react";
 
 const PointerGlow = () => {
   useEffect(() => {
@@ -21,6 +23,7 @@ const PointerGlow = () => {
 
 const Index = () => {
   const { user } = useAuth();
+  const { hasRole, canAccessKnowledgeBase } = useUserRoles();
   const { toast } = useToast();
   const [isCreatingIdeas, setIsCreatingIdeas] = useState(false);
 
@@ -90,20 +93,73 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-10 grid gap-6 md:grid-cols-3">
+      {user && (
+        <main className="mx-auto max-w-7xl px-4 py-10">
+          <h2 className="text-2xl font-bold mb-6">Quick Access</h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <Link to="/chat" className="block">
+              <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                <CardHeader>
+                  <MessageSquare className="h-8 w-8 text-primary mb-2" />
+                  <CardTitle>AI Chat</CardTitle>
+                  <CardDescription>Get tailored content suggestions grounded in the knowledge base.</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+
+            {(hasRole('admin') || hasRole('super_admin') || hasRole('marketing')) && (
+              <Link to="/engagement" className="block">
+                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardHeader>
+                    <MessageSquarePlus className="h-8 w-8 text-primary mb-2" />
+                    <CardTitle>Engagement</CardTitle>
+                    <CardDescription>Track Reddit discussions and generate engagement opportunities.</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+
+            {canAccessKnowledgeBase() && (
+              <Link to="/kb" className="block">
+                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardHeader>
+                    <BookOpen className="h-8 w-8 text-primary mb-2" />
+                    <CardTitle>Knowledge Base</CardTitle>
+                    <CardDescription>Manage files and sources that power the AI assistant.</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+
+            {(hasRole('admin') || hasRole('super_admin')) && (
+              <Link to="/lists" className="block">
+                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardHeader>
+                    <List className="h-8 w-8 text-primary mb-2" />
+                    <CardTitle>List Management</CardTitle>
+                    <CardDescription>Manage event lists and lead processing workflows.</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+          </div>
+        </main>
+      )}
+
+      <section className="mx-auto max-w-7xl px-4 py-10 grid gap-6 md:grid-cols-3">
         <div className="p-6 rounded-xl border glass-card">
           <h3 className="font-semibold mb-1">All your content, organized</h3>
           <p className="text-sm text-muted-foreground">Files and Drive folders turn into searchable knowledge so reps find the best artifact fast.</p>
         </div>
         <div className="p-6 rounded-xl border glass-card">
           <h3 className="font-semibold mb-1">AI suggestions that sell</h3>
-          <p className="text-sm text-muted-foreground">Get tailored email and LinkedIn snippets grounded in Sentra’s knowledge base.</p>
+          <p className="text-sm text-muted-foreground">Get tailored email and LinkedIn snippets grounded in Sentra's knowledge base.</p>
         </div>
         <div className="p-6 rounded-xl border glass-card">
           <h3 className="font-semibold mb-1">Built for security</h3>
           <p className="text-sm text-muted-foreground">Keep data in your environment with Supabase and your n8n pipeline.</p>
         </div>
-      </main>
+      </section>
     </div>
   );
 };

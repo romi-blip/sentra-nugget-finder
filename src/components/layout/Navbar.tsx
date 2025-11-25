@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Settings, LogOut, MessageSquarePlus } from 'lucide-react';
+import { Settings, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   onOpenSettings: () => void;
@@ -34,61 +34,26 @@ const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
             <Link to="/" className="text-xl font-bold">
               Sentra
             </Link>
-            {user && (
+            {user && hasRole('super_admin') && (
               <div className="flex items-center space-x-4">
                 <Link 
-                  to="/chat" 
+                  to="/admin/users" 
                   className="text-sm font-medium transition-colors hover:text-primary"
                 >
-                  Chat
+                  User Management
                 </Link>
-                {(hasRole('admin') || hasRole('super_admin') || hasRole('marketing')) && (
-                  <Link 
-                    to="/engagement" 
-                    className="text-sm font-medium transition-colors hover:text-primary flex items-center gap-1"
-                  >
-                    <MessageSquarePlus className="h-4 w-4" />
-                    Engagement
-                  </Link>
-                )}
-                {(hasRole('admin') || hasRole('super_admin')) && (
-                  <Link 
-                    to="/lists" 
-                    className="text-sm font-medium transition-colors hover:text-primary"
-                  >
-                    List Management
-                  </Link>
-                )}
-                {canAccessKnowledgeBase() && (
-                  <Link 
-                    to="/kb" 
-                    className="text-sm font-medium transition-colors hover:text-primary"
-                  >
-                    Knowledge Base
-                  </Link>
-                )}
-                {hasRole('super_admin') && (
-                  <>
-                    <Link 
-                      to="/admin/users" 
-                      className="text-sm font-medium transition-colors hover:text-primary"
-                    >
-                      User Management
-                    </Link>
-                    <Link 
-                      to="/analytics" 
-                      className="text-sm font-medium transition-colors hover:text-primary"
-                    >
-                      Analytics
-                    </Link>
-                    <Link 
-                      to="/admin/settings" 
-                      className="text-sm font-medium transition-colors hover:text-primary"
-                    >
-                      Settings
-                    </Link>
-                  </>
-                )}
+                <Link 
+                  to="/analytics" 
+                  className="text-sm font-medium transition-colors hover:text-primary"
+                >
+                  Analytics
+                </Link>
+                <Link 
+                  to="/admin/settings" 
+                  className="text-sm font-medium transition-colors hover:text-primary"
+                >
+                  Settings
+                </Link>
               </div>
             )}
           </div>
