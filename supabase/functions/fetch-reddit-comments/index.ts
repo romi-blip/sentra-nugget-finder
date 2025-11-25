@@ -62,39 +62,82 @@ Deno.serve(async (req) => {
         scraperRunUrl.searchParams.set('token', apifyToken);
         scraperRunUrl.searchParams.set('waitForFinish', '120');
 
-        const scraperInput = {
-          posts: [post.link],
-        };
-
-        // Add delay to respect rate limits
-        if (results.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-
-        // Fetch post metadata for upvotes
-        const scraperResponse = await fetch(scraperRunUrl.toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(scraperInput),
-        });
+        // Extract subreddit name from post link (e.g. https://www.reddit.com/r/sysadmin/...)
+        const subredditMatch = post.link?.match(/reddit\.com\/r\/([^/]+)/i);
+        const subredditName = subredditMatch?.[1];
 
         let postUpvotes = null;
-        if (scraperResponse.ok) {
-          const scraperRunData = await scraperResponse.json();
-          if (scraperRunData.data?.status === 'SUCCEEDED') {
-            const scraperDatasetId = scraperRunData.data.defaultDatasetId;
-            if (scraperDatasetId) {
-              const scraperItemsUrl = new URL(`https://api.apify.com/v2/datasets/${scraperDatasetId}/items`);
-              scraperItemsUrl.searchParams.set('token', apifyToken);
-              scraperItemsUrl.searchParams.set('clean', 'true');
-              scraperItemsUrl.searchParams.set('format', 'json');
-              
-              const scraperItemsResponse = await fetch(scraperItemsUrl.toString());
-              if (scraperItemsResponse.ok) {
-                const scraperData = await scraperItemsResponse.json();
-                if (scraperData && scraperData.length > 0) {
-                  postUpvotes = scraperData[0].upvotes || scraperData[0].score || null;
-                  console.log(`Extracted post upvotes: ${postUpvotes}`);
+
+        if (!subredditName) {
+          console.warn(`Could not extract subreddit name from link: ${post.link}`);
+        } else {
+          const scraperInput = {
+            subreddits: [subredditName],
+            maxPosts: 100,
+            sort: 'new',
+          };
+
+          // Add delay to respect rate limits between Apify actor runs
+          if (results.length > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
+
+          // Fetch post metadata for upvotes
+          const scraperResponse = await fetch(scraperRunUrl.toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(scraperInput),
+          });
+
+          if (!scraperResponse.ok) {
+            const errorText = await scraperResponse.text();
+            console.error(`Apify reddit-scraper run failed: ${scraperResponse.status}`, errorText);
+          } else {
+            const scraperRunData = await scraperResponse.json();
+            console.log('Apify reddit-scraper status:', scraperRunData.data?.status);
+
+            if (scraperRunData.data?.status === 'SUCCEEDED') {
+              const scraperDatasetId = scraperRunData.data.defaultDatasetId;
+              if (scraperDatasetId) {
+                const scraperItemsUrl = new URL(`https://api.apify.com/v2/datasets/${scraperDatasetId}/items`);
+                scraperItemsUrl.searchParams.set('token', apifyToken);
+                scraperItemsUrl.searchParams.set('clean', 'true');
+                scraperItemsUrl.searchParams.set('format', 'json');
+
+                const scraperItemsResponse = await fetch(scraperItemsUrl.toString());
+                if (!scraperItemsResponse.ok) {
+                  console.error(`Failed to fetch reddit-scraper dataset: ${scraperItemsResponse.status}`);
+                } else {
+                  const scraperData = await scraperItemsResponse.json();
+                  console.log(
+                    `reddit-scraper returned ${Array.isArray(scraperData) ? scraperData.length : 0} items for r/${subredditName}`
+                  );
+
+                  if (Array.isArray(scraperData) && scraperData.length > 0) {
+                    const matchingPost = scraperData.find((item: any) => {
+                      const postId = item.post_id || item.postId;
+                      const postName = item.post_name || item.postName;
+                      const permalink: string | undefined = item.permalink;
+                      const url: string | undefined = item.url;
+                      return (
+                        postId === post.reddit_id ||
+                        postName === `t3_${post.reddit_id}` ||
+                        permalink?.includes(post.reddit_id) ||
+                        url?.includes(post.reddit_id)
+                      );
+                    });
+
+                    if (matchingPost) {
+                      postUpvotes = matchingPost.score ?? matchingPost.upvotes ?? null;
+                      console.log(
+                        `Extracted upvotes for post ${post.id} (reddit_id: ${post.reddit_id}) from r/${subredditName}: ${postUpvotes}`
+                      );
+                    } else {
+                      console.log(
+                        `No matching post found in reddit-scraper dataset for reddit_id ${post.reddit_id} in r/${subredditName}`
+                      );
+                    }
+                  }
                 }
               }
             }
