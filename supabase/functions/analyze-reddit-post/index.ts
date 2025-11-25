@@ -204,6 +204,18 @@ Content: ${post.content || post.content_snippet || 'No content'}`;
       }
     }
 
+    // Auto-fetch comments for high priority posts
+    if (review.recommendation === 'high_priority') {
+      try {
+        console.log('Auto-fetching comments for high priority post:', post_id);
+        await supabase.functions.invoke('fetch-reddit-comments', {
+          body: { post_id },
+        });
+      } catch (err) {
+        console.error('Error auto-fetching comments:', err);
+      }
+    }
+
     return new Response(JSON.stringify({ success: true, review: insertedReview }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
