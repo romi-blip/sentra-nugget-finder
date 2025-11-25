@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Download, Edit, Save, X } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Copy, Download, Edit, Save, X, Bold, Italic, Heading2, Heading3, List, Link, Eye, FileEdit } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
 import { contentService } from "@/services/contentService";
 import { useToast } from "@/hooks/use-toast";
@@ -40,12 +41,15 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Reset edit state when item changes or sheet closes
   useEffect(() => {
     if (item && open) {
       setEditedContent(item.content || item.research_notes || '');
       setIsEditing(false);
+      setActiveTab('edit');
     }
   }, [item, open]);
 
@@ -84,6 +88,34 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const insertMarkdown = (before: string, after: string = '') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = editedContent.substring(start, end);
+    
+    const newContent = 
+      editedContent.substring(0, start) + 
+      before + 
+      selectedText + 
+      after + 
+      editedContent.substring(end);
+    
+    setEditedContent(newContent);
+    
+    // Restore focus and cursor position
+    setTimeout(() => {
+      textarea.focus();
+      const newPosition = start + before.length + selectedText.length + after.length;
+      textarea.setSelectionRange(
+        selectedText ? newPosition : start + before.length,
+        selectedText ? newPosition : start + before.length
+      );
+    }, 0);
   };
 
   const handleCopyContent = async () => {
@@ -135,9 +167,11 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
     toast({ title: `Exported as ${filename}` });
   };
 
+  const proseClasses = "prose prose-sm dark:prose-invert max-w-none prose-p:text-sm prose-p:leading-relaxed prose-p:font-normal prose-li:text-sm prose-headings:mt-6 prose-headings:mb-3 prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h4:text-sm prose-lead:text-sm prose-lead:font-normal prose-strong:font-semibold [&>p:first-of-type]:text-sm [&>p:first-of-type]:font-normal";
+
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-2xl">
+      <SheetContent className={`w-full ${isEditing ? 'sm:max-w-4xl' : 'sm:max-w-2xl'}`}>
         <SheetHeader>
           <SheetTitle className="pr-8">{item.title}</SheetTitle>
           <SheetDescription>
@@ -147,45 +181,132 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
           </SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-200px)] mt-6">
-          <div className="space-y-6 pr-4">
-            {(item.content || item.research_notes) && !isEditing ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-sm prose-p:leading-relaxed prose-p:font-normal prose-li:text-sm prose-headings:mt-6 prose-headings:mb-3 prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h4:text-sm prose-lead:text-sm prose-lead:font-normal prose-strong:font-semibold [&>p:first-of-type]:text-sm [&>p:first-of-type]:font-normal">
-                <ReactMarkdown>{normalizeAiContent(item.content || item.research_notes || '')}</ReactMarkdown>
+        {isEditing ? (
+          <div className="mt-6 flex flex-col h-[calc(100vh-200px)]">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'edit' | 'preview')} className="flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <TabsList>
+                  <TabsTrigger value="edit" className="gap-2">
+                    <FileEdit className="h-4 w-4" />
+                    Edit
+                  </TabsTrigger>
+                  <TabsTrigger value="preview" className="gap-2">
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </TabsTrigger>
+                </TabsList>
+                
+                {activeTab === 'edit' && (
+                  <div className="flex items-center gap-1 bg-muted rounded-md p-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-7 w-7 p-0"
+                      onClick={() => insertMarkdown('**', '**')}
+                      title="Bold"
+                    >
+                      <Bold className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-7 w-7 p-0"
+                      onClick={() => insertMarkdown('*', '*')}
+                      title="Italic"
+                    >
+                      <Italic className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-7 w-7 p-0"
+                      onClick={() => insertMarkdown('\n## ', '\n')}
+                      title="Heading 2"
+                    >
+                      <Heading2 className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-7 w-7 p-0"
+                      onClick={() => insertMarkdown('\n### ', '\n')}
+                      title="Heading 3"
+                    >
+                      <Heading3 className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-7 w-7 p-0"
+                      onClick={() => insertMarkdown('\n- ', '')}
+                      title="Bullet List"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-7 w-7 p-0"
+                      onClick={() => insertMarkdown('[', '](url)')}
+                      title="Link"
+                    >
+                      <Link className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
-            ) : (item.content || item.research_notes) && isEditing ? (
-              <div className="space-y-2">
+              
+              <TabsContent value="edit" className="flex-1 mt-0">
                 <Textarea
+                  ref={textareaRef}
                   value={editedContent}
                   onChange={(e) => setEditedContent(e.target.value)}
-                  className="min-h-[500px] font-mono text-sm"
+                  className="h-full min-h-[400px] font-mono text-sm resize-none"
                   placeholder="Edit your content in markdown format..."
                 />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Strategic Purpose</h4>
-                  <p className="text-sm text-muted-foreground">{item.strategic_purpose}</p>
-                </div>
-                {item.target_keywords && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Target Keywords</h4>
-                    <p className="text-sm text-muted-foreground">{item.target_keywords}</p>
+              </TabsContent>
+              
+              <TabsContent value="preview" className="flex-1 mt-0">
+                <ScrollArea className="h-full min-h-[400px] border rounded-md p-4 bg-background">
+                  <div className={proseClasses}>
+                    <ReactMarkdown>{normalizeAiContent(editedContent)}</ReactMarkdown>
                   </div>
-                )}
-                {item.outline && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Outline</h4>
-                    <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-4 rounded-lg">
-                      {item.outline}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
           </div>
-        </ScrollArea>
+        ) : (
+          <ScrollArea className="h-[calc(100vh-200px)] mt-6">
+            <div className="space-y-6 pr-4">
+              {(item.content || item.research_notes) ? (
+                <div className={proseClasses}>
+                  <ReactMarkdown>{normalizeAiContent(item.content || item.research_notes || '')}</ReactMarkdown>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Strategic Purpose</h4>
+                    <p className="text-sm text-muted-foreground">{item.strategic_purpose}</p>
+                  </div>
+                  {item.target_keywords && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Target Keywords</h4>
+                      <p className="text-sm text-muted-foreground">{item.target_keywords}</p>
+                    </div>
+                  )}
+                  {item.outline && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Outline</h4>
+                      <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-4 rounded-lg">
+                        {item.outline}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        )}
 
         <div className="flex flex-wrap gap-2 mt-6 pt-4 border-t">
           {isEditing ? (
