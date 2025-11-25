@@ -102,11 +102,11 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
         <ScrollArea className="h-[calc(100vh-200px)] mt-6">
           <div className="space-y-6 pr-4">
             {item.content ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-sm prose-p:leading-relaxed prose-li:text-sm prose-headings:mt-6 prose-headings:mb-3 prose-h2:text-lg prose-h3:text-base prose-h4:text-sm">
+              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-sm prose-p:leading-relaxed prose-p:font-normal prose-li:text-sm prose-headings:mt-6 prose-headings:mb-3 prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h4:text-sm prose-lead:text-sm prose-lead:font-normal prose-strong:font-semibold [&>p:first-of-type]:text-sm [&>p:first-of-type]:font-normal">
                 <ReactMarkdown>{normalizeAiContent(item.content)}</ReactMarkdown>
               </div>
             ) : item.research_notes ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-sm prose-p:leading-relaxed prose-li:text-sm prose-headings:mt-6 prose-headings:mb-3 prose-h2:text-lg prose-h3:text-base prose-h4:text-sm">
+              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-sm prose-p:leading-relaxed prose-p:font-normal prose-li:text-sm prose-headings:mt-6 prose-headings:mb-3 prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h4:text-sm prose-lead:text-sm prose-lead:font-normal prose-strong:font-semibold [&>p:first-of-type]:text-sm [&>p:first-of-type]:font-normal">
                 <ReactMarkdown>{normalizeAiContent(item.research_notes)}</ReactMarkdown>
               </div>
             ) : (
