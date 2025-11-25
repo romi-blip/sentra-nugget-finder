@@ -54,16 +54,16 @@ Deno.serve(async (req) => {
           }
         }
 
-        console.log(`Starting Apify actor for post: ${post.link}`);
+        console.log(`Starting Apify actors for post: ${post.link}`);
 
-        // Call Apify Reddit Posts Scraper actor (returns post metadata + comments)
-        const actorId = 'vulnv~reddit-posts-scraper';
-        const runUrl = new URL(`https://api.apify.com/v2/acts/${actorId}/runs`);
-        runUrl.searchParams.set('token', apifyToken);
-        runUrl.searchParams.set('waitForFinish', '120'); // wait up to 120s
+        // Step 1: Fetch post metadata (including upvotes) using reddit-scraper
+        const scraperActorId = 'crawlerbros~reddit-scraper';
+        const scraperRunUrl = new URL(`https://api.apify.com/v2/acts/${scraperActorId}/runs`);
+        scraperRunUrl.searchParams.set('token', apifyToken);
+        scraperRunUrl.searchParams.set('waitForFinish', '120');
 
-        const actorInput = {
-          postUrls: [post.link],
+        const scraperInput = {
+          posts: [post.link],
         };
 
         // Add delay to respect rate limits
@@ -71,38 +71,78 @@ Deno.serve(async (req) => {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        const runResponse = await fetch(runUrl.toString(), {
+        // Fetch post metadata for upvotes
+        const scraperResponse = await fetch(scraperRunUrl.toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(actorInput),
+          body: JSON.stringify(scraperInput),
         });
 
-        if (!runResponse.ok) {
-          const errorText = await runResponse.text();
-          console.error(`Apify run failed: ${runResponse.status}`, errorText);
+        let postUpvotes = null;
+        if (scraperResponse.ok) {
+          const scraperRunData = await scraperResponse.json();
+          if (scraperRunData.data?.status === 'SUCCEEDED') {
+            const scraperDatasetId = scraperRunData.data.defaultDatasetId;
+            if (scraperDatasetId) {
+              const scraperItemsUrl = new URL(`https://api.apify.com/v2/datasets/${scraperDatasetId}/items`);
+              scraperItemsUrl.searchParams.set('token', apifyToken);
+              scraperItemsUrl.searchParams.set('clean', 'true');
+              scraperItemsUrl.searchParams.set('format', 'json');
+              
+              const scraperItemsResponse = await fetch(scraperItemsUrl.toString());
+              if (scraperItemsResponse.ok) {
+                const scraperData = await scraperItemsResponse.json();
+                if (scraperData && scraperData.length > 0) {
+                  postUpvotes = scraperData[0].upvotes || scraperData[0].score || null;
+                  console.log(`Extracted post upvotes: ${postUpvotes}`);
+                }
+              }
+            }
+          }
+        }
+
+        // Step 2: Fetch comments using reddit-comment-scraper
+        const commentActorId = 'crawlerbros~reddit-comment-scraper';
+        const commentRunUrl = new URL(`https://api.apify.com/v2/acts/${commentActorId}/runs`);
+        commentRunUrl.searchParams.set('token', apifyToken);
+        commentRunUrl.searchParams.set('waitForFinish', '120');
+
+        const commentInput = {
+          posts: [post.link],
+        };
+
+        const commentResponse = await fetch(commentRunUrl.toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(commentInput),
+        });
+
+        if (!commentResponse.ok) {
+          const errorText = await commentResponse.text();
+          console.error(`Apify comment run failed: ${commentResponse.status}`, errorText);
           results.push({ 
             post_id: post.id, 
             status: 'error', 
-            error: `Apify HTTP ${runResponse.status}` 
+            error: `Apify HTTP ${commentResponse.status}` 
           });
           continue;
         }
 
-        const runData = await runResponse.json();
-        console.log('Apify run status:', runData.data?.status);
+        const commentRunData = await commentResponse.json();
+        console.log('Apify comment run status:', commentRunData.data?.status);
 
-        if (runData.data?.status !== 'SUCCEEDED') {
-          console.error('Apify run did not succeed:', runData.data?.status);
+        if (commentRunData.data?.status !== 'SUCCEEDED') {
+          console.error('Apify comment run did not succeed:', commentRunData.data?.status);
           results.push({ 
             post_id: post.id, 
             status: 'error', 
-            error: `Apify run ${runData.data?.status || 'failed'}` 
+            error: `Apify run ${commentRunData.data?.status || 'failed'}` 
           });
           continue;
         }
 
-        // Fetch scraped comments from dataset
-        const datasetId = runData.data.defaultDatasetId;
+        // Fetch comments from dataset
+        const datasetId = commentRunData.data.defaultDatasetId;
         if (!datasetId) {
           console.error('No dataset ID returned from Apify');
           results.push({ 
@@ -129,15 +169,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const scrapedData = await itemsResponse.json();
-        console.log(`Fetched ${scrapedData.length} result(s) from Apify`);
-
-        // Extract post data and comments from the first result
-        const postData = scrapedData[0] || {};
-        const postUpvotes = postData.score || null;
-        const rawComments = postData.comments || [];
-        
-        console.log(`Post upvotes: ${postUpvotes}, Comments: ${rawComments.length}`);
+        const comments = await itemsResponse.json();
+        console.log(`Fetched ${comments.length} comments from Apify`);
 
         // Map Apify comments to our schema
         type TopComment = {
@@ -147,13 +180,13 @@ Deno.serve(async (req) => {
           created_utc: number | string;
         };
 
-        const normalizedComments: TopComment[] = rawComments
-          .filter((c: any) => c.body && c.body.trim()) // Filter out empty comments
+        const normalizedComments: TopComment[] = comments
+          .filter((c: any) => c.comment || c.text) // Filter out empty comments
           .map((c: any) => ({
             author: c.author || 'unknown',
-            body: String(c.body || '').substring(0, 500),
-            score: Number(c.score || 0),
-            created_utc: c.created_utc || Date.now() / 1000,
+            body: String(c.comment || c.text || '').substring(0, 500),
+            score: Number(c.score || c.upvotes || 0),
+            created_utc: c.created_utc || c.created || Date.now() / 1000,
           }));
 
         // Sort by score descending and take top 10
