@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Search, Pencil, Trash2, Eye, Copy, Download, Loader2, FileText } from "lucide-react";
+import { MoreHorizontal, Search, Pencil, Trash2, Eye, Copy, Download, Loader2, FileText, RefreshCw } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
 
 interface ContentPlanTableProps {
@@ -155,6 +155,17 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                         <DropdownMenuItem onClick={() => onExport(item)}>
                           <Download className="h-4 w-4 mr-2" />
                           Export
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => onCreateContent(item)}
+                          disabled={isGenerating || item.status === 'generating'}
+                        >
+                          {isGenerating && generatingId === item.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                          )}
+                          {isGenerating && generatingId === item.id ? 'Generating...' : 'Re-generate Content'}
                         </DropdownMenuItem>
                       </>
                     )}
