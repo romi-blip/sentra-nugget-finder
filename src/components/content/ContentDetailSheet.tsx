@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, Download } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Copy, Download, Edit, Save, X } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
+import { contentService } from "@/services/contentService";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import { normalizeAiContent } from "@/lib/normalizeAiContent";
@@ -35,8 +37,54 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
   item,
 }) => {
   const { toast } = useToast();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Reset edit state when item changes or sheet closes
+  useEffect(() => {
+    if (item && open) {
+      setEditedContent(item.content || item.research_notes || '');
+      setIsEditing(false);
+    }
+  }, [item, open]);
 
   if (!item) return null;
+
+  const handleEdit = () => {
+    setEditedContent(item.content || item.research_notes || '');
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditedContent(item.content || item.research_notes || '');
+    setIsEditing(false);
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const updateField = item.content ? 'content' : 'research_notes';
+      await contentService.update(item.id, { [updateField]: editedContent });
+      toast({ title: "Content updated successfully" });
+      setIsEditing(false);
+      // Update the local item to reflect changes
+      if (item.content) {
+        item.content = editedContent;
+      } else {
+        item.research_notes = editedContent;
+      }
+    } catch (error) {
+      console.error('Error saving content:', error);
+      toast({ 
+        title: "Failed to save content", 
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive" 
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleCopyContent = async () => {
     const textToCopy = item.content || item.outline || '';
@@ -101,13 +149,18 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
 
         <ScrollArea className="h-[calc(100vh-200px)] mt-6">
           <div className="space-y-6 pr-4">
-            {item.content ? (
+            {(item.content || item.research_notes) && !isEditing ? (
               <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-sm prose-p:leading-relaxed prose-p:font-normal prose-li:text-sm prose-headings:mt-6 prose-headings:mb-3 prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h4:text-sm prose-lead:text-sm prose-lead:font-normal prose-strong:font-semibold [&>p:first-of-type]:text-sm [&>p:first-of-type]:font-normal">
-                <ReactMarkdown>{normalizeAiContent(item.content)}</ReactMarkdown>
+                <ReactMarkdown>{normalizeAiContent(item.content || item.research_notes || '')}</ReactMarkdown>
               </div>
-            ) : item.research_notes ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-sm prose-p:leading-relaxed prose-p:font-normal prose-li:text-sm prose-headings:mt-6 prose-headings:mb-3 prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-h4:text-sm prose-lead:text-sm prose-lead:font-normal prose-strong:font-semibold [&>p:first-of-type]:text-sm [&>p:first-of-type]:font-normal">
-                <ReactMarkdown>{normalizeAiContent(item.research_notes)}</ReactMarkdown>
+            ) : (item.content || item.research_notes) && isEditing ? (
+              <div className="space-y-2">
+                <Textarea
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  className="min-h-[500px] font-mono text-sm"
+                  placeholder="Edit your content in markdown format..."
+                />
               </div>
             ) : (
               <div className="space-y-4">
@@ -135,18 +188,39 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
         </ScrollArea>
 
         <div className="flex flex-wrap gap-2 mt-6 pt-4 border-t">
-          <Button variant="outline" size="sm" onClick={handleCopyContent}>
-            <Copy className="h-4 w-4 mr-2" />
-            Copy Content
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleExport('md')}>
-            <Download className="h-4 w-4 mr-2" />
-            Export as Markdown
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleExport('txt')}>
-            <Download className="h-4 w-4 mr-2" />
-            Export as Text
-          </Button>
+          {isEditing ? (
+            <>
+              <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={isSaving}>
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              {(item.content || item.research_notes) && (
+                <Button variant="outline" size="sm" onClick={handleEdit}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Content
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={handleCopyContent}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copy Content
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => handleExport('md')}>
+                <Download className="h-4 w-4 mr-2" />
+                Export as Markdown
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => handleExport('txt')}>
+                <Download className="h-4 w-4 mr-2" />
+                Export as Text
+              </Button>
+            </>
+          )}
         </div>
       </SheetContent>
     </Sheet>
