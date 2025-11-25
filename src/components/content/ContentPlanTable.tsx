@@ -21,12 +21,15 @@ interface ContentPlanTableProps {
   onExport: (item: ContentPlanItem) => void;
   isResearching?: boolean;
   researchingId?: string;
+  isGenerating?: boolean;
+  generatingId?: string;
 }
 
 const statusColors: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
   researching: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
   researched: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  generating: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   in_progress: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
   completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
 };
@@ -35,6 +38,7 @@ const statusLabels: Record<string, string> = {
   draft: "Draft",
   researching: "Researching...",
   researched: "Researched",
+  generating: "Generating...",
   in_progress: "In Progress",
   completed: "Completed",
 };
@@ -53,6 +57,8 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   onExport,
   isResearching,
   researchingId,
+  isGenerating,
+  generatingId,
 }) => {
   const toggleSelectAll = () => {
     if (selectedIds.length === items.length) {
@@ -124,7 +130,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                 </div>
               </TableCell>
               <TableCell>
-                <Badge className={`${statusColors[item.status] || statusColors.draft} ${item.status === 'researching' ? 'animate-pulse' : ''}`}>
+                <Badge className={`${statusColors[item.status] || statusColors.draft} ${(item.status === 'researching' || item.status === 'generating') ? 'animate-pulse' : ''}`}>
                   {statusLabels[item.status] || item.status}
                 </Badge>
               </TableCell>
@@ -171,9 +177,16 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                           )}
                           {isResearching && researchingId === item.id ? 'Researching...' : 'Research Topic'}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onCreateContent(item)}>
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Create Content
+                        <DropdownMenuItem 
+                          onClick={() => onCreateContent(item)}
+                          disabled={isGenerating || item.status === 'generating' || !item.research_notes}
+                        >
+                          {isGenerating && generatingId === item.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Pencil className="h-4 w-4 mr-2" />
+                          )}
+                          {isGenerating && generatingId === item.id ? 'Generating...' : 'Create Content'}
                         </DropdownMenuItem>
                       </>
                     )}

@@ -34,11 +34,14 @@ const ContentPlan = () => {
     deleteItem,
     deleteBulk,
     researchItem,
+    generateContent,
     isCreating,
     isImporting,
     isDeleting,
     isResearching,
     researchingId,
+    isGenerating,
+    generatingId,
   } = useContentPlan();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -183,7 +186,7 @@ const ContentPlan = () => {
   };
 
   const handleCreateContent = (item: ContentPlanItem) => {
-    toast({ title: "Create content feature", description: "Coming soon!" });
+    generateContent(item.id);
   };
 
   return (
@@ -261,6 +264,8 @@ const ContentPlan = () => {
             onExport={handleExport}
             isResearching={isResearching}
             researchingId={researchingId}
+            isGenerating={isGenerating}
+            generatingId={generatingId}
           />
         )}
       </div>

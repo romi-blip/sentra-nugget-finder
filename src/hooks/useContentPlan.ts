@@ -97,6 +97,27 @@ export const useContentPlan = () => {
     },
   });
 
+  const generateContentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // First update status to "generating"
+      await contentService.update(id, { status: 'generating' });
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      // Then generate the content
+      return contentService.generateContent(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      toast({ title: "Content generated", description: "Blog post has been created and humanized." });
+    },
+    onError: (error: Error, id) => {
+      // Revert status back to researched on error
+      contentService.update(id, { status: 'researched' }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      });
+      toast({ title: "Content generation failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   return {
     items: query.data || [],
     isLoading: query.isLoading,
@@ -107,11 +128,14 @@ export const useContentPlan = () => {
     deleteItem: deleteMutation.mutate,
     deleteBulk: deleteBulkMutation.mutate,
     researchItem: researchMutation.mutate,
+    generateContent: generateContentMutation.mutate,
     isCreating: createMutation.isPending,
     isImporting: createBulkMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
     isResearching: researchMutation.isPending,
     researchingId: researchMutation.variables,
+    isGenerating: generateContentMutation.isPending,
+    generatingId: generateContentMutation.variables,
   };
 };

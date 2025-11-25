@@ -94,3 +94,6 @@ verify_jwt = false
 
 [functions.research-topic]
 verify_jwt = true
+
+[functions.generate-content]
+verify_jwt = true
