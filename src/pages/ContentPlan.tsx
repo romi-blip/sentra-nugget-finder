@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Upload, Search, Trash2 } from "lucide-react";
+import { Plus, Upload, Search, Trash2, FlaskConical, FileText, Loader2 } from "lucide-react";
 import SEO from "@/components/SEO";
 import { useContentPlan } from "@/hooks/useContentPlan";
 import { ContentPlanTable } from "@/components/content/ContentPlanTable";
@@ -35,6 +35,8 @@ const ContentPlan = () => {
     deleteBulk,
     researchItem,
     generateContent,
+    bulkResearch,
+    bulkGenerateContent,
     isCreating,
     isImporting,
     isDeleting,
@@ -42,6 +44,8 @@ const ContentPlan = () => {
     researchingId,
     isGenerating,
     generatingId,
+    isBulkResearching,
+    isBulkGenerating,
   } = useContentPlan();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -192,6 +196,26 @@ const ContentPlan = () => {
     generateContent(item.id);
   };
 
+  // Get selected items for bulk operations
+  const selectedItems = items.filter(item => selectedIds.includes(item.id));
+  const canBulkResearch = selectedItems.some(item => item.status === 'draft');
+  const canBulkGenerate = selectedItems.some(item => item.status === 'researched' || item.research_notes);
+  
+  const draftSelectedIds = selectedItems.filter(item => item.status === 'draft').map(item => item.id);
+  const researchedSelectedIds = selectedItems.filter(item => item.status === 'researched' || item.research_notes).map(item => item.id);
+
+  const handleBulkResearch = () => {
+    if (draftSelectedIds.length > 0) {
+      bulkResearch(draftSelectedIds);
+    }
+  };
+
+  const handleBulkGenerateContent = () => {
+    if (researchedSelectedIds.length > 0) {
+      bulkGenerateContent(researchedSelectedIds);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <SEO title="Content Plan | Sentra GTM Assistant" description="Plan, research, and create content." canonicalPath="/content" />
@@ -233,10 +257,44 @@ const ContentPlan = () => {
           </div>
           
           {selectedIds.length > 0 && (
-            <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete {selectedIds.length} selected
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              {canBulkResearch && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleBulkResearch}
+                  disabled={isBulkResearching}
+                >
+                  {isBulkResearching ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FlaskConical className="h-4 w-4 mr-2" />
+                  )}
+                  {isBulkResearching ? 'Researching...' : `Research ${draftSelectedIds.length} items`}
+                </Button>
+              )}
+              
+              {canBulkGenerate && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleBulkGenerateContent}
+                  disabled={isBulkGenerating}
+                >
+                  {isBulkGenerating ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4 mr-2" />
+                  )}
+                  {isBulkGenerating ? 'Generating...' : `Generate ${researchedSelectedIds.length} content`}
+                </Button>
+              )}
+              
+              <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={isBulkResearching || isBulkGenerating}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete {selectedIds.length} selected
+              </Button>
+            </div>
           )}
         </div>
 
