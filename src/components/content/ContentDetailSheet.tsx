@@ -7,6 +7,7 @@ import { Copy, Download } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
+import { normalizeAiContent } from "@/lib/normalizeAiContent";
 
 interface ContentDetailSheetProps {
   open: boolean;
@@ -102,11 +103,11 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
           <div className="space-y-6 pr-4">
             {item.content ? (
               <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{item.content}</ReactMarkdown>
+                <ReactMarkdown>{normalizeAiContent(item.content)}</ReactMarkdown>
               </div>
             ) : item.research_notes ? (
               <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{item.research_notes}</ReactMarkdown>
+                <ReactMarkdown>{normalizeAiContent(item.research_notes)}</ReactMarkdown>
               </div>
             ) : (
               <div className="space-y-4">
