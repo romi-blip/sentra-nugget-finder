@@ -77,12 +77,22 @@ export const useContentPlan = () => {
   });
 
   const researchMutation = useMutation({
-    mutationFn: contentService.researchTopic,
+    mutationFn: async (id: string) => {
+      // First update status to "researching"
+      await contentService.update(id, { status: 'researching' });
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      // Then perform the research
+      return contentService.researchTopic(id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
       toast({ title: "Research completed", description: "Topic research has been saved to the content item." });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, id) => {
+      // Revert status back to draft on error
+      contentService.update(id, { status: 'draft' }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      });
       toast({ title: "Research failed", description: error.message, variant: "destructive" });
     },
   });
