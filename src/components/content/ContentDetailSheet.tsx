@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Copy, Download, Edit, Save, X, Bold, Italic, Heading2, Heading3, List, Link, Eye, FileEdit } from "lucide-react";
+import { Copy, Download, Edit, Save, X } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
 import { contentService } from "@/services/contentService";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import { normalizeAiContent } from "@/lib/normalizeAiContent";
+import { RichTextEditor } from "./RichTextEditor";
+import { marked } from "marked";
+import TurndownService from "turndown";
 
 interface ContentDetailSheetProps {
   open: boolean;
@@ -32,6 +33,32 @@ const statusLabels: Record<string, string> = {
   completed: "Completed",
 };
 
+// Convert markdown to HTML for the editor
+const markdownToHtml = (markdown: string): string => {
+  try {
+    const normalized = normalizeAiContent(markdown);
+    return marked.parse(normalized, { async: false }) as string;
+  } catch (error) {
+    console.error('Error converting markdown to HTML:', error);
+    return markdown;
+  }
+};
+
+// Convert HTML back to markdown for storage
+const htmlToMarkdown = (html: string): string => {
+  try {
+    const turndownService = new TurndownService({
+      headingStyle: 'atx',
+      bulletListMarker: '-',
+      codeBlockStyle: 'fenced',
+    });
+    return turndownService.turndown(html);
+  } catch (error) {
+    console.error('Error converting HTML to markdown:', error);
+    return html;
+  }
+};
+
 export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
   open,
   onClose,
@@ -39,44 +66,45 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
 }) => {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState('');
+  const [editedHtml, setEditedHtml] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Reset edit state when item changes or sheet closes
   useEffect(() => {
     if (item && open) {
-      setEditedContent(item.content || item.research_notes || '');
+      const content = item.content || item.research_notes || '';
+      setEditedHtml(markdownToHtml(content));
       setIsEditing(false);
-      setActiveTab('edit');
     }
   }, [item, open]);
 
   if (!item) return null;
 
   const handleEdit = () => {
-    setEditedContent(item.content || item.research_notes || '');
+    const content = item.content || item.research_notes || '';
+    setEditedHtml(markdownToHtml(content));
     setIsEditing(true);
   };
 
   const handleCancelEdit = () => {
-    setEditedContent(item.content || item.research_notes || '');
+    const content = item.content || item.research_notes || '';
+    setEditedHtml(markdownToHtml(content));
     setIsEditing(false);
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const markdownContent = htmlToMarkdown(editedHtml);
       const updateField = item.content ? 'content' : 'research_notes';
-      await contentService.update(item.id, { [updateField]: editedContent });
+      await contentService.update(item.id, { [updateField]: markdownContent });
       toast({ title: "Content updated successfully" });
       setIsEditing(false);
       // Update the local item to reflect changes
       if (item.content) {
-        item.content = editedContent;
+        item.content = markdownContent;
       } else {
-        item.research_notes = editedContent;
+        item.research_notes = markdownContent;
       }
     } catch (error) {
       console.error('Error saving content:', error);
@@ -88,34 +116,6 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const insertMarkdown = (before: string, after: string = '') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = editedContent.substring(start, end);
-    
-    const newContent = 
-      editedContent.substring(0, start) + 
-      before + 
-      selectedText + 
-      after + 
-      editedContent.substring(end);
-    
-    setEditedContent(newContent);
-    
-    // Restore focus and cursor position
-    setTimeout(() => {
-      textarea.focus();
-      const newPosition = start + before.length + selectedText.length + after.length;
-      textarea.setSelectionRange(
-        selectedText ? newPosition : start + before.length,
-        selectedText ? newPosition : start + before.length
-      );
-    }, 0);
   };
 
   const handleCopyContent = async () => {
@@ -182,98 +182,12 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
         </SheetHeader>
 
         {isEditing ? (
-          <div className="mt-6 flex flex-col h-[calc(100vh-200px)]">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'edit' | 'preview')} className="flex-1 flex flex-col">
-              <div className="flex items-center justify-between mb-3">
-                <TabsList>
-                  <TabsTrigger value="edit" className="gap-2">
-                    <FileEdit className="h-4 w-4" />
-                    Edit
-                  </TabsTrigger>
-                  <TabsTrigger value="preview" className="gap-2">
-                    <Eye className="h-4 w-4" />
-                    Preview
-                  </TabsTrigger>
-                </TabsList>
-                
-                {activeTab === 'edit' && (
-                  <div className="flex items-center gap-1 bg-muted rounded-md p-1">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-7 w-7 p-0"
-                      onClick={() => insertMarkdown('**', '**')}
-                      title="Bold"
-                    >
-                      <Bold className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-7 w-7 p-0"
-                      onClick={() => insertMarkdown('*', '*')}
-                      title="Italic"
-                    >
-                      <Italic className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-7 w-7 p-0"
-                      onClick={() => insertMarkdown('\n## ', '\n')}
-                      title="Heading 2"
-                    >
-                      <Heading2 className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-7 w-7 p-0"
-                      onClick={() => insertMarkdown('\n### ', '\n')}
-                      title="Heading 3"
-                    >
-                      <Heading3 className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-7 w-7 p-0"
-                      onClick={() => insertMarkdown('\n- ', '')}
-                      title="Bullet List"
-                    >
-                      <List className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-7 w-7 p-0"
-                      onClick={() => insertMarkdown('[', '](url)')}
-                      title="Link"
-                    >
-                      <Link className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-              
-              <TabsContent value="edit" className="flex-1 mt-0">
-                <Textarea
-                  ref={textareaRef}
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="h-full min-h-[400px] font-mono text-sm resize-none"
-                  placeholder="Edit your content in markdown format..."
-                />
-              </TabsContent>
-              
-              <TabsContent value="preview" className="flex-1 mt-0">
-                <ScrollArea className="h-full min-h-[400px] border rounded-md p-4 bg-background">
-                  <div className={proseClasses}>
-                    <ReactMarkdown>{normalizeAiContent(editedContent)}</ReactMarkdown>
-                  </div>
-                </ScrollArea>
-              </TabsContent>
-            </Tabs>
+          <div className="mt-6 h-[calc(100vh-200px)]">
+            <RichTextEditor
+              content={editedHtml}
+              onChange={setEditedHtml}
+              placeholder="Start writing your content..."
+            />
           </div>
         ) : (
           <ScrollArea className="h-[calc(100vh-200px)] mt-6">
