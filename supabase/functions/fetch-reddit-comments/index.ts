@@ -73,8 +73,8 @@ Deno.serve(async (req) => {
         } else {
           const scraperInput = {
             subreddits: [subredditName],
-            maxPosts: 100,
-            sort: 'new',
+            maxPosts: 200,
+            sort: 'hot', // Use 'hot' to capture engaging posts that may be older
           };
 
           // Add delay to respect rate limits between Apify actor runs
