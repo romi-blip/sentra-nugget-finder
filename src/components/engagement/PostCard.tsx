@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ExternalLink, MessageSquare, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { ExternalLink, MessageSquare, CheckCircle, RefreshCw, Loader2, ArrowUp } from 'lucide-react';
 import { useRedditActions } from '@/hooks/useRedditActions';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -98,6 +98,15 @@ export function PostCard({ post, onClick, isSelected, onSelectChange, selectionM
               <span>{post.author || 'Unknown'}</span>
               <span>•</span>
               <span>{post.pub_date && formatDistanceToNow(new Date(post.pub_date), { addSuffix: true })}</span>
+              {post.upvotes !== null && post.upvotes !== undefined && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <ArrowUp className="h-3 w-3" />
+                    {post.upvotes}
+                  </span>
+                </>
+              )}
               {post.comment_count > 0 && (
                 <>
                   <span>•</span>

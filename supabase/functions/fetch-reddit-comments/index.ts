@@ -132,6 +132,14 @@ Deno.serve(async (req) => {
         const comments = await itemsResponse.json();
         console.log(`Fetched ${comments.length} comments from Apify`);
 
+        // Extract post upvotes from the first item (Apify often includes post data)
+        let postUpvotes = null;
+        if (comments.length > 0 && comments[0].post_score !== undefined) {
+          postUpvotes = Number(comments[0].post_score || comments[0].postScore || 0);
+        } else if (comments.length > 0 && comments[0].post) {
+          postUpvotes = Number(comments[0].post.score || comments[0].post.upvotes || 0);
+        }
+
         // Map Apify comments to our schema
         type TopComment = {
           author: string;
@@ -154,16 +162,22 @@ Deno.serve(async (req) => {
         const topComments = normalizedComments.slice(0, 10);
         const commentCount = normalizedComments.length;
 
-        console.log(`Processed ${commentCount} comments, top 10 selected`);
+        console.log(`Processed ${commentCount} comments, top 10 selected, post upvotes: ${postUpvotes}`);
 
-        // Update database
+        // Update database with comments and upvotes
+        const updateData: any = {
+          comment_count: commentCount,
+          top_comments: topComments,
+          comments_fetched_at: new Date().toISOString()
+        };
+        
+        if (postUpvotes !== null) {
+          updateData.upvotes = postUpvotes;
+        }
+
         const { error: updateError } = await supabase
           .from('reddit_posts')
-          .update({
-            comment_count: commentCount,
-            top_comments: topComments,
-            comments_fetched_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('id', post.id);
 
         if (updateError) {

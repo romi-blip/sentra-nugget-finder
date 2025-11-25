@@ -1194,6 +1194,7 @@ export type Database = {
           title: string
           top_comments: Json | null
           updated_at: string | null
+          upvotes: number | null
         }
         Insert: {
           author?: string | null
@@ -1211,6 +1212,7 @@ export type Database = {
           title: string
           top_comments?: Json | null
           updated_at?: string | null
+          upvotes?: number | null
         }
         Update: {
           author?: string | null
@@ -1228,6 +1230,7 @@ export type Database = {
           title?: string
           top_comments?: Json | null
           updated_at?: string | null
+          upvotes?: number | null
         }
         Relationships: [
           {
