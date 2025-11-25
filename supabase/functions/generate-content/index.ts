@@ -135,9 +135,18 @@ ${generatedContent}`;
     }
 
     const humanizationData = await humanizationResponse.json();
-    const humanizedContent = humanizationData.choices[0].message.content;
+    let humanizedContent = humanizationData.choices[0].message.content;
 
-    console.log('Content humanized, saving to database...');
+    // Programmatic post-processing to guarantee em dash removal
+    // Replace em dashes with appropriate alternatives
+    humanizedContent = humanizedContent
+      .replace(/\s—\s/g, ', ')  // " — " → ", "
+      .replace(/—/g, ' - ')     // Any remaining em dashes → " - "
+      .replace(/–/g, '-')       // En dashes → hyphens
+      .replace(/\s,\s,/g, ', ') // Fix double commas from replacement
+      .replace(/\s{2,}/g, ' '); // Clean up double spaces
+
+    console.log('Content humanized and post-processed, saving to database...');
 
     // Save the content and update status
     const { error: updateError } = await supabase
