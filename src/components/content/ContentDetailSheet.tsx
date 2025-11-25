@@ -2,7 +2,6 @@ import React from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, Download } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
@@ -101,52 +100,35 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
 
         <ScrollArea className="h-[calc(100vh-200px)] mt-6">
           <div className="space-y-6 pr-4">
-            {item.target_keywords && (
-              <div>
-                <h4 className="text-sm font-medium mb-2">Target Keywords</h4>
-                <p className="text-sm text-muted-foreground">{item.target_keywords}</p>
+            {item.content ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown>{item.content}</ReactMarkdown>
               </div>
-            )}
-
-            <div>
-              <h4 className="text-sm font-medium mb-2">Strategic Purpose</h4>
-              <p className="text-sm text-muted-foreground">{item.strategic_purpose}</p>
-            </div>
-
-            {item.outline && (
-              <>
-                <Separator />
+            ) : item.research_notes ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown>{item.research_notes}</ReactMarkdown>
+              </div>
+            ) : (
+              <div className="space-y-4">
                 <div>
-                  <h4 className="text-sm font-medium mb-2">Outline</h4>
-                  <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-4 rounded-lg">
-                    {item.outline}
-                  </div>
+                  <h4 className="text-sm font-medium mb-2">Strategic Purpose</h4>
+                  <p className="text-sm text-muted-foreground">{item.strategic_purpose}</p>
                 </div>
-              </>
-            )}
-
-            {item.research_notes && (
-              <>
-                <Separator />
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Research Notes</h4>
-                  <div className="prose prose-sm dark:prose-invert max-w-none bg-muted/30 p-4 rounded-lg overflow-auto">
-                    <ReactMarkdown>{item.research_notes}</ReactMarkdown>
+                {item.target_keywords && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Target Keywords</h4>
+                    <p className="text-sm text-muted-foreground">{item.target_keywords}</p>
                   </div>
-                </div>
-              </>
-            )}
-
-            {item.content && (
-              <>
-                <Separator />
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Content</h4>
-                  <div className="prose prose-sm dark:prose-invert max-w-none bg-muted/30 p-4 rounded-lg">
-                    <ReactMarkdown>{item.content}</ReactMarkdown>
+                )}
+                {item.outline && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Outline</h4>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-4 rounded-lg">
+                      {item.outline}
+                    </div>
                   </div>
-                </div>
-              </>
+                )}
+              </div>
             )}
           </div>
         </ScrollArea>
