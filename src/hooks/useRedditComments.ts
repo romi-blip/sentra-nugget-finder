@@ -18,8 +18,11 @@ export function useRedditComments() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+    onSuccess: async (data) => {
+      // Invalidate and refetch to ensure UI updates immediately
+      await queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      await queryClient.refetchQueries({ queryKey: ['reddit-posts'] });
+      
       const successCount = data?.results?.filter((r: any) => r.status === 'success').length || 0;
       toast({
         title: "Comments fetched",
