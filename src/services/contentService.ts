@@ -108,4 +108,14 @@ export const contentService = {
     if (data?.error) throw new Error(data.error);
     return data;
   },
+
+  async generateContent(id: string): Promise<{ content: string }> {
+    const { data, error } = await supabase.functions.invoke('generate-content', {
+      body: { contentItemId: id },
+    });
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
 };
