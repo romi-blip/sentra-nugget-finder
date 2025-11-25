@@ -256,6 +256,7 @@ const ContentPlan = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onView={setViewItem}
+            onViewResearch={setViewItem}
             onCopy={handleCopy}
             onExport={handleExport}
             isResearching={isResearching}
