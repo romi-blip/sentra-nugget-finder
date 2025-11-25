@@ -66,7 +66,10 @@ const ContentPlan = () => {
       item.strategic_purpose.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.target_keywords?.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+    // Include "generating" items in the "researched" tab so they remain visible during generation
+    const matchesStatus = statusFilter === "all" || 
+      item.status === statusFilter ||
+      (statusFilter === "researched" && item.status === "generating");
     
     return matchesSearch && matchesStatus;
   });
@@ -74,7 +77,7 @@ const ContentPlan = () => {
   const statusCounts = {
     all: items.length,
     draft: items.filter(i => i.status === 'draft').length,
-    researched: items.filter(i => i.status === 'researched').length,
+    researched: items.filter(i => i.status === 'researched' || i.status === 'generating').length,
     in_progress: items.filter(i => i.status === 'in_progress').length,
     completed: items.filter(i => i.status === 'completed').length,
   };
