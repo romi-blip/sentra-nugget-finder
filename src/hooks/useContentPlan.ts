@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { contentService, CreateContentItemData, ContentPlanItem } from "@/services/contentService";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,6 +8,13 @@ export const useContentPlan = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Track bulk operation progress
+  const [bulkProgress, setBulkProgress] = useState<{
+    current: number;
+    total: number;
+    currentItemId: string | null;
+  } | null>(null);
 
   const query = useQuery({
     queryKey: ['content-plan-items'],
@@ -124,9 +132,14 @@ export const useContentPlan = () => {
       await Promise.all(ids.map(id => contentService.update(id, { status: 'researching' })));
       queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
       
+      // Initialize progress
+      setBulkProgress({ current: 0, total: ids.length, currentItemId: null });
+      
       // Process research sequentially to avoid overwhelming the API
       const results = [];
-      for (const id of ids) {
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        setBulkProgress({ current: i + 1, total: ids.length, currentItemId: id });
         try {
           const result = await contentService.researchTopic(id);
           results.push({ id, success: true, result });
@@ -140,6 +153,7 @@ export const useContentPlan = () => {
       return results;
     },
     onSuccess: (results) => {
+      setBulkProgress(null);
       queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
       const successful = results.filter(r => r.success).length;
       const failed = results.filter(r => !r.success).length;
@@ -154,6 +168,7 @@ export const useContentPlan = () => {
       }
     },
     onError: (error: Error) => {
+      setBulkProgress(null);
       toast({ title: "Bulk research failed", description: error.message, variant: "destructive" });
     },
   });
@@ -164,9 +179,14 @@ export const useContentPlan = () => {
       await Promise.all(ids.map(id => contentService.update(id, { status: 'generating' })));
       queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
       
+      // Initialize progress
+      setBulkProgress({ current: 0, total: ids.length, currentItemId: null });
+      
       // Process generation sequentially to avoid overwhelming the API
       const results = [];
-      for (const id of ids) {
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        setBulkProgress({ current: i + 1, total: ids.length, currentItemId: id });
         try {
           const result = await contentService.generateContent(id);
           results.push({ id, success: true, result });
@@ -180,6 +200,7 @@ export const useContentPlan = () => {
       return results;
     },
     onSuccess: (results) => {
+      setBulkProgress(null);
       queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
       const successful = results.filter(r => r.success).length;
       const failed = results.filter(r => !r.success).length;
@@ -194,6 +215,7 @@ export const useContentPlan = () => {
       }
     },
     onError: (error: Error) => {
+      setBulkProgress(null);
       toast({ title: "Bulk generation failed", description: error.message, variant: "destructive" });
     },
   });
@@ -221,5 +243,6 @@ export const useContentPlan = () => {
     generatingId: generateContentMutation.variables,
     isBulkResearching: bulkResearchMutation.isPending,
     isBulkGenerating: bulkGenerateContentMutation.isPending,
+    bulkProgress,
   };
 };

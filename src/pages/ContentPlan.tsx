@@ -46,7 +46,13 @@ const ContentPlan = () => {
     generatingId,
     isBulkResearching,
     isBulkGenerating,
+    bulkProgress,
   } = useContentPlan();
+
+  // Get title of currently processing item
+  const currentProcessingItem = bulkProgress?.currentItemId 
+    ? items.find(item => item.id === bulkProgress.currentItemId)
+    : null;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -270,7 +276,9 @@ const ContentPlan = () => {
                   ) : (
                     <FlaskConical className="h-4 w-4 mr-2" />
                   )}
-                  {isBulkResearching ? 'Researching...' : `Research ${draftSelectedIds.length} items`}
+                  {isBulkResearching && bulkProgress 
+                    ? `Researching ${bulkProgress.current}/${bulkProgress.total}...` 
+                    : `Research ${draftSelectedIds.length} items`}
                 </Button>
               )}
               
@@ -286,8 +294,17 @@ const ContentPlan = () => {
                   ) : (
                     <FileText className="h-4 w-4 mr-2" />
                   )}
-                  {isBulkGenerating ? 'Generating...' : `Generate ${researchedSelectedIds.length} content`}
+                  {isBulkGenerating && bulkProgress 
+                    ? `Generating ${bulkProgress.current}/${bulkProgress.total}...` 
+                    : `Generate ${researchedSelectedIds.length} content`}
                 </Button>
+              )}
+              
+              {/* Progress indicator with current item name */}
+              {bulkProgress && currentProcessingItem && (
+                <span className="text-xs text-muted-foreground ml-2 truncate max-w-[200px]">
+                  Processing: {currentProcessingItem.title}
+                </span>
               )}
               
               <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={isBulkResearching || isBulkGenerating}>
