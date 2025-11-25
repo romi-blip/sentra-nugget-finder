@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ExternalLink, MessageSquare, CheckCircle, RefreshCw } from 'lucide-react';
+import { ExternalLink, MessageSquare, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { useRedditActions } from '@/hooks/useRedditActions';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -12,15 +12,25 @@ interface PostCardProps {
   isSelected?: boolean;
   onSelectChange?: (selected: boolean) => void;
   selectionMode?: boolean;
+  isFetchingComments?: boolean;
 }
 
-export function PostCard({ post, onClick, isSelected, onSelectChange, selectionMode }: PostCardProps) {
+export function PostCard({ post, onClick, isSelected, onSelectChange, selectionMode, isFetchingComments }: PostCardProps) {
   // Handle both object and array responses for post_reviews (one-to-one relationship)
   const review = Array.isArray(post.post_reviews) 
     ? post.post_reviews?.[0] 
     : post.post_reviews;
   const reply = post.suggested_replies?.[0];
   const { analyzePost } = useRedditActions();
+
+  // Check if comments are likely being fetched in background
+  // (high priority posts with recent reviews but no comments yet)
+  const isAutoFetchingComments = 
+    isFetchingComments || 
+    (review?.recommendation === 'high_priority' && 
+     review?.updated_at && 
+     new Date(review.updated_at).getTime() > Date.now() - 60000 && // Updated in last minute
+     !post.comments_fetched_at); // No comments fetched yet
 
   const handleCheckboxChange = (checked: boolean) => {
     onSelectChange?.(checked);
@@ -74,6 +84,12 @@ export function PostCard({ post, onClick, isSelected, onSelectChange, selectionM
                 <Badge variant={reply.status === 'posted' ? 'default' : 'secondary'}>
                   {reply.status === 'posted' ? <CheckCircle className="h-3 w-3 mr-1" /> : <MessageSquare className="h-3 w-3 mr-1" />}
                   {reply.status}
+                </Badge>
+              )}
+              {isAutoFetchingComments && (
+                <Badge variant="outline" className="animate-pulse">
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Fetching comments
                 </Badge>
               )}
             </div>

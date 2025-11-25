@@ -40,5 +40,6 @@ export function useRedditComments() {
 
   return {
     fetchComments,
+    isFetching: fetchComments.isPending,
   };
 }
