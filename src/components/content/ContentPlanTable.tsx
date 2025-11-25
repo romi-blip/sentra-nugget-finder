@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Search, Pencil, Trash2, Eye, Copy, Download } from "lucide-react";
+import { MoreHorizontal, Search, Pencil, Trash2, Eye, Copy, Download, Loader2 } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
 
 interface ContentPlanTableProps {
@@ -18,6 +18,8 @@ interface ContentPlanTableProps {
   onView: (item: ContentPlanItem) => void;
   onCopy: (item: ContentPlanItem) => void;
   onExport: (item: ContentPlanItem) => void;
+  isResearching?: boolean;
+  researchingId?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -45,6 +47,8 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   onView,
   onCopy,
   onExport,
+  isResearching,
+  researchingId,
 }) => {
   const toggleSelectAll = () => {
     if (selectedIds.length === items.length) {
@@ -145,9 +149,16 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                       </>
                     ) : (
                       <>
-                        <DropdownMenuItem onClick={() => onResearch(item)}>
-                          <Search className="h-4 w-4 mr-2" />
-                          Research Topic
+                        <DropdownMenuItem 
+                          onClick={() => onResearch(item)}
+                          disabled={isResearching}
+                        >
+                          {isResearching && researchingId === item.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Search className="h-4 w-4 mr-2" />
+                          )}
+                          {isResearching && researchingId === item.id ? 'Researching...' : 'Research Topic'}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onCreateContent(item)}>
                           <Pencil className="h-4 w-4 mr-2" />
