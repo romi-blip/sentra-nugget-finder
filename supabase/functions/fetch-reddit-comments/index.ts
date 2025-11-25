@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
         runUrl.searchParams.set('waitForFinish', '120'); // wait up to 120s
 
         const actorInput = {
-          startUrls: [{ url: post.link }],
+          postUrls: [post.link],
         };
 
         // Add delay to respect rate limits
