@@ -114,16 +114,22 @@ Deno.serve(async (req) => {
                   );
 
                   if (Array.isArray(scraperData) && scraperData.length > 0) {
+                    // Extract the bare ID (without t3_ prefix) for matching
+                    const bareRedditId = post.reddit_id.replace(/^t3_/, '');
+                    
                     const matchingPost = scraperData.find((item: any) => {
-                      const postId = item.post_id || item.postId;
-                      const postName = item.post_name || item.postName;
+                      const postId = item.post_id || item.postId || item.id;
+                      const postName = item.post_name || item.postName || item.name;
                       const permalink: string | undefined = item.permalink;
                       const url: string | undefined = item.url;
+                      
                       return (
+                        postId === bareRedditId ||
                         postId === post.reddit_id ||
-                        postName === `t3_${post.reddit_id}` ||
-                        permalink?.includes(post.reddit_id) ||
-                        url?.includes(post.reddit_id)
+                        postName === post.reddit_id ||
+                        postName === `t3_${bareRedditId}` ||
+                        permalink?.includes(bareRedditId) ||
+                        url?.includes(bareRedditId)
                       );
                     });
 
