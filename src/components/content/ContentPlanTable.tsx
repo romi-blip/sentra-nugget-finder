@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Search, Pencil, Trash2, Eye, Copy, Download, Loader2 } from "lucide-react";
+import { MoreHorizontal, Search, Pencil, Trash2, Eye, Copy, Download, Loader2, FileText } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
 
 interface ContentPlanTableProps {
@@ -16,6 +16,7 @@ interface ContentPlanTableProps {
   onEdit: (item: ContentPlanItem) => void;
   onDelete: (item: ContentPlanItem) => void;
   onView: (item: ContentPlanItem) => void;
+  onViewResearch: (item: ContentPlanItem) => void;
   onCopy: (item: ContentPlanItem) => void;
   onExport: (item: ContentPlanItem) => void;
   isResearching?: boolean;
@@ -47,6 +48,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   onEdit,
   onDelete,
   onView,
+  onViewResearch,
   onCopy,
   onExport,
   isResearching,
@@ -134,7 +136,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {item.status === 'completed' || item.content ? (
+                    {(item.status === 'completed' || item.content) && (
                       <>
                         <DropdownMenuItem onClick={() => onView(item)}>
                           <Eye className="h-4 w-4 mr-2" />
@@ -149,11 +151,18 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                           Export
                         </DropdownMenuItem>
                       </>
-                    ) : (
+                    )}
+                    {item.research_notes && (
+                      <DropdownMenuItem onClick={() => onViewResearch(item)}>
+                        <FileText className="h-4 w-4 mr-2" />
+                        View Research
+                      </DropdownMenuItem>
+                    )}
+                    {!item.content && item.status !== 'completed' && (
                       <>
                         <DropdownMenuItem 
                           onClick={() => onResearch(item)}
-                          disabled={isResearching}
+                          disabled={isResearching || item.status === 'researching'}
                         >
                           {isResearching && researchingId === item.id ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
