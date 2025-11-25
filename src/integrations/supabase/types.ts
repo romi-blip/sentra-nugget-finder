@@ -358,6 +358,48 @@ export type Database = {
           },
         ]
       }
+      content_plan_items: {
+        Row: {
+          content: string | null
+          created_at: string
+          created_by: string
+          id: string
+          outline: string | null
+          research_notes: string | null
+          status: string
+          strategic_purpose: string
+          target_keywords: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          outline?: string | null
+          research_notes?: string | null
+          status?: string
+          strategic_purpose: string
+          target_keywords?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          outline?: string | null
+          research_notes?: string | null
+          status?: string
+          strategic_purpose?: string
+          target_keywords?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       data_breach_articles: {
         Row: {
           ai_ml_involvement: string | null

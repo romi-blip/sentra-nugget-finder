@@ -18,6 +18,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import AdminSettings from "./pages/AdminSettings";
 import Analytics from "./pages/Analytics";
 import Engagement from "./pages/Engagement";
+import ContentPlan from "./pages/ContentPlan";
 
 const queryClient = new QueryClient();
 
@@ -94,6 +95,14 @@ const App = () => {
               element={
                 <ProtectedRoute requiredRoles={['admin', 'super_admin', 'marketing']}>
                   <Engagement />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/content" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'super_admin', 'marketing']}>
+                  <ContentPlan />
                 </ProtectedRoute>
               } 
             />
