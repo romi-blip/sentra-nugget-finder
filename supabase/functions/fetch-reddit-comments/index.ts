@@ -56,8 +56,8 @@ Deno.serve(async (req) => {
 
         console.log(`Starting Apify actor for post: ${post.link}`);
 
-        // Call Apify Reddit Comment Scraper actor
-        const actorId = 'crawlerbros~reddit-comment-scraper';
+        // Call Apify Reddit Posts Scraper actor (returns post metadata + comments)
+        const actorId = 'vulnv~reddit-posts-scraper';
         const runUrl = new URL(`https://api.apify.com/v2/acts/${actorId}/runs`);
         runUrl.searchParams.set('token', apifyToken);
         runUrl.searchParams.set('waitForFinish', '120'); // wait up to 120s
@@ -129,40 +129,15 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const comments = await itemsResponse.json();
-        console.log(`Fetched ${comments.length} comments from Apify`);
+        const scrapedData = await itemsResponse.json();
+        console.log(`Fetched ${scrapedData.length} result(s) from Apify`);
 
-        // Try to fetch post upvotes from Reddit JSON API
-        let postUpvotes = null;
-        try {
-          const jsonUrl = post.link.endsWith('/') ? `${post.link}.json` : `${post.link}/.json`;
-          console.log(`Fetching post data from: ${jsonUrl}`);
-          
-          const postResponse = await fetch(jsonUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)'
-            }
-          });
-          
-          console.log(`Reddit JSON API response status: ${postResponse.status}`);
-          
-          if (postResponse.ok) {
-            const postData = await postResponse.json();
-            console.log(`Reddit JSON API response structure:`, JSON.stringify(postData).substring(0, 200));
-            
-            // Reddit JSON structure: [post_data, comments_data]
-            if (postData && postData[0]?.data?.children?.[0]?.data?.ups) {
-              postUpvotes = postData[0].data.children[0].data.ups;
-              console.log(`Extracted post upvotes: ${postUpvotes}`);
-            } else {
-              console.log(`Could not extract upvotes from Reddit response`);
-            }
-          } else {
-            console.log(`Reddit JSON API returned non-OK status: ${postResponse.status}`);
-          }
-        } catch (e) {
-          console.error('Error fetching post upvotes from Reddit JSON:', e);
-        }
+        // Extract post data and comments from the first result
+        const postData = scrapedData[0] || {};
+        const postUpvotes = postData.score || null;
+        const rawComments = postData.comments || [];
+        
+        console.log(`Post upvotes: ${postUpvotes}, Comments: ${rawComments.length}`);
 
         // Map Apify comments to our schema
         type TopComment = {
@@ -172,13 +147,13 @@ Deno.serve(async (req) => {
           created_utc: number | string;
         };
 
-        const normalizedComments: TopComment[] = comments
-          .filter((c: any) => c.comment || c.text) // Filter out empty comments
+        const normalizedComments: TopComment[] = rawComments
+          .filter((c: any) => c.body && c.body.trim()) // Filter out empty comments
           .map((c: any) => ({
             author: c.author || 'unknown',
-            body: String(c.comment || c.text || '').substring(0, 500),
-            score: Number(c.score || c.upvotes || 0),
-            created_utc: c.created_utc || c.created || Date.now() / 1000,
+            body: String(c.body || '').substring(0, 500),
+            score: Number(c.score || 0),
+            created_utc: c.created_utc || Date.now() / 1000,
           }));
 
         // Sort by score descending and take top 10
