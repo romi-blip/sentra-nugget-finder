@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
         commentRunUrl.searchParams.set('waitForFinish', '120');
 
         const commentInput = {
-          posts: [post.link],
+          postUrls: [post.link],
         };
 
         const commentResponse = await fetch(commentRunUrl.toString(), {
