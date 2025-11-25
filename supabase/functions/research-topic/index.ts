@@ -194,10 +194,10 @@ Provide comprehensive research with citations and sources.
 }
 
 async function generateEmbedding(text: string): Promise<number[]> {
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -207,6 +207,8 @@ async function generateEmbedding(text: string): Promise<number[]> {
   });
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Embedding error:', errorText);
     throw new Error(`Embedding generation failed: ${response.status}`);
   }
 
