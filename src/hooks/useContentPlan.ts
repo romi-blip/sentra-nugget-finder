@@ -118,6 +118,86 @@ export const useContentPlan = () => {
     },
   });
 
+  const bulkResearchMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      // Update all statuses to "researching"
+      await Promise.all(ids.map(id => contentService.update(id, { status: 'researching' })));
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      
+      // Process research sequentially to avoid overwhelming the API
+      const results = [];
+      for (const id of ids) {
+        try {
+          const result = await contentService.researchTopic(id);
+          results.push({ id, success: true, result });
+        } catch (error) {
+          // Revert status on individual failure
+          await contentService.update(id, { status: 'draft' });
+          results.push({ id, success: false, error });
+        }
+        queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+      if (failed > 0) {
+        toast({ 
+          title: "Bulk research completed with errors", 
+          description: `${successful} succeeded, ${failed} failed.`,
+          variant: "destructive"
+        });
+      } else {
+        toast({ title: "Bulk research completed", description: `${successful} items researched.` });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Bulk research failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const bulkGenerateContentMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      // Update all statuses to "generating"
+      await Promise.all(ids.map(id => contentService.update(id, { status: 'generating' })));
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      
+      // Process generation sequentially to avoid overwhelming the API
+      const results = [];
+      for (const id of ids) {
+        try {
+          const result = await contentService.generateContent(id);
+          results.push({ id, success: true, result });
+        } catch (error) {
+          // Revert status on individual failure
+          await contentService.update(id, { status: 'researched' });
+          results.push({ id, success: false, error });
+        }
+        queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      const successful = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+      if (failed > 0) {
+        toast({ 
+          title: "Bulk generation completed with errors", 
+          description: `${successful} succeeded, ${failed} failed.`,
+          variant: "destructive"
+        });
+      } else {
+        toast({ title: "Bulk generation completed", description: `${successful} content pieces generated.` });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Bulk generation failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   return {
     items: query.data || [],
     isLoading: query.isLoading,
@@ -129,6 +209,8 @@ export const useContentPlan = () => {
     deleteBulk: deleteBulkMutation.mutate,
     researchItem: researchMutation.mutate,
     generateContent: generateContentMutation.mutate,
+    bulkResearch: bulkResearchMutation.mutate,
+    bulkGenerateContent: bulkGenerateContentMutation.mutate,
     isCreating: createMutation.isPending,
     isImporting: createBulkMutation.isPending,
     isUpdating: updateMutation.isPending,
@@ -137,5 +219,7 @@ export const useContentPlan = () => {
     researchingId: researchMutation.variables,
     isGenerating: generateContentMutation.isPending,
     generatingId: generateContentMutation.variables,
+    isBulkResearching: bulkResearchMutation.isPending,
+    isBulkGenerating: bulkGenerateContentMutation.isPending,
   };
 };
