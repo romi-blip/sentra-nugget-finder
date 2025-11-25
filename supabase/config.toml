@@ -91,3 +91,6 @@ verify_jwt = false
 
 [functions.refresh-high-priority-posts]
 verify_jwt = false
+
+[functions.research-topic]
+verify_jwt = true

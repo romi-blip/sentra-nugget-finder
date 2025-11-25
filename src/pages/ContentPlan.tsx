@@ -33,9 +33,12 @@ const ContentPlan = () => {
     updateItem,
     deleteItem,
     deleteBulk,
+    researchItem,
     isCreating,
     isImporting,
     isDeleting,
+    isResearching,
+    researchingId,
   } = useContentPlan();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -176,7 +179,7 @@ const ContentPlan = () => {
   };
 
   const handleResearch = (item: ContentPlanItem) => {
-    toast({ title: "Research feature", description: "Coming soon!" });
+    researchItem(item.id);
   };
 
   const handleCreateContent = (item: ContentPlanItem) => {
@@ -255,6 +258,8 @@ const ContentPlan = () => {
             onView={setViewItem}
             onCopy={handleCopy}
             onExport={handleExport}
+            isResearching={isResearching}
+            researchingId={researchingId}
           />
         )}
       </div>

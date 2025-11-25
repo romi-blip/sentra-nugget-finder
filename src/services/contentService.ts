@@ -98,4 +98,14 @@ export const contentService = {
 
     if (error) throw error;
   },
+
+  async researchTopic(id: string): Promise<{ research_notes: string }> {
+    const { data, error } = await supabase.functions.invoke('research-topic', {
+      body: { contentItemId: id },
+    });
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
 };

@@ -76,6 +76,17 @@ export const useContentPlan = () => {
     },
   });
 
+  const researchMutation = useMutation({
+    mutationFn: contentService.researchTopic,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      toast({ title: "Research completed", description: "Topic research has been saved to the content item." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Research failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   return {
     items: query.data || [],
     isLoading: query.isLoading,
@@ -85,9 +96,12 @@ export const useContentPlan = () => {
     updateItem: updateMutation.mutate,
     deleteItem: deleteMutation.mutate,
     deleteBulk: deleteBulkMutation.mutate,
+    researchItem: researchMutation.mutate,
     isCreating: createMutation.isPending,
     isImporting: createBulkMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    isResearching: researchMutation.isPending,
+    researchingId: researchMutation.variables,
   };
 };

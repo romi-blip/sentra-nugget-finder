@@ -130,8 +130,8 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
                 <Separator />
                 <div>
                   <h4 className="text-sm font-medium mb-2">Research Notes</h4>
-                  <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted/50 p-4 rounded-lg">
-                    {item.research_notes}
+                  <div className="prose prose-sm dark:prose-invert max-w-none bg-muted/30 p-4 rounded-lg overflow-auto">
+                    <ReactMarkdown>{item.research_notes}</ReactMarkdown>
                   </div>
                 </div>
               </>
