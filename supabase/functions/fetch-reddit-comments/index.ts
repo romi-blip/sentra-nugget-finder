@@ -3,6 +3,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const apifyToken = Deno.env.get('APIFY_API_TOKEN')!;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -53,71 +54,107 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Construct JSON API URL using api.reddit.com (less strict than www)
-        const originalUrl = new URL(post.link);
-        const jsonUrl = `https://api.reddit.com${originalUrl.pathname}.json`;
-        console.log(`Fetching comments from: ${jsonUrl}`);
+        console.log(`Starting Apify actor for post: ${post.link}`);
 
-        // Add delay to respect rate limits (1 request per second)
+        // Call Apify Reddit Comment Scraper actor
+        const actorId = 'crawlerbros~reddit-comment-scraper';
+        const runUrl = new URL(`https://api.apify.com/v2/acts/${actorId}/runs`);
+        runUrl.searchParams.set('token', apifyToken);
+        runUrl.searchParams.set('waitForFinish', '120'); // wait up to 120s
+
+        const actorInput = {
+          startUrls: [{ url: post.link }],
+        };
+
+        // Add delay to respect rate limits
         if (results.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        const response = await fetch(jsonUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Cache-Control': 'max-age=0'
-          }
+        const runResponse = await fetch(runUrl.toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(actorInput),
         });
 
-        if (!response.ok) {
-          console.error(`Failed to fetch comments: ${response.status}`);
+        if (!runResponse.ok) {
+          const errorText = await runResponse.text();
+          console.error(`Apify run failed: ${runResponse.status}`, errorText);
           results.push({ 
             post_id: post.id, 
             status: 'error', 
-            error: `HTTP ${response.status}` 
+            error: `Apify HTTP ${runResponse.status}` 
           });
           continue;
         }
 
-        const data = await response.json();
-        
-        // Reddit JSON API returns an array: [post_data, comments_data]
-        if (!Array.isArray(data) || data.length < 2) {
-          console.error('Unexpected Reddit API response structure');
+        const runData = await runResponse.json();
+        console.log('Apify run status:', runData.data?.status);
+
+        if (runData.data?.status !== 'SUCCEEDED') {
+          console.error('Apify run did not succeed:', runData.data?.status);
           results.push({ 
             post_id: post.id, 
             status: 'error', 
-            error: 'Invalid response structure' 
+            error: `Apify run ${runData.data?.status || 'failed'}` 
           });
           continue;
         }
 
-        const commentsData = data[1]?.data?.children || [];
-        
-        // Extract comment count from post data
-        const postData = data[0]?.data?.children?.[0]?.data;
-        const commentCount = postData?.num_comments || 0;
+        // Fetch scraped comments from dataset
+        const datasetId = runData.data.defaultDatasetId;
+        if (!datasetId) {
+          console.error('No dataset ID returned from Apify');
+          results.push({ 
+            post_id: post.id, 
+            status: 'error', 
+            error: 'No dataset ID' 
+          });
+          continue;
+        }
 
-        // Extract top comments
-        const topComments = commentsData
-          .filter((c: any) => c.kind === 't1' && c.data?.body) // Filter actual comments
-          .slice(0, 10)
+        const itemsUrl = new URL(`https://api.apify.com/v2/datasets/${datasetId}/items`);
+        itemsUrl.searchParams.set('token', apifyToken);
+        itemsUrl.searchParams.set('clean', 'true');
+        itemsUrl.searchParams.set('format', 'json');
+
+        const itemsResponse = await fetch(itemsUrl.toString());
+        if (!itemsResponse.ok) {
+          console.error(`Failed to fetch dataset: ${itemsResponse.status}`);
+          results.push({ 
+            post_id: post.id, 
+            status: 'error', 
+            error: `Dataset fetch HTTP ${itemsResponse.status}` 
+          });
+          continue;
+        }
+
+        const comments = await itemsResponse.json();
+        console.log(`Fetched ${comments.length} comments from Apify`);
+
+        // Map Apify comments to our schema
+        type TopComment = {
+          author: string;
+          body: string;
+          score: number;
+          created_utc: number | string;
+        };
+
+        const normalizedComments: TopComment[] = comments
+          .filter((c: any) => c.comment || c.text) // Filter out empty comments
           .map((c: any) => ({
-            author: c.data.author,
-            body: c.data.body.substring(0, 500), // Limit to 500 chars
-            score: c.data.score || 0,
-            created_utc: c.data.created_utc
+            author: c.author || 'unknown',
+            body: String(c.comment || c.text || '').substring(0, 500),
+            score: Number(c.score || c.upvotes || 0),
+            created_utc: c.created_utc || c.created || Date.now() / 1000,
           }));
+
+        // Sort by score descending and take top 10
+        normalizedComments.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        const topComments = normalizedComments.slice(0, 10);
+        const commentCount = normalizedComments.length;
+
+        console.log(`Processed ${commentCount} comments, top 10 selected`);
 
         // Update database
         const { error: updateError } = await supabase

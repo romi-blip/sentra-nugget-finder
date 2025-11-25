@@ -85,3 +85,6 @@ verify_jwt = false
 
 [functions.generate-reddit-reply]
 verify_jwt = false
+
+[functions.fetch-reddit-comments]
+verify_jwt = false
