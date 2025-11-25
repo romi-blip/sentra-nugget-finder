@@ -14,6 +14,7 @@ export interface RedditPost {
   iso_date: string | null;
   created_at: string;
   updated_at: string;
+  upvotes: number | null;
 }
 
 interface UseRedditPostsOptions {
