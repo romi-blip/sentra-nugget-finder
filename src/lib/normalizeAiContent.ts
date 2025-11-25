@@ -120,12 +120,24 @@ export const normalizeAiContent = (content: string): string => {
     .replace(/&#8211;/g, '–')
     .replace(/&#8212;/g, '—');
 
-  // Step 9: Decode literal escape sequences
+  // Step 9: Decode literal escape sequences (handle various escape formats)
+  // Handle double-escaped sequences first (\\n -> \n -> actual newline)
+  cleanedContent = cleanedContent
+    .replace(/\\\\n/g, '\n')
+    .replace(/\\\\t/g, '\t')
+    .replace(/\\\\r/g, '\r');
+  
+  // Then handle single-escaped sequences
   cleanedContent = cleanedContent
     .replace(/\\n/g, '\n')
     .replace(/\\t/g, '\t')
     .replace(/\\r\\n/g, '\n')
     .replace(/\\r/g, '\r');
+  
+  // Handle cases where newlines might be represented as literal text
+  cleanedContent = cleanedContent
+    .replace(/\s*---\s*/g, '\n\n---\n\n')  // Ensure horizontal rules have proper spacing
+    .replace(/\s*(#{1,6})\s+/g, '\n\n$1 '); // Ensure headers start on new lines
 
   // Step 10: Normalize bullets like • or – to "- "
   cleanedContent = cleanedContent
