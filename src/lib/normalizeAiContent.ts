@@ -166,7 +166,7 @@ export const normalizeAiContent = (content: string): string => {
   // Example: "# My Heading As the next sentence..." → "# My Heading\n\nAs the next sentence..."
   // Match heading ending with lowercase letter followed by space and capital letter (new sentence)
   cleanedContent = cleanedContent.replace(
-    /^(#{1,6}\s+[^\n]+?[a-z])\s+([A-Z][a-z])/gm,
+    /^(#{1,6}\s+[^\n]+[a-z])\s+([A-Z][a-z])/gm,
     '$1\n\n$2'
   );
   
