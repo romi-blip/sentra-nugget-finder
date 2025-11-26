@@ -119,7 +119,7 @@ const blogPostTool = {
               },
               content: { 
                 type: "string", 
-                description: "Section content with paragraphs separated by double newlines. Can include bullet lists (use - for bullets) or numbered lists." 
+                description: "Section content with paragraphs separated by double newlines. Can include bullet lists (use - for bullets) or numbered lists. IMPORTANT: Embed 1-2 relevant inline links per section using markdown format [link text](URL) when citing statistics, research, or external sources from the research notes." 
               }
             },
             required: ["heading", "content"]
@@ -200,7 +200,8 @@ Create a compelling blog post with:
 - 3-5 well-developed sections with clear headings
 - A strong conclusion with key takeaways
 - Natural incorporation of target keywords where relevant
-- Include relevant sources from the research notes in the sources array (extract URLs and titles from the Sources & Citations section)
+- **CRITICAL: Embed 3-4 inline links throughout the content** using markdown format [link text](URL). Place these naturally within sentences when citing statistics, studies, or external sources from the research notes. Do NOT just list links at the end - weave them into the narrative.
+- Also include relevant sources in the sources array for a References section
 
 Use the create_blog_post function to structure your response.`;
 
