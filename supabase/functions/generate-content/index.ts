@@ -64,6 +64,13 @@ ${contentItem.research_notes ? `**Research Notes:**\n${contentItem.research_note
 - Do NOT include metadata fields like title:, meta_description:, keywords:, etc.
 - Do NOT wrap the output in code fences (\`\`\`markdown or similar)
 - Start directly with the blog content (first heading or introduction paragraph)
+- IMPORTANT: Each heading (# or ##) MUST be on its own line with a blank line BEFORE and AFTER it
+- NEVER put paragraph text on the same line as a heading
+- Proper format example:
+  
+  # Heading Here
+  
+  Paragraph text starts on a new line after a blank line.
 
 Write the complete blog post now.`;
 
