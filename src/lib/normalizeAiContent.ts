@@ -6,6 +6,28 @@
 export const normalizeAiContent = (content: string): string => {
   let cleanedContent = content;
 
+  // Step 0: Strip YAML frontmatter (--- block at beginning)
+  // Handles patterns like:
+  // ---
+  // title: ...
+  // meta_description: ...
+  // keywords: ...
+  // ---
+  cleanedContent = cleanedContent.replace(
+    /^[\s]*```(?:markdown|md)?\s*\n---[\s\S]*?---\s*\n```[\s]*/m,
+    ''
+  );
+  cleanedContent = cleanedContent.replace(
+    /^[\s]*---[\s\S]*?---[\s]*/m,
+    ''
+  );
+  
+  // Strip standalone metadata lines at the beginning (title:, meta_description:, keywords:)
+  cleanedContent = cleanedContent.replace(
+    /^[\s]*(title|meta_description|meta|keywords|description):\s*[^\n]+\n/gim,
+    ''
+  );
+
   // Step 1: Extract and decode iframe srcdoc content (if present)
   if (cleanedContent.includes('<iframe') && cleanedContent.includes('srcdoc=')) {
     try {
