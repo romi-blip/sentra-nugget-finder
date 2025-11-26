@@ -58,7 +58,14 @@ ${contentItem.research_notes ? `**Research Notes:**\n${contentItem.research_note
 - Include a compelling introduction and strong conclusion
 - Focus on providing value to security leaders and practitioners
 
-Write the complete blog post in markdown format.`;
+**CRITICAL OUTPUT RULES:**
+- Output ONLY the blog post content in clean markdown format
+- Do NOT include any YAML frontmatter (no --- blocks at the start)
+- Do NOT include metadata fields like title:, meta_description:, keywords:, etc.
+- Do NOT wrap the output in code fences (\`\`\`markdown or similar)
+- Start directly with the blog content (first heading or introduction paragraph)
+
+Write the complete blog post now.`;
 
     const generationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
