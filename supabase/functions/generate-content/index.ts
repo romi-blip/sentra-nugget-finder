@@ -18,6 +18,10 @@ interface BlogPostStructure {
     content: string;
   }>;
   conclusion: string;
+  sources?: Array<{
+    title: string;
+    url?: string;
+  }>;
 }
 
 // Convert structured data to properly formatted markdown
@@ -68,6 +72,20 @@ function formatBlogPost(data: BlogPostStructure): string {
     lines.push('');
   }
   
+  // Sources/References (if provided)
+  if (data.sources && data.sources.length > 0) {
+    lines.push('## References');
+    lines.push('');
+    for (const source of data.sources) {
+      if (source.url) {
+        lines.push(`- [${source.title}](${source.url})`);
+      } else {
+        lines.push(`- ${source.title}`);
+      }
+    }
+    lines.push('');
+  }
+  
   // Join and clean up
   return lines.join('\n').trim();
 }
@@ -110,6 +128,18 @@ const blogPostTool = {
         conclusion: { 
           type: "string", 
           description: "1-2 closing paragraphs summarizing key takeaways. Separate paragraphs with double newlines." 
+        },
+        sources: {
+          type: "array",
+          description: "List of sources and references cited in the content. Include any sources from the research notes.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "Source title or description" },
+              url: { type: "string", description: "Source URL if available" }
+            },
+            required: ["title"]
+          }
         }
       },
       required: ["title", "introduction", "sections", "conclusion"]
@@ -170,6 +200,7 @@ Create a compelling blog post with:
 - 3-5 well-developed sections with clear headings
 - A strong conclusion with key takeaways
 - Natural incorporation of target keywords where relevant
+- Include relevant sources from the research notes in the sources array (extract URLs and titles from the Sources & Citations section)
 
 Use the create_blog_post function to structure your response.`;
 
