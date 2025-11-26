@@ -161,6 +161,21 @@ export const normalizeAiContent = (content: string): string => {
     .replace(/\s*---\s*/g, '\n\n---\n\n')  // Ensure horizontal rules have proper spacing
     .replace(/\s*(#{1,6})\s+/g, '\n\n$1 '); // Ensure headers start on new lines
 
+  // Step 9.5: Split headings from following paragraph text
+  // Detect pattern where heading runs directly into paragraph text without newline
+  // Example: "# My Heading As the next sentence..." → "# My Heading\n\nAs the next sentence..."
+  // Match heading ending with lowercase letter followed by space and capital letter (new sentence)
+  cleanedContent = cleanedContent.replace(
+    /^(#{1,6}\s+[^\n]+?[a-z])\s+([A-Z][a-z])/gm,
+    '$1\n\n$2'
+  );
+  
+  // Also handle headings ending with punctuation followed by new sentence
+  cleanedContent = cleanedContent.replace(
+    /^(#{1,6}\s+[^\n]+?[.!?:])\s+([A-Z][a-z])/gm,
+    '$1\n\n$2'
+  );
+
   // Step 10: Normalize bullets like • or – to "- "
   cleanedContent = cleanedContent
     .replace(/^[\s]*[•–]/gm, '- ')
