@@ -9,6 +9,114 @@ const corsHeaders = {
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
+// Type for the structured blog post output
+interface BlogPostStructure {
+  title: string;
+  introduction: string;
+  sections: Array<{
+    heading: string;
+    content: string;
+  }>;
+  conclusion: string;
+}
+
+// Convert structured data to properly formatted markdown
+function formatBlogPost(data: BlogPostStructure): string {
+  const lines: string[] = [];
+  
+  // Title (H1)
+  lines.push(`# ${data.title}`);
+  lines.push('');
+  
+  // Introduction - handle multiple paragraphs
+  const introParagraphs = data.introduction.split(/\n\n+/).filter(p => p.trim());
+  for (const para of introParagraphs) {
+    lines.push(para.trim());
+    lines.push('');
+  }
+  
+  // Sections
+  for (let i = 0; i < data.sections.length; i++) {
+    const section = data.sections[i];
+    
+    // Section heading (H2)
+    lines.push(`## ${section.heading}`);
+    lines.push('');
+    
+    // Section content - handle paragraphs, lists, etc.
+    const contentParts = section.content.split(/\n\n+/).filter(p => p.trim());
+    for (const part of contentParts) {
+      // Check if this is a list (starts with - or number.)
+      const trimmedPart = part.trim();
+      if (trimmedPart.match(/^[-*]\s/) || trimmedPart.match(/^\d+\.\s/)) {
+        // It's a list - preserve line breaks within it
+        lines.push(trimmedPart);
+      } else {
+        lines.push(trimmedPart);
+      }
+      lines.push('');
+    }
+  }
+  
+  // Conclusion (H2)
+  lines.push('## Conclusion');
+  lines.push('');
+  
+  const conclusionParagraphs = data.conclusion.split(/\n\n+/).filter(p => p.trim());
+  for (const para of conclusionParagraphs) {
+    lines.push(para.trim());
+    lines.push('');
+  }
+  
+  // Join and clean up
+  return lines.join('\n').trim();
+}
+
+// Tool definition for structured blog post output
+const blogPostTool = {
+  type: "function",
+  function: {
+    name: "create_blog_post",
+    description: "Create a structured blog post with proper sections",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { 
+          type: "string", 
+          description: "The main title of the blog post. Just the title text, no # symbols or formatting." 
+        },
+        introduction: { 
+          type: "string", 
+          description: "1-2 opening paragraphs that hook the reader and introduce the topic. Separate paragraphs with double newlines." 
+        },
+        sections: {
+          type: "array",
+          description: "3-5 main content sections",
+          items: {
+            type: "object",
+            properties: {
+              heading: { 
+                type: "string", 
+                description: "Section heading text. No ## symbols, no numbers. Just the heading text." 
+              },
+              content: { 
+                type: "string", 
+                description: "Section content with paragraphs separated by double newlines. Can include bullet lists (use - for bullets) or numbered lists." 
+              }
+            },
+            required: ["heading", "content"]
+          }
+        },
+        conclusion: { 
+          type: "string", 
+          description: "1-2 closing paragraphs summarizing key takeaways. Separate paragraphs with double newlines." 
+        }
+      },
+      required: ["title", "introduction", "sections", "conclusion"]
+    }
+  }
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -38,68 +146,34 @@ serve(async (req) => {
 
     console.log(`Generating content for: ${contentItem.title}`);
 
-    // Step 1: Generate the blog post with explicit formatting instructions
-    const generationPrompt = `You are an expert B2B content writer for Sentra, a leading Data Security Posture Management (DSPM) and Data Detection & Response (DDR) platform.
+    // Step 1: Generate structured blog post using tool calling
+    const systemPrompt = `You are an expert B2B content writer for Sentra, a leading Data Security Posture Management (DSPM) and Data Detection & Response (DDR) platform.
 
-Write a compelling blog post based on the following:
+You write compelling, valuable content for security leaders and practitioners. Your writing is:
+- Professional but approachable
+- Focused on practical insights and actionable takeaways
+- Well-structured with clear logical flow
+- 800-1200 words total
+
+IMPORTANT: You MUST use the create_blog_post function to structure your response. Do not write free-form text.`;
+
+    const userPrompt = `Write a blog post based on the following:
 
 **Title:** ${contentItem.title}
 **Strategic Purpose:** ${contentItem.strategic_purpose}
-${contentItem.target_keywords ? `**Target Keywords:** ${contentItem.target_keywords}` : ''}
-${contentItem.outline ? `**Outline:** ${contentItem.outline}` : ''}
-${contentItem.research_notes ? `**Research Notes:**\n${contentItem.research_notes}` : ''}
+${contentItem.target_keywords ? `**Target Keywords to naturally incorporate:** ${contentItem.target_keywords}` : ''}
+${contentItem.outline ? `**Outline to follow:** ${contentItem.outline}` : ''}
+${contentItem.research_notes ? `**Research Notes for reference:**\n${contentItem.research_notes}` : ''}
 
-**Content Requirements:**
-- Length: 800-1200 words
-- Write in a professional but approachable tone
-- Include practical insights and actionable takeaways
-- Naturally incorporate target keywords where relevant
-- Structure with clear headings and subheadings
-- Include a compelling introduction and strong conclusion
-- Focus on providing value to security leaders and practitioners
+Create a compelling blog post with:
+- An engaging introduction that hooks the reader
+- 3-5 well-developed sections with clear headings
+- A strong conclusion with key takeaways
+- Natural incorporation of target keywords where relevant
 
-**CRITICAL MARKDOWN FORMATTING RULES - YOU MUST FOLLOW THESE EXACTLY:**
+Use the create_blog_post function to structure your response.`;
 
-1. Start directly with content - NO frontmatter, NO metadata fields, NO code fences
-
-2. Every heading MUST have ONE blank line BEFORE it and ONE blank line AFTER it:
-   CORRECT:
-   
-   ## Heading Title
-   
-   Paragraph text here.
-
-   WRONG:
-   ## Heading Title
-   Paragraph text here.
-
-3. Every paragraph MUST be separated by ONE blank line
-
-4. NEVER put paragraph text on the same line as a heading
-
-5. For numbered sections, use this exact format:
-   
-   ## 1. Section Title
-   
-   Paragraph explaining this section.
-   
-   ## 2. Next Section
-   
-   More explanation here.
-
-6. For bullet lists, put a blank line before and after the list:
-   
-   Here is an introduction to the list.
-   
-   - First bullet point
-   - Second bullet point
-   - Third bullet point
-   
-   Here is the paragraph after the list.
-
-7. Do NOT use **bold** inside headings combined with numbers like ## **1.** - just use ## 1.
-
-Write the complete blog post now, following these formatting rules exactly.`;
+    console.log('Calling OpenAI with structured output (tool calling)...');
 
     const generationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -110,11 +184,12 @@ Write the complete blog post now, following these formatting rules exactly.`;
       body: JSON.stringify({
         model: 'gpt-4.1-2025-04-14',
         messages: [
-          { role: 'system', content: 'You are an expert B2B content writer. You follow markdown formatting instructions precisely and never deviate from them.' },
-          { role: 'user', content: generationPrompt }
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
         ],
+        tools: [blogPostTool],
+        tool_choice: { type: "function", function: { name: "create_blog_post" } },
         max_tokens: 4000,
-        temperature: 0.7,
       }),
     });
 
@@ -125,39 +200,42 @@ Write the complete blog post now, following these formatting rules exactly.`;
     }
 
     const generationData = await generationResponse.json();
-    const generatedContent = generationData.choices[0].message.content;
+    
+    // Extract the structured data from the tool call
+    const toolCall = generationData.choices[0]?.message?.tool_calls?.[0];
+    if (!toolCall || toolCall.function.name !== 'create_blog_post') {
+      console.error('Unexpected response structure:', JSON.stringify(generationData, null, 2));
+      throw new Error('Failed to get structured blog post from GPT');
+    }
 
-    console.log('Content generated, applying humanization...');
+    const blogPostData: BlogPostStructure = JSON.parse(toolCall.function.arguments);
+    console.log('Received structured blog post data:', JSON.stringify(blogPostData, null, 2).substring(0, 500) + '...');
 
-    // Step 2: Humanize the content
-    const humanizationPrompt = `You are an expert editor. Your task is to humanize the following AI-generated blog post by removing identifiable AI writing patterns while preserving the message, quality, AND markdown formatting.
+    // Format the structured data into proper markdown
+    const formattedContent = formatBlogPost(blogPostData);
+    console.log('Formatted markdown content, applying humanization...');
+
+    // Step 2: Humanize the content (simple text editing, structure is already correct)
+    const humanizationPrompt = `You are an expert editor. Humanize this blog post by removing AI writing patterns while preserving the exact structure and formatting.
 
 **Patterns to fix:**
-1. Replace ALL em dashes (—) with appropriate alternatives (commas, periods, or parentheses)
-2. Remove/replace overused AI phrases: "dive into", "delve", "landscape", "leverage", "robust", "seamless", "cutting-edge", "revolutionize", "game-changer", "navigate", "realm", "paradigm", "holistic"
-3. Fix formulaic sentence starters: Rewrite sentences starting with "In today's...", "It's worth noting that...", "When it comes to...", "In the ever-evolving..."
-4. Remove excessive hedging: "It's important to note", "It should be mentioned", "One might argue"
-5. Vary parallel structures: If multiple list items or sentences start the same way, vary them
-6. Replace overused transitions: "Furthermore", "Moreover", "Additionally" - use more natural connections
-7. Remove filler phrases: "In order to" → "to", "Due to the fact that" → "because"
-8. Make language more direct and conversational
+1. Replace em dashes (—) with commas, periods, or parentheses
+2. Remove overused AI phrases: "dive into", "delve", "landscape", "leverage", "robust", "seamless", "cutting-edge", "revolutionize", "game-changer", "navigate", "realm", "paradigm", "holistic", "ever-evolving"
+3. Rewrite formulaic starters: "In today's...", "It's worth noting...", "When it comes to...", "In an era..."
+4. Remove hedging: "It's important to note", "It should be mentioned"
+5. Vary parallel structures in lists
+6. Replace overused transitions: "Furthermore", "Moreover", "Additionally"
+7. Remove filler: "In order to" → "to", "Due to the fact" → "because"
+8. Make language more direct and natural
 
-**CRITICAL - PRESERVE MARKDOWN FORMATTING:**
-- Keep all blank lines before and after headings
-- Keep all blank lines between paragraphs
-- Keep all blank lines before and after lists
-- Do NOT combine headings with paragraph text on same line
-- Do NOT add any frontmatter or metadata
-- Do NOT wrap in code fences
+**CRITICAL:** 
+- Keep ALL blank lines exactly as they are
+- Keep all # and ## heading markers exactly as they are
+- Output ONLY the revised content, nothing else
+- Do NOT add any commentary, notes, or explanations
 
-**Important:**
-- Maintain the same meaning and key points
-- Keep the professional tone appropriate for B2B security content
-- Preserve all technical accuracy
-- Output ONLY the revised blog post, no commentary
-
-**Original content:**
-${generatedContent}`;
+**Content to humanize:**
+${formattedContent}`;
 
     const humanizationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -168,47 +246,42 @@ ${generatedContent}`;
       body: JSON.stringify({
         model: 'gpt-4.1-2025-04-14',
         messages: [
-          { role: 'system', content: 'You are an expert editor who humanizes AI-generated content while preserving quality, meaning, and exact markdown formatting structure.' },
+          { role: 'system', content: 'You are an expert editor. You humanize AI content while preserving exact markdown structure. Output only the edited content with no commentary.' },
           { role: 'user', content: humanizationPrompt }
         ],
         max_tokens: 4000,
-        temperature: 0.3,
       }),
     });
 
     if (!humanizationResponse.ok) {
       const errorText = await humanizationResponse.text();
       console.error('OpenAI humanization error:', errorText);
-      throw new Error(`Failed to humanize content: ${errorText}`);
+      // If humanization fails, use the formatted content directly
+      console.log('Humanization failed, using formatted content directly');
     }
 
-    const humanizationData = await humanizationResponse.json();
-    let humanizedContent = humanizationData.choices[0].message.content;
+    let finalContent = formattedContent;
+    
+    if (humanizationResponse.ok) {
+      const humanizationData = await humanizationResponse.json();
+      finalContent = humanizationData.choices[0].message.content;
+      
+      // Minimal cleanup - just em dashes and normalize blank lines
+      finalContent = finalContent
+        .replace(/\s—\s/g, ', ')
+        .replace(/—/g, ' - ')
+        .replace(/–/g, '-')
+        .replace(/\n{4,}/g, '\n\n\n')
+        .trim();
+    }
 
-    // Safe post-processing: only add newlines, never split content
-    humanizedContent = humanizedContent
-      // Replace em dashes
-      .replace(/\s—\s/g, ', ')
-      .replace(/—/g, ' - ')
-      .replace(/–/g, '-')
-      // Fix double commas/spaces from replacement
-      .replace(/\s,\s,/g, ', ')
-      .replace(/\s{2,}/g, ' ')
-      // Ensure blank line before headings (safe: only adds, doesn't split)
-      .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
-      // Ensure blank line after headings (safe: only adds, doesn't split)
-      .replace(/(#{1,6}\s[^\n]+)\n([^#\n\s])/g, '$1\n\n$2')
-      // Normalize multiple blank lines to max 2
-      .replace(/\n{4,}/g, '\n\n\n')
-      .trim();
-
-    console.log('Content humanized and post-processed, saving to database...');
+    console.log('Content finalized, saving to database...');
 
     // Save the content and update status
     const { error: updateError } = await supabase
       .from('content_plan_items')
       .update({
-        content: humanizedContent,
+        content: finalContent,
         status: 'completed',
         updated_at: new Date().toISOString(),
       })
@@ -222,7 +295,7 @@ ${generatedContent}`;
 
     return new Response(JSON.stringify({ 
       success: true,
-      content: humanizedContent 
+      content: finalContent 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
