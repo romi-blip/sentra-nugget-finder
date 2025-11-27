@@ -173,7 +173,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" side="left" sideOffset={5} collisionPadding={8}>
                     {(item.status === 'completed' || item.content) && (
                       <>
                         <DropdownMenuItem onClick={() => onView(item)}>
