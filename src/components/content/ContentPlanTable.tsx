@@ -35,6 +35,8 @@ const statusColors: Record<string, string> = {
   generating: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   in_progress: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
   completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  reviewing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  reviewed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
 };
 
 const statusLabels: Record<string, string> = {
@@ -44,22 +46,8 @@ const statusLabels: Record<string, string> = {
   generating: "Generating...",
   in_progress: "In Progress",
   completed: "Completed",
-};
-
-const reviewStatusColors: Record<string, string> = {
-  not_reviewed: "bg-muted text-muted-foreground",
-  reviewing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  reviewed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  approved: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  needs_revision: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-};
-
-const reviewStatusLabels: Record<string, string> = {
-  not_reviewed: "Not Reviewed",
   reviewing: "Reviewing...",
   reviewed: "Reviewed",
-  approved: "Approved",
-  needs_revision: "Needs Revision",
 };
 
 export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
@@ -121,7 +109,6 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
             <TableHead className="hidden md:table-cell">Strategic Purpose</TableHead>
             <TableHead className="hidden lg:table-cell">Keywords</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="hidden sm:table-cell">Review</TableHead>
             <TableHead className="w-12"></TableHead>
           </TableRow>
         </TableHeader>
@@ -153,18 +140,9 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                 </div>
               </TableCell>
               <TableCell>
-                <Badge className={`${statusColors[item.status] || statusColors.draft} ${(item.status === 'researching' || item.status === 'generating') ? 'animate-pulse' : ''}`}>
+                <Badge className={`${statusColors[item.status] || statusColors.draft} ${(item.status === 'researching' || item.status === 'generating' || item.status === 'reviewing') ? 'animate-pulse' : ''}`}>
                   {statusLabels[item.status] || item.status}
                 </Badge>
-              </TableCell>
-              <TableCell className="hidden sm:table-cell">
-                {item.status === 'completed' && item.review_status && item.review_status !== 'not_reviewed' ? (
-                  <Badge className={`${reviewStatusColors[item.review_status]} ${item.review_status === 'reviewing' ? 'animate-pulse' : ''}`}>
-                    {reviewStatusLabels[item.review_status]}
-                  </Badge>
-                ) : item.status === 'completed' ? (
-                  <span className="text-xs text-muted-foreground">-</span>
-                ) : null}
               </TableCell>
               <TableCell>
                 <DropdownMenu>
