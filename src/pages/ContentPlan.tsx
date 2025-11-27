@@ -87,9 +87,11 @@ const ContentPlan = () => {
       (item.target_keywords?.toLowerCase().includes(searchQuery.toLowerCase()));
     
     // Include "generating" items in the "researched" tab so they remain visible during generation
+    // Include "reviewing" items in the "completed" tab so they remain visible during review
     const matchesStatus = statusFilter === "all" || 
       item.status === statusFilter ||
-      (statusFilter === "researched" && item.status === "generating");
+      (statusFilter === "researched" && item.status === "generating") ||
+      (statusFilter === "completed" && item.status === "reviewing");
     
     return matchesSearch && matchesStatus;
   });
@@ -99,7 +101,8 @@ const ContentPlan = () => {
     draft: items.filter(i => i.status === 'draft').length,
     researched: items.filter(i => i.status === 'researched' || i.status === 'generating').length,
     in_progress: items.filter(i => i.status === 'in_progress').length,
-    completed: items.filter(i => i.status === 'completed').length,
+    completed: items.filter(i => i.status === 'completed' || i.status === 'reviewing').length,
+    reviewed: items.filter(i => i.status === 'reviewed').length,
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,6 +343,7 @@ const ContentPlan = () => {
             <TabsTrigger value="researched">Researched ({statusCounts.researched})</TabsTrigger>
             <TabsTrigger value="in_progress">In Progress ({statusCounts.in_progress})</TabsTrigger>
             <TabsTrigger value="completed">Completed ({statusCounts.completed})</TabsTrigger>
+            <TabsTrigger value="reviewed">Reviewed ({statusCounts.reviewed})</TabsTrigger>
           </TabsList>
         </Tabs>
 
