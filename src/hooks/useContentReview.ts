@@ -217,12 +217,78 @@ export const useReviewerPatterns = () => {
     },
   });
 
+  const createPatternMutation = useMutation({
+    mutationFn: async (pattern: {
+      feedback_type: string;
+      feedback_pattern: string;
+      feedback_instruction: string;
+      priority: string;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('content_reviewer_feedback')
+        .insert({
+          ...pattern,
+          created_by: user.id,
+        });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviewer-patterns'] });
+      toast({ title: "Pattern created" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Failed to create pattern", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const updatePatternMutation = useMutation({
+    mutationFn: async ({ id, updates }: { 
+      id: string; 
+      updates: {
+        feedback_type?: string;
+        feedback_pattern?: string;
+        feedback_instruction?: string;
+        priority?: string;
+      };
+    }) => {
+      const { error } = await supabase
+        .from('content_reviewer_feedback')
+        .update(updates)
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviewer-patterns'] });
+      toast({ title: "Pattern updated" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Failed to update pattern", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    },
+  });
+
   return {
     patterns: patternsQuery.data || [],
     isLoading: patternsQuery.isLoading,
     togglePattern: togglePatternMutation.mutate,
     deletePattern: deletePatternMutation.mutate,
+    createPattern: createPatternMutation.mutate,
+    updatePattern: updatePatternMutation.mutate,
     isToggling: togglePatternMutation.isPending,
     isDeleting: deletePatternMutation.isPending,
+    isCreating: createPatternMutation.isPending,
+    isUpdating: updatePatternMutation.isPending,
   };
 };
