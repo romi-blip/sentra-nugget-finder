@@ -103,3 +103,12 @@ verify_jwt = true
 
 [functions.refresh-lead-feed]
 verify_jwt = true
+
+[functions.review-content]
+verify_jwt = true
+
+[functions.update-reviewer-agent]
+verify_jwt = true
+
+[functions.apply-review-feedback]
+verify_jwt = true
