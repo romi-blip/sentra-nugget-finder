@@ -69,10 +69,23 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
   const [editedHtml, setEditedHtml] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Get the appropriate content based on status
+  // For 'completed'/'generating' show content, for 'researched' show research_notes
+  const getDisplayContent = (contentItem: ContentPlanItem): string => {
+    if (contentItem.status === 'completed' || contentItem.status === 'generating') {
+      return contentItem.content || contentItem.research_notes || '';
+    }
+    // For 'researched' status, prioritize research_notes (even if stale content exists)
+    if (contentItem.status === 'researched') {
+      return contentItem.research_notes || '';
+    }
+    return contentItem.content || contentItem.research_notes || '';
+  };
+
   // Reset edit state when item changes or sheet closes
   useEffect(() => {
     if (item && open) {
-      const content = item.content || item.research_notes || '';
+      const content = getDisplayContent(item);
       setEditedHtml(markdownToHtml(content));
       setIsEditing(false);
     }
@@ -80,15 +93,15 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
 
   if (!item) return null;
 
+  const displayContent = getDisplayContent(item);
+
   const handleEdit = () => {
-    const content = item.content || item.research_notes || '';
-    setEditedHtml(markdownToHtml(content));
+    setEditedHtml(markdownToHtml(displayContent));
     setIsEditing(true);
   };
 
   const handleCancelEdit = () => {
-    const content = item.content || item.research_notes || '';
-    setEditedHtml(markdownToHtml(content));
+    setEditedHtml(markdownToHtml(displayContent));
     setIsEditing(false);
   };
 
@@ -192,9 +205,9 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
         ) : (
           <ScrollArea className="h-[calc(100vh-200px)] mt-6">
             <div className="space-y-6 pr-4">
-              {(item.content || item.research_notes) ? (
+              {displayContent ? (
                 <div className={proseClasses}>
-                  <ReactMarkdown>{normalizeAiContent(item.content || item.research_notes || '')}</ReactMarkdown>
+                  <ReactMarkdown>{normalizeAiContent(displayContent)}</ReactMarkdown>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -236,7 +249,7 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
             </>
           ) : (
             <>
-              {(item.content || item.research_notes) && (
+              {displayContent && (
                 <Button variant="outline" size="sm" onClick={handleEdit}>
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Content
