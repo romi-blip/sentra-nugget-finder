@@ -24,6 +24,54 @@ interface BlogPostStructure {
   }>;
 }
 
+// Extract all URLs from research notes for validation
+function extractUrlsFromResearch(researchNotes: string): Set<string> {
+  const urlRegex = /https?:\/\/[^\s\)>\]]+/g;
+  const matches = researchNotes.match(urlRegex) || [];
+  // Clean URLs (remove trailing punctuation)
+  const cleanedUrls = matches.map(url => url.replace(/[.,;:!?\)>\]]+$/, ''));
+  return new Set(cleanedUrls);
+}
+
+// Extract URLs from generated content
+function extractUrlsFromContent(content: string): string[] {
+  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+  const urls: string[] = [];
+  let match;
+  while ((match = markdownLinkRegex.exec(content)) !== null) {
+    urls.push(match[2].replace(/[.,;:!?\)]+$/, ''));
+  }
+  return urls;
+}
+
+// Validate that content URLs exist in research notes
+function validateContentUrls(content: string, researchUrls: Set<string>): { valid: string[], invalid: string[] } {
+  const contentUrls = extractUrlsFromContent(content);
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  
+  for (const url of contentUrls) {
+    // Check if URL exists in research or is a close match (same domain)
+    const urlDomain = new URL(url).hostname;
+    const isValid = researchUrls.has(url) || 
+      Array.from(researchUrls).some(researchUrl => {
+        try {
+          return new URL(researchUrl).hostname === urlDomain;
+        } catch {
+          return false;
+        }
+      });
+    
+    if (isValid) {
+      valid.push(url);
+    } else {
+      invalid.push(url);
+    }
+  }
+  
+  return { valid, invalid };
+}
+
 // Convert structured data to properly formatted markdown
 function formatBlogPost(data: BlogPostStructure): string {
   const lines: string[] = [];
@@ -95,7 +143,7 @@ const blogPostTool = {
   type: "function",
   function: {
     name: "create_blog_post",
-    description: "Create a structured blog post with proper sections",
+    description: "Create a structured blog post with proper sections. IMPORTANT: Only use URLs that appear in the research notes. Each inline link must support the specific claim it's attached to.",
     parameters: {
       type: "object",
       properties: {
@@ -105,7 +153,7 @@ const blogPostTool = {
         },
         introduction: { 
           type: "string", 
-          description: "1-2 opening paragraphs that hook the reader and introduce the topic. Separate paragraphs with double newlines." 
+          description: "1-2 opening paragraphs that hook the reader and introduce the topic. Separate paragraphs with double newlines. Can include inline links if citing data." 
         },
         sections: {
           type: "array",
@@ -119,7 +167,7 @@ const blogPostTool = {
               },
               content: { 
                 type: "string", 
-                description: "Section content with paragraphs separated by double newlines. Can include bullet lists (use - for bullets) or numbered lists. IMPORTANT: Embed 1-2 relevant inline links per section using markdown format [link text](URL) when citing statistics, research, or external sources from the research notes." 
+                description: "Section content with paragraphs separated by double newlines. CRITICAL: When citing statistics, data points, or external research, use inline markdown links [claim text](URL) where the URL comes DIRECTLY from the research notes. Do NOT invent URLs. Only link claims that have corresponding URLs in the research notes." 
               }
             },
             required: ["heading", "content"]
@@ -131,12 +179,12 @@ const blogPostTool = {
         },
         sources: {
           type: "array",
-          description: "List of sources and references cited in the content. Include any sources from the research notes.",
+          description: "List of sources actually cited in the content. Only include sources whose URLs appear in the research notes and were used in the content.",
           items: {
             type: "object",
             properties: {
               title: { type: "string", description: "Source title or description" },
-              url: { type: "string", description: "Source URL if available" }
+              url: { type: "string", description: "Source URL - must be from research notes" }
             },
             required: ["title"]
           }
@@ -176,6 +224,12 @@ serve(async (req) => {
 
     console.log(`Generating content for: ${contentItem.title}`);
 
+    // Extract available URLs from research notes for validation
+    const researchUrls = contentItem.research_notes 
+      ? extractUrlsFromResearch(contentItem.research_notes)
+      : new Set<string>();
+    console.log(`Found ${researchUrls.size} URLs in research notes`);
+
     // Step 1: Generate structured blog post using tool calling
     const systemPrompt = `You are an expert B2B content writer for Sentra, a leading Data Security Posture Management (DSPM) and Data Detection & Response (DDR) platform.
 
@@ -185,6 +239,13 @@ You write compelling, valuable content for security leaders and practitioners. Y
 - Well-structured with clear logical flow
 - 800-1200 words total
 
+CRITICAL LINKING RULES:
+1. ONLY use URLs that appear in the research notes provided
+2. When citing a statistic or claim, find the corresponding URL in the research notes and use it
+3. Do NOT invent or hallucinate URLs
+4. If a claim doesn't have a supporting URL in the research notes, do not add a link for it
+5. Links should be contextually relevant - the link text should describe what the user will find
+
 IMPORTANT: You MUST use the create_blog_post function to structure your response. Do not write free-form text.`;
 
     const userPrompt = `Write a blog post based on the following:
@@ -193,15 +254,21 @@ IMPORTANT: You MUST use the create_blog_post function to structure your response
 **Strategic Purpose:** ${contentItem.strategic_purpose}
 ${contentItem.target_keywords ? `**Target Keywords to naturally incorporate:** ${contentItem.target_keywords}` : ''}
 ${contentItem.outline ? `**Outline to follow:** ${contentItem.outline}` : ''}
-${contentItem.research_notes ? `**Research Notes for reference:**\n${contentItem.research_notes}` : ''}
+${contentItem.research_notes ? `**Research Notes (IMPORTANT - extract links from here):**\n${contentItem.research_notes}` : ''}
 
 Create a compelling blog post with:
 - An engaging introduction that hooks the reader
 - 3-5 well-developed sections with clear headings
 - A strong conclusion with key takeaways
 - Natural incorporation of target keywords where relevant
-- **CRITICAL: Embed 3-4 inline links throughout the content** using markdown format [link text](URL). Place these naturally within sentences when citing statistics, studies, or external sources from the research notes. Do NOT just list links at the end - weave them into the narrative.
-- Also include relevant sources in the sources array for a References section
+
+**CRITICAL LINKING INSTRUCTIONS:**
+- Include 3-4 inline links throughout the content using markdown format [descriptive text](URL)
+- ONLY use URLs that you can find in the Research Notes above
+- Each link must support a specific claim or data point
+- Place links naturally within sentences, not as standalone references
+- If you cannot find a URL in the research notes for a claim, do NOT add a link - just state the claim without linking
+- The link text should describe what the source is about, not generic text like "click here"
 
 Use the create_blog_post function to structure your response.`;
 
@@ -245,10 +312,20 @@ Use the create_blog_post function to structure your response.`;
 
     // Format the structured data into proper markdown
     const formattedContent = formatBlogPost(blogPostData);
+    
+    // Validate URLs in generated content
+    if (researchUrls.size > 0) {
+      const { valid, invalid } = validateContentUrls(formattedContent, researchUrls);
+      console.log(`URL validation: ${valid.length} valid, ${invalid.length} invalid`);
+      if (invalid.length > 0) {
+        console.warn('Invalid URLs found in content (not in research notes):', invalid);
+      }
+    }
+    
     console.log('Formatted markdown content, applying humanization...');
 
     // Step 2: Humanize the content (simple text editing, structure is already correct)
-    const humanizationPrompt = `You are an expert editor. Humanize this blog post by removing AI writing patterns while preserving the exact structure and formatting.
+    const humanizationPrompt = `You are an expert editor. Humanize this blog post by removing AI writing patterns while preserving the exact structure, formatting, and ALL LINKS.
 
 **Patterns to fix:**
 1. Replace em dashes (—) with commas, periods, or parentheses
@@ -263,6 +340,7 @@ Use the create_blog_post function to structure your response.`;
 **CRITICAL:** 
 - Keep ALL blank lines exactly as they are
 - Keep all # and ## heading markers exactly as they are
+- PRESERVE ALL MARKDOWN LINKS [text](url) exactly as they are - do not modify or remove any links
 - Output ONLY the revised content, nothing else
 - Do NOT add any commentary, notes, or explanations
 
@@ -278,7 +356,7 @@ ${formattedContent}`;
       body: JSON.stringify({
         model: 'gpt-4.1-2025-04-14',
         messages: [
-          { role: 'system', content: 'You are an expert editor. You humanize AI content while preserving exact markdown structure. Output only the edited content with no commentary.' },
+          { role: 'system', content: 'You are an expert editor. You humanize AI content while preserving exact markdown structure and all links. Output only the edited content with no commentary.' },
           { role: 'user', content: humanizationPrompt }
         ],
         max_tokens: 4000,

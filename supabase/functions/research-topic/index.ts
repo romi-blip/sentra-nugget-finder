@@ -152,7 +152,9 @@ Search for:
 3. Competitive landscape and market analysis
 4. Key challenges and solutions in this area
 
-Provide comprehensive research with citations and sources.
+IMPORTANT: For every statistic, data point, or claim you find, include the source URL inline using markdown format [claim or statistic](URL). This is critical for citation accuracy.
+
+Provide comprehensive research with inline citations.
 `;
 
   const response = await fetch('https://api.openai.com/v1/responses', {
@@ -260,12 +262,16 @@ async function synthesizeResearch(
   webResults: string,
   internalKnowledge: Record<string, DocumentMatch[]>
 ): Promise<string> {
-  // Format internal knowledge for the prompt
+  // Format internal knowledge for the prompt, extracting URLs from metadata
   const formatDocs = (docs: DocumentMatch[], source: string) => {
     if (!docs.length) return `No relevant ${source} content found.`;
     return docs.map((d, i) => {
-      const metadata = d.metadata ? JSON.stringify(d.metadata) : '';
-      return `[${i + 1}] (similarity: ${(d.similarity * 100).toFixed(1)}%)\n${d.content?.substring(0, 500) || 'N/A'}...${metadata ? `\nMetadata: ${metadata}` : ''}`;
+      const metadata = d.metadata || {};
+      const url = metadata.url || metadata.source_url || metadata.link || '';
+      const title = metadata.title || metadata.name || '';
+      const urlInfo = url ? `\nSource URL: ${url}` : '';
+      const titleInfo = title ? `\nTitle: ${title}` : '';
+      return `[${i + 1}] (similarity: ${(d.similarity * 100).toFixed(1)}%)${titleInfo}${urlInfo}\n${d.content?.substring(0, 500) || 'N/A'}...`;
     }).join('\n\n');
   };
 
@@ -304,25 +310,35 @@ ${websiteContent}
 
 ---
 
+**CRITICAL INSTRUCTION FOR INLINE CITATIONS:**
+You MUST include inline markdown links [text](URL) directly within the content wherever you cite a statistic, claim, data point, or insight. Do NOT just list sources at the end - weave the URLs into the text itself using markdown link format.
+
+Example of CORRECT format:
+"According to [Gartner's 2024 Market Guide](https://gartner.com/report), 67% of enterprises now use DSPM tools."
+
+Example of WRONG format:
+"67% of enterprises now use DSPM tools.
+Sources: https://gartner.com/report"
+
 Create a structured research document in Markdown format with the following sections:
 
 # Research: ${item.title}
 
 ## Executive Summary
-(2-3 paragraphs summarizing key findings and content direction)
+(2-3 paragraphs summarizing key findings and content direction. Include inline citations for any data points.)
 
 ## Market & Industry Insights
 ### Current Trends
-(Key trends from web research and industry analysis)
+(Key trends from web research and industry analysis. Every statistic or data point MUST have an inline link citation.)
 
 ### Recent Developments
-(Relevant news and updates)
+(Relevant news and updates with inline citations to source URLs)
 
 ### Statistics & Data Points
-(Key statistics to cite in content)
+(Key statistics to cite in content - EACH statistic must include its source URL as an inline markdown link, e.g., "[72% of organizations experienced a cloud data breach](https://example.com/report)")
 
 ## Competitive Landscape
-(How competitors position themselves, gaps Sentra can fill)
+(How competitors position themselves, gaps Sentra can fill. Cite competitor pages or analyst reports inline.)
 
 ## Sentra Positioning & Messaging
 ### Key Differentiators
@@ -332,7 +348,7 @@ Create a structured research document in Markdown format with the following sect
 (Specific talking points and value propositions)
 
 ### Existing Content to Reference
-(Relevant Sentra materials)
+(Relevant Sentra materials - include URLs from the website content above)
 
 ## Content Recommendations
 ### Recommended Angle
@@ -344,14 +360,12 @@ Create a structured research document in Markdown format with the following sect
 ### Call-to-Action Suggestions
 (Appropriate CTAs)
 
-## Sources & Citations
-### Web Sources
-(List all web sources with URLs)
+## Citable Sources Summary
+(A consolidated list of all URLs mentioned above for easy reference. Format as markdown links.)
 
-### Internal Sources
-(Reference to internal documents used)
+Be specific, actionable, and ensure all recommendations align with Sentra's positioning as the agentless DSPM + DDR solution for multi-cloud data visibility, compliance, and threat detection.
 
-Be specific, actionable, and ensure all recommendations align with Sentra's positioning as the agentless DSPM + DDR solution for multi-cloud data visibility, compliance, and threat detection.`;
+REMEMBER: Every claim, statistic, or data point in the research MUST have its source URL embedded inline using [text](URL) format. This is critical for the content generation phase.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -362,7 +376,7 @@ Be specific, actionable, and ensure all recommendations align with Sentra's posi
     body: JSON.stringify({
       model: 'gpt-4.1-2025-04-14',
       messages: [
-        { role: 'system', content: 'You are an expert content strategist specializing in B2B cybersecurity marketing.' },
+        { role: 'system', content: 'You are an expert content strategist specializing in B2B cybersecurity marketing. You ALWAYS include inline markdown citations [text](URL) when citing any data, statistics, or external sources.' },
         { role: 'user', content: synthesisPrompt }
       ],
       max_tokens: 4000,
