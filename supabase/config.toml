@@ -97,3 +97,9 @@ verify_jwt = true
 
 [functions.generate-content]
 verify_jwt = true
+
+[functions.research-lead]
+verify_jwt = true
+
+[functions.refresh-lead-feed]
+verify_jwt = true

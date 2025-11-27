@@ -1061,6 +1061,137 @@ export type Database = {
           },
         ]
       }
+      lead_research: {
+        Row: {
+          company_industry: string | null
+          company_linkedin: string | null
+          company_name: string | null
+          company_size: string | null
+          company_website: string | null
+          created_at: string
+          email: string | null
+          error_message: string | null
+          first_name: string | null
+          full_name: string | null
+          id: string
+          input_type: string
+          input_url: string | null
+          last_name: string | null
+          linkedin_url: string | null
+          location: string | null
+          raw_linkedin_data: Json | null
+          raw_salesforce_data: Json | null
+          raw_web_research: Json | null
+          research_summary: string | null
+          salesforce_id: string | null
+          salesforce_object_type: string | null
+          status: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_industry?: string | null
+          company_linkedin?: string | null
+          company_name?: string | null
+          company_size?: string | null
+          company_website?: string | null
+          created_at?: string
+          email?: string | null
+          error_message?: string | null
+          first_name?: string | null
+          full_name?: string | null
+          id?: string
+          input_type: string
+          input_url?: string | null
+          last_name?: string | null
+          linkedin_url?: string | null
+          location?: string | null
+          raw_linkedin_data?: Json | null
+          raw_salesforce_data?: Json | null
+          raw_web_research?: Json | null
+          research_summary?: string | null
+          salesforce_id?: string | null
+          salesforce_object_type?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_industry?: string | null
+          company_linkedin?: string | null
+          company_name?: string | null
+          company_size?: string | null
+          company_website?: string | null
+          created_at?: string
+          email?: string | null
+          error_message?: string | null
+          first_name?: string | null
+          full_name?: string | null
+          id?: string
+          input_type?: string
+          input_url?: string | null
+          last_name?: string | null
+          linkedin_url?: string | null
+          location?: string | null
+          raw_linkedin_data?: Json | null
+          raw_salesforce_data?: Json | null
+          raw_web_research?: Json | null
+          research_summary?: string | null
+          salesforce_id?: string | null
+          salesforce_object_type?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      lead_research_feed: {
+        Row: {
+          content: string
+          created_at: string
+          feed_type: string
+          id: string
+          lead_research_id: string
+          published_at: string | null
+          raw_data: Json | null
+          source_url: string | null
+          title: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          feed_type: string
+          id?: string
+          lead_research_id: string
+          published_at?: string | null
+          raw_data?: Json | null
+          source_url?: string | null
+          title?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          feed_type?: string
+          id?: string
+          lead_research_id?: string
+          published_at?: string | null
+          raw_data?: Json | null
+          source_url?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_research_feed_lead_research_id_fkey"
+            columns: ["lead_research_id"]
+            isOneToOne: false
+            referencedRelation: "lead_research"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       outreach_sequences: {
         Row: {
           campaign_id: string
