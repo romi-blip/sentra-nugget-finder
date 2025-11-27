@@ -60,7 +60,10 @@ const ContentPlan = () => {
   
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<ContentPlanItem | null>(null);
-  const [viewItem, setViewItem] = useState<ContentPlanItem | null>(null);
+  const [viewItemId, setViewItemId] = useState<string | null>(null);
+  
+  // Get fresh item data from query results
+  const viewItem = viewItemId ? items.find(item => item.id === viewItemId) || null : null;
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<ContentPlanItem | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   
@@ -191,7 +194,7 @@ const ContentPlan = () => {
   };
 
   const handleExport = (item: ContentPlanItem) => {
-    setViewItem(item);
+    setViewItemId(item.id);
   };
 
   const handleResearch = (item: ContentPlanItem) => {
@@ -336,8 +339,8 @@ const ContentPlan = () => {
             onCreateContent={handleCreateContent}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            onView={setViewItem}
-            onViewResearch={setViewItem}
+            onView={(item) => setViewItemId(item.id)}
+            onViewResearch={(item) => setViewItemId(item.id)}
             onCopy={handleCopy}
             onExport={handleExport}
             isResearching={isResearching}
@@ -366,7 +369,7 @@ const ContentPlan = () => {
 
       <ContentDetailSheet
         open={!!viewItem}
-        onClose={() => setViewItem(null)}
+        onClose={() => setViewItemId(null)}
         item={viewItem}
       />
 
