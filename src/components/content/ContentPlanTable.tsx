@@ -170,10 +170,23 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                       </>
                     )}
                     {item.research_notes && (
-                      <DropdownMenuItem onClick={() => onViewResearch(item)}>
-                        <FileText className="h-4 w-4 mr-2" />
-                        View Research
-                      </DropdownMenuItem>
+                      <>
+                        <DropdownMenuItem onClick={() => onViewResearch(item)}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          View Research
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => onResearch(item)}
+                          disabled={isResearching || item.status === 'researching'}
+                        >
+                          {isResearching && researchingId === item.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                          )}
+                          {isResearching && researchingId === item.id ? 'Researching...' : 'Re-research Topic'}
+                        </DropdownMenuItem>
+                      </>
                     )}
                     {!item.content && item.status !== 'completed' && (
                       <>
