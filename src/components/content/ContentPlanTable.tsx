@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Search, Pencil, Trash2, Eye, Copy, Download, Loader2, FileText, RefreshCw } from "lucide-react";
+import { MoreHorizontal, Search, Pencil, Trash2, Eye, Copy, Download, Loader2, FileText, RefreshCw, ClipboardCheck } from "lucide-react";
 import { ContentPlanItem } from "@/services/contentService";
 
 interface ContentPlanTableProps {
@@ -19,10 +19,13 @@ interface ContentPlanTableProps {
   onViewResearch: (item: ContentPlanItem) => void;
   onCopy: (item: ContentPlanItem) => void;
   onExport: (item: ContentPlanItem) => void;
+  onReview?: (item: ContentPlanItem) => void;
   isResearching?: boolean;
   researchingId?: string;
   isGenerating?: boolean;
   generatingId?: string;
+  isReviewing?: boolean;
+  reviewingId?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -43,6 +46,22 @@ const statusLabels: Record<string, string> = {
   completed: "Completed",
 };
 
+const reviewStatusColors: Record<string, string> = {
+  not_reviewed: "bg-muted text-muted-foreground",
+  reviewing: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  reviewed: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  approved: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  needs_revision: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+};
+
+const reviewStatusLabels: Record<string, string> = {
+  not_reviewed: "Not Reviewed",
+  reviewing: "Reviewing...",
+  reviewed: "Reviewed",
+  approved: "Approved",
+  needs_revision: "Needs Revision",
+};
+
 export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   items,
   selectedIds,
@@ -55,10 +74,13 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   onViewResearch,
   onCopy,
   onExport,
+  onReview,
   isResearching,
   researchingId,
   isGenerating,
   generatingId,
+  isReviewing,
+  reviewingId,
 }) => {
   const toggleSelectAll = () => {
     if (selectedIds.length === items.length) {
@@ -99,6 +121,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
             <TableHead className="hidden md:table-cell">Strategic Purpose</TableHead>
             <TableHead className="hidden lg:table-cell">Keywords</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead className="hidden sm:table-cell">Review</TableHead>
             <TableHead className="w-12"></TableHead>
           </TableRow>
         </TableHeader>
@@ -134,6 +157,15 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                   {statusLabels[item.status] || item.status}
                 </Badge>
               </TableCell>
+              <TableCell className="hidden sm:table-cell">
+                {item.status === 'completed' && item.review_status && item.review_status !== 'not_reviewed' ? (
+                  <Badge className={`${reviewStatusColors[item.review_status]} ${item.review_status === 'reviewing' ? 'animate-pulse' : ''}`}>
+                    {reviewStatusLabels[item.review_status]}
+                  </Badge>
+                ) : item.status === 'completed' ? (
+                  <span className="text-xs text-muted-foreground">-</span>
+                ) : null}
+              </TableCell>
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -156,6 +188,19 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
                           <Download className="h-4 w-4 mr-2" />
                           Export
                         </DropdownMenuItem>
+                        {onReview && (
+                          <DropdownMenuItem 
+                            onClick={() => onReview(item)}
+                            disabled={isReviewing || item.review_status === 'reviewing'}
+                          >
+                            {isReviewing && reviewingId === item.id ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <ClipboardCheck className="h-4 w-4 mr-2" />
+                            )}
+                            {isReviewing && reviewingId === item.id ? 'Reviewing...' : 'Submit for Review'}
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem 
                           onClick={() => onCreateContent(item)}
                           disabled={isGenerating || item.status === 'generating'}

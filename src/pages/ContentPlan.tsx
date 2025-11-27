@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Upload, Search, Trash2, FlaskConical, FileText, Loader2 } from "lucide-react";
 import SEO from "@/components/SEO";
 import { useContentPlan } from "@/hooks/useContentPlan";
+import { useContentReview } from "@/hooks/useContentReview";
 import { ContentPlanTable } from "@/components/content/ContentPlanTable";
 import { CreateContentItemDialog } from "@/components/content/CreateContentItemDialog";
 import { ContentFieldMappingDialog } from "@/components/content/ContentFieldMappingDialog";
@@ -70,8 +71,12 @@ const ContentPlan = () => {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Review hook for the currently reviewing item
+  const { runReview, isReviewing } = useContentReview(reviewingId || undefined);
 
   const filteredItems = items.filter(item => {
     const matchesSearch = !searchQuery || 
@@ -203,6 +208,11 @@ const ContentPlan = () => {
 
   const handleCreateContent = (item: ContentPlanItem) => {
     generateContent(item.id);
+  };
+
+  const handleReview = (item: ContentPlanItem) => {
+    setReviewingId(item.id);
+    runReview(item.id);
   };
 
   // Get selected items for bulk operations
@@ -343,10 +353,13 @@ const ContentPlan = () => {
             onViewResearch={(item) => setViewItemId(item.id)}
             onCopy={handleCopy}
             onExport={handleExport}
+            onReview={handleReview}
             isResearching={isResearching}
             researchingId={researchingId}
             isGenerating={isGenerating}
             generatingId={generatingId}
+            isReviewing={isReviewing}
+            reviewingId={reviewingId || undefined}
           />
         )}
       </div>

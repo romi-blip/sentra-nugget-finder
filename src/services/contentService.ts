@@ -9,6 +9,8 @@ export interface ContentPlanItem {
   status: string;
   content: string | null;
   research_notes: string | null;
+  review_status: string | null;
+  latest_review_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

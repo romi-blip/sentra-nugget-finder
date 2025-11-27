@@ -364,8 +364,10 @@ export type Database = {
           created_at: string
           created_by: string
           id: string
+          latest_review_id: string | null
           outline: string | null
           research_notes: string | null
+          review_status: string | null
           status: string
           strategic_purpose: string
           target_keywords: string | null
@@ -377,8 +379,10 @@ export type Database = {
           created_at?: string
           created_by: string
           id?: string
+          latest_review_id?: string | null
           outline?: string | null
           research_notes?: string | null
+          review_status?: string | null
           status?: string
           strategic_purpose: string
           target_keywords?: string | null
@@ -390,15 +394,111 @@ export type Database = {
           created_at?: string
           created_by?: string
           id?: string
+          latest_review_id?: string | null
           outline?: string | null
           research_notes?: string | null
+          review_status?: string | null
           status?: string
           strategic_purpose?: string
           target_keywords?: string | null
           title?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "content_plan_items_latest_review_id_fkey"
+            columns: ["latest_review_id"]
+            isOneToOne: false
+            referencedRelation: "content_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_reviewer_feedback: {
+        Row: {
+          created_at: string
+          created_by: string
+          feedback_instruction: string
+          feedback_pattern: string
+          feedback_type: string
+          id: string
+          is_active: boolean
+          priority: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          feedback_instruction: string
+          feedback_pattern: string
+          feedback_type: string
+          id?: string
+          is_active?: boolean
+          priority?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          feedback_instruction?: string
+          feedback_pattern?: string
+          feedback_type?: string
+          id?: string
+          is_active?: boolean
+          priority?: string
+          updated_at?: string
+        }
         Relationships: []
+      }
+      content_reviews: {
+        Row: {
+          content_item_id: string
+          created_at: string
+          feedback_applied: boolean
+          human_feedback: string | null
+          id: string
+          overall_score: number | null
+          review_result: Json | null
+          review_summary: string | null
+          reviewer_version: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          content_item_id: string
+          created_at?: string
+          feedback_applied?: boolean
+          human_feedback?: string | null
+          id?: string
+          overall_score?: number | null
+          review_result?: Json | null
+          review_summary?: string | null
+          reviewer_version?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          content_item_id?: string
+          created_at?: string
+          feedback_applied?: boolean
+          human_feedback?: string | null
+          id?: string
+          overall_score?: number | null
+          review_result?: Json | null
+          review_summary?: string | null
+          reviewer_version?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_reviews_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "content_plan_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       data_breach_articles: {
         Row: {
