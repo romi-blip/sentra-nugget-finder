@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Upload, Search, Trash2, FlaskConical, FileText, Loader2 } from "lucide-react";
+import { Plus, Upload, Search, Trash2, FlaskConical, FileText, Loader2, Settings } from "lucide-react";
 import SEO from "@/components/SEO";
 import { useContentPlan } from "@/hooks/useContentPlan";
 import { useContentReview } from "@/hooks/useContentReview";
@@ -10,6 +10,7 @@ import { ContentPlanTable } from "@/components/content/ContentPlanTable";
 import { CreateContentItemDialog } from "@/components/content/CreateContentItemDialog";
 import { ContentFieldMappingDialog } from "@/components/content/ContentFieldMappingDialog";
 import { ContentDetailSheet } from "@/components/content/ContentDetailSheet";
+import { ReviewerSettingsDialog } from "@/components/content/ReviewerSettingsDialog";
 import { ContentPlanItem, CreateContentItemData } from "@/services/contentService";
 import { useToast } from "@/hooks/use-toast";
 import Papa from "papaparse";
@@ -72,6 +73,7 @@ const ContentPlan = () => {
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [reviewerSettingsOpen, setReviewerSettingsOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -253,6 +255,9 @@ const ContentPlan = () => {
               accept=".csv"
               className="hidden"
             />
+            <Button variant="outline" size="icon" onClick={() => setReviewerSettingsOpen(true)} title="Reviewer Settings">
+              <Settings className="h-4 w-4" />
+            </Button>
             <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
               <Upload className="h-4 w-4 mr-2" />
               {isImporting ? "Importing..." : "Upload CSV"}
@@ -384,6 +389,11 @@ const ContentPlan = () => {
         open={!!viewItem}
         onClose={() => setViewItemId(null)}
         item={viewItem}
+      />
+
+      <ReviewerSettingsDialog
+        open={reviewerSettingsOpen}
+        onClose={() => setReviewerSettingsOpen(false)}
       />
 
       <AlertDialog open={!!deleteConfirmItem} onOpenChange={() => setDeleteConfirmItem(null)}>
