@@ -19,6 +19,7 @@ import AdminSettings from "./pages/AdminSettings";
 import Analytics from "./pages/Analytics";
 import Engagement from "./pages/Engagement";
 import ContentPlan from "./pages/ContentPlan";
+import LeadResearch from "./pages/LeadResearch";
 
 const queryClient = new QueryClient();
 
@@ -103,6 +104,14 @@ const App = () => {
               element={
                 <ProtectedRoute requiredRoles={['admin', 'super_admin', 'marketing']}>
                   <ContentPlan />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/lead-research" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'super_admin', 'sales']}>
+                  <LeadResearch />
                 </ProtectedRoute>
               } 
             />

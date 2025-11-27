@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { useToast } from "@/hooks/use-toast";
-import { Lightbulb, MessageSquare, MessageSquarePlus, BookOpen, List, PenTool } from "lucide-react";
+import { Lightbulb, MessageSquare, MessageSquarePlus, BookOpen, List, PenTool, UserSearch } from "lucide-react";
 
 const PointerGlow = () => {
   useEffect(() => {
@@ -150,6 +150,18 @@ const Index = () => {
                     <PenTool className="h-8 w-8 text-primary mb-2" />
                     <CardTitle>Content Creation</CardTitle>
                     <CardDescription>Plan, research, and create content with AI assistance.</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+
+            {(hasRole('admin') || hasRole('super_admin') || hasRole('sales')) && (
+              <Link to="/lead-research" className="block">
+                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardHeader>
+                    <UserSearch className="h-8 w-8 text-primary mb-2" />
+                    <CardTitle>Lead Research</CardTitle>
+                    <CardDescription>Research leads from Salesforce, LinkedIn, or manual input.</CardDescription>
                   </CardHeader>
                 </Card>
               </Link>
