@@ -107,7 +107,7 @@ export const ContentPlanTable: React.FC<ContentPlanTableProps> = ({
   }
 
   return (
-    <div className="border rounded-lg overflow-x-auto">
+    <div className="border rounded-lg">
       <Table>
         <TableHeader>
           <TableRow>
