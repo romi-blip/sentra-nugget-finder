@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
       .select('id, reddit_id, link, keyword_id, title')
       .not('keyword_id', 'is', null)
       .or('pub_date.is.null,author.is.null')
-      .limit(50); // Limit batch size for Apify
+      .limit(50);
 
     if (fetchError) {
       console.error('Error fetching posts:', fetchError);
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const urlsToScrape = postsNeedingRefresh.map(post => ({ url: post.link }));
     console.log(`Scraping ${urlsToScrape.length} Reddit URLs via Apify...`);
 
-    // Start Apify actor run
+    // Start Apify actor run with correct input schema
     const runResponse = await fetch(
       `https://api.apify.com/v2/acts/crawlerbros~reddit-scraper/runs?token=${apifyToken}`,
       {
@@ -54,10 +54,8 @@ Deno.serve(async (req) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startUrls: urlsToScrape,
-          maxItems: urlsToScrape.length,
-          proxy: {
-            useApifyProxy: true,
-            apifyProxyGroups: ['RESIDENTIAL']
+          proxyConfiguration: {
+            useApifyProxy: true
           }
         })
       }
@@ -66,7 +64,7 @@ Deno.serve(async (req) => {
     if (!runResponse.ok) {
       const errorText = await runResponse.text();
       console.error('Failed to start Apify run:', errorText);
-      throw new Error(`Failed to start Apify run: ${runResponse.status}`);
+      throw new Error(`Failed to start Apify run: ${runResponse.status} - ${errorText}`);
     }
 
     const runData = await runResponse.json();
@@ -76,10 +74,10 @@ Deno.serve(async (req) => {
     // Poll for completion (max 3 minutes)
     let runStatus = 'RUNNING';
     let attempts = 0;
-    const maxAttempts = 36; // 36 * 5 seconds = 3 minutes
+    const maxAttempts = 36;
 
     while (runStatus === 'RUNNING' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       const statusResponse = await fetch(
         `https://api.apify.com/v2/actor-runs/${runId}?token=${apifyToken}`
@@ -106,7 +104,6 @@ Deno.serve(async (req) => {
     // Create a map of reddit_id to scraped data
     const scrapedDataMap = new Map();
     for (const item of items) {
-      // Extract reddit_id from the item's URL or id field
       const redditId = item.id || item.postId;
       if (redditId) {
         scrapedDataMap.set(redditId, item);
@@ -127,7 +124,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Parse the date - Apify returns various date formats
         let pubDate = null;
         if (scrapedData.createdAt) {
           pubDate = new Date(scrapedData.createdAt).toISOString();
