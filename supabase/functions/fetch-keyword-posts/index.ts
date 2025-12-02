@@ -81,7 +81,8 @@ Deno.serve(async (req) => {
               resultsPerPage: 20,
               mobileResults: false,
               countryCode: 'us',
-              languageCode: 'en'
+              languageCode: 'en',
+              tbs: 'qdr:m3' // Past 3 months filter
             })
           }
         );
@@ -143,12 +144,13 @@ Deno.serve(async (req) => {
         
         console.log(`Processing ${searchResults.length} search pages for keyword "${keyword.keyword}"`);
         
-        // Process each search page
+        // Step 1: Collect all Reddit URLs from Google search results
+        const urlsBySubreddit = new Map<string, Array<{ url: string; redditId: string; googleTitle: string; googleDescription: string }>>();
+        
         for (const searchPage of searchResults) {
           const organicResults = searchPage.organicResults || [];
           console.log(`Found ${organicResults.length} organic results in search page`);
           
-          // Process each organic result (actual Reddit post URL)
           for (const result of organicResults) {
             const url = result.url;
             if (!url) continue;
@@ -168,7 +170,91 @@ Deno.serve(async (req) => {
               .eq('reddit_id', redditId)
               .single();
 
-            if (existing) continue;
+            if (existing) {
+              console.log(`Post ${redditId} already exists, skipping`);
+              continue;
+            }
+
+            // Group by subreddit for batch fetching
+            if (!urlsBySubreddit.has(subredditName)) {
+              urlsBySubreddit.set(subredditName, []);
+            }
+            
+            urlsBySubreddit.get(subredditName)!.push({
+              url,
+              redditId,
+              googleTitle: result.title || '',
+              googleDescription: result.description || ''
+            });
+          }
+        }
+
+        console.log(`Found ${urlsBySubreddit.size} subreddits with new posts to fetch`);
+
+        // Step 2: For each subreddit, fetch actual Reddit post data
+        for (const [subredditName, posts] of urlsBySubreddit.entries()) {
+          try {
+            console.log(`Fetching ${posts.length} posts from r/${subredditName}`);
+
+            // Call Apify reddit-scraper
+            const scraperRunResponse = await fetch(
+              `https://api.apify.com/v2/acts/crawlerbros~reddit-scraper/runs?token=${apifyToken}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  subreddits: [subredditName],
+                  maxPosts: 100,
+                  sort: 'new'
+                })
+              }
+            );
+
+            if (!scraperRunResponse.ok) {
+              console.error(`Apify scraper run failed for r/${subredditName}`);
+              continue;
+            }
+
+            const scraperRunData = await scraperRunResponse.json();
+            const scraperRunId = scraperRunData.data.id;
+
+            // Wait for scraper to complete
+            let scraperAttempts = 0;
+            let scraperStatus = 'RUNNING';
+            let scraperDatasetId: string | null = null;
+            
+            while (scraperStatus === 'RUNNING' && scraperAttempts < 40) {
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              const scraperStatusResponse = await fetch(
+                `https://api.apify.com/v2/acts/crawlerbros~reddit-scraper/runs/${scraperRunId}?token=${apifyToken}`
+              );
+              const scraperStatusData = await scraperStatusResponse.json();
+              scraperStatus = scraperStatusData.data.status;
+              if (!scraperDatasetId && scraperStatusData.data.defaultDatasetId) {
+                scraperDatasetId = scraperStatusData.data.defaultDatasetId;
+              }
+              scraperAttempts++;
+            }
+
+            if (scraperStatus !== 'SUCCEEDED' || !scraperDatasetId) {
+              console.error(`Scraper did not succeed for r/${subredditName}: ${scraperStatus}`);
+              continue;
+            }
+
+            // Get Reddit post data from dataset
+            const scraperItemsUrl = new URL(`https://api.apify.com/v2/datasets/${scraperDatasetId}/items`);
+            scraperItemsUrl.searchParams.set('token', apifyToken);
+            scraperItemsUrl.searchParams.set('clean', 'true');
+            scraperItemsUrl.searchParams.set('format', 'json');
+
+            const scraperDataResponse = await fetch(scraperItemsUrl.toString());
+            if (!scraperDataResponse.ok) {
+              console.error(`Failed to fetch scraper dataset for r/${subredditName}`);
+              continue;
+            }
+
+            const scraperData = await scraperDataResponse.json();
+            console.log(`Fetched ${scraperData.length} posts from r/${subredditName} scraper`);
 
             // Get or create subreddit entry
             let subredditId = null;
@@ -183,39 +269,82 @@ Deno.serve(async (req) => {
               subredditId = subredditData.id;
             }
 
-            // Insert new post
-            const { data: insertedPost, error: insertError } = await supabase
-              .from('reddit_posts')
-              .insert({
-                reddit_id: redditId,
-                subreddit_id: subredditId,
-                keyword_id: keyword.id,
-                link: url,
-                title: result.title || 'No title',
-                author: null,
-                pub_date: null,
-                upvotes: 0,
-                comment_count: 0,
-                content: result.description || null,
-                content_snippet: result.description ? result.description.substring(0, 500) : null,
-              })
-              .select()
-              .single();
+            // Step 3: Match Google URLs to actual Reddit posts and insert
+            for (const { url, redditId, googleTitle, googleDescription } of posts) {
+              // Find matching post in scraper data
+              const actualPost = scraperData.find((item: any) => 
+                item.id === redditId || item.name === `t3_${redditId}`
+              );
 
-            if (insertError) {
-              console.error('Error inserting post:', insertError);
-              continue;
+              if (!actualPost) {
+                console.log(`Could not find Reddit data for post ${redditId}, using Google data`);
+                // Fallback to Google data if Reddit scraper didn't return this post
+                const { data: insertedPost, error: insertError } = await supabase
+                  .from('reddit_posts')
+                  .insert({
+                    reddit_id: redditId,
+                    subreddit_id: subredditId,
+                    keyword_id: keyword.id,
+                    link: url,
+                    title: googleTitle || 'No title',
+                    author: null,
+                    pub_date: null,
+                    upvotes: 0,
+                    comment_count: 0,
+                    content: googleDescription || null,
+                    content_snippet: googleDescription ? googleDescription.substring(0, 500) : null,
+                  })
+                  .select()
+                  .single();
+
+                if (!insertError && insertedPost) {
+                  newPostsToAnalyze.push({ postId: insertedPost.id, post: insertedPost });
+                  keywordNewPosts++;
+                  totalNewPosts++;
+                }
+                continue;
+              }
+
+              // Insert with full Reddit data
+              const pubDate = actualPost.created_utc ? new Date(actualPost.created_utc * 1000).toISOString() : null;
+              
+              const { data: insertedPost, error: insertError } = await supabase
+                .from('reddit_posts')
+                .insert({
+                  reddit_id: redditId,
+                  subreddit_id: subredditId,
+                  keyword_id: keyword.id,
+                  link: url,
+                  title: actualPost.title || googleTitle || 'No title',
+                  author: actualPost.author || null,
+                  pub_date: pubDate,
+                  iso_date: pubDate,
+                  upvotes: actualPost.score || 0,
+                  comment_count: actualPost.num_comments || 0,
+                  content: actualPost.selftext || googleDescription || null,
+                  content_snippet: actualPost.selftext ? actualPost.selftext.substring(0, 500) : (googleDescription ? googleDescription.substring(0, 500) : null),
+                })
+                .select()
+                .single();
+
+              if (insertError) {
+                console.error('Error inserting post:', insertError);
+                continue;
+              }
+
+              if (insertedPost) {
+                newPostsToAnalyze.push({
+                  postId: insertedPost.id,
+                  post: insertedPost
+                });
+                keywordNewPosts++;
+                totalNewPosts++;
+                console.log(`Inserted new post with full data: ${insertedPost.title}`);
+              }
             }
 
-            if (insertedPost) {
-              newPostsToAnalyze.push({
-                postId: insertedPost.id,
-                post: insertedPost
-              });
-              keywordNewPosts++;
-              totalNewPosts++;
-              console.log(`Inserted new post: ${insertedPost.title}`);
-            }
+          } catch (subredditError) {
+            console.error(`Error processing subreddit ${subredditName}:`, subredditError);
           }
         }
 
