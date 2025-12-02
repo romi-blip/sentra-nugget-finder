@@ -100,27 +100,65 @@ Deno.serve(async (req) => {
     );
     const items = await datasetResponse.json();
     console.log(`Retrieved ${items.length} items from Apify`);
-
-    // Create a map of reddit_id to scraped data
-    const scrapedDataMap = new Map();
-    for (const item of items) {
-      // trudax/reddit-scraper-lite returns different field names
-      const redditId = item.id || item.postId || item.name?.replace('t3_', '');
-      if (redditId) {
-        scrapedDataMap.set(redditId, item);
-      }
+    
+    // Log sample item structure for debugging
+    if (items.length > 0) {
+      console.log('Sample Apify item keys:', Object.keys(items[0]));
+      console.log('Sample Apify item:', JSON.stringify(items[0]).substring(0, 500));
     }
 
+    // Create a map of reddit_id to scraped data - try multiple approaches
+    const scrapedDataMap = new Map();
+    const urlToDataMap = new Map();
+    
+    for (const item of items) {
+      // Try to extract reddit_id from various possible fields
+      let redditId = item.id || item.postId || item.name?.replace('t3_', '');
+      
+      // Also try to extract from URL field if present
+      if (!redditId && item.url) {
+        const urlMatch = item.url.match(/\/comments\/([a-z0-9]+)/i);
+        if (urlMatch) {
+          redditId = urlMatch[1];
+        }
+      }
+      
+      // Also try permalink
+      if (!redditId && item.permalink) {
+        const permalinkMatch = item.permalink.match(/\/comments\/([a-z0-9]+)/i);
+        if (permalinkMatch) {
+          redditId = permalinkMatch[1];
+        }
+      }
+      
+      if (redditId) {
+        console.log(`Mapped reddit_id: ${redditId}`);
+        scrapedDataMap.set(redditId, item);
+      }
+      
+      // Also create URL-based mapping as fallback
+      if (item.url) {
+        urlToDataMap.set(item.url, item);
+      }
+    }
+    
+    console.log(`ScrapedDataMap size: ${scrapedDataMap.size}, UrlToDataMap size: ${urlToDataMap.size}`);
     // Update posts with scraped data
     let updatedCount = 0;
     let errorCount = 0;
 
     for (const post of postsNeedingRefresh) {
       try {
-        const scrapedData = scrapedDataMap.get(post.reddit_id);
+        // Try reddit_id first, then URL-based lookup
+        let scrapedData = scrapedDataMap.get(post.reddit_id);
         
         if (!scrapedData) {
-          console.warn(`No scraped data found for post ${post.id} (reddit_id: ${post.reddit_id})`);
+          // Try URL-based lookup
+          scrapedData = urlToDataMap.get(post.link);
+        }
+        
+        if (!scrapedData) {
+          console.warn(`No scraped data found for post ${post.id} (reddit_id: ${post.reddit_id}, link: ${post.link})`);
           errorCount++;
           continue;
         }
