@@ -219,7 +219,7 @@ serve(async (req) => {
               
               // Invoke analyze-reddit-post function
               const { error: analyzeError } = await supabase.functions.invoke('analyze-reddit-post', {
-                body: { postId, post }
+                body: { post_id: postId, post }
               });
               
               if (analyzeError) {
