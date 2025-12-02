@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import {
   Dialog,
   DialogContent,
@@ -123,7 +124,7 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
 
           {post.content && (
             <div className="prose prose-sm max-w-none">
-              <div dangerouslySetInnerHTML={{ __html: post.content }} />
+              <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }} />
             </div>
           )}
 
