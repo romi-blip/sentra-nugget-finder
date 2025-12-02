@@ -250,78 +250,88 @@ const Engagement = () => {
           </Card>
         </div>
 
-        <Tabs defaultValue="subreddits" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="subreddits">Subreddits</TabsTrigger>
-            <TabsTrigger value="keywords">Keywords</TabsTrigger>
-          </TabsList>
+        <Collapsible defaultOpen={false}>
+          <Card className="p-4">
+            <CollapsibleTrigger className="flex items-center justify-between w-full group">
+              <h2 className="text-lg font-semibold">Manage Tracked Sources</h2>
+              <ChevronDown className="h-5 w-5 transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-4">
+              <Tabs defaultValue="subreddits" className="w-full">
+                <TabsList className="grid w-full max-w-md grid-cols-2">
+                  <TabsTrigger value="subreddits">Subreddits</TabsTrigger>
+                  <TabsTrigger value="keywords">Keywords</TabsTrigger>
+                </TabsList>
 
-          <TabsContent value="subreddits" className="space-y-4">
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Add Subreddit</h2>
-              <SubredditManager 
-                onAdd={handleAddSubreddit}
-                isAdding={addSubreddit.isPending}
-              />
-            </Card>
+                <TabsContent value="subreddits" className="space-y-4">
+                  <Card className="p-6">
+                    <h2 className="text-xl font-semibold mb-4">Add Subreddit</h2>
+                    <SubredditManager 
+                      onAdd={handleAddSubreddit}
+                      isAdding={addSubreddit.isPending}
+                    />
+                  </Card>
 
-            {subreddits.length > 0 && (
-              <Collapsible defaultOpen>
-                <Card className="p-6">
-                  <CollapsibleTrigger className="flex items-center justify-between w-full group">
-                    <h2 className="text-xl font-semibold">Tracked Subreddits ({subreddits.length})</h2>
-                    <ChevronDown className="h-5 w-5 transition-transform group-data-[state=open]:rotate-180" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {subreddits.map((subreddit) => (
-                        <SubredditCard
-                          key={subreddit.id}
-                          subreddit={subreddit}
-                          onToggleActive={handleToggleActive}
-                          onRemove={handleRemoveSubreddit}
-                        />
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            )}
-          </TabsContent>
+                  {subreddits.length > 0 && (
+                    <Collapsible defaultOpen>
+                      <Card className="p-6">
+                        <CollapsibleTrigger className="flex items-center justify-between w-full group">
+                          <h2 className="text-xl font-semibold">Tracked Subreddits ({subreddits.length})</h2>
+                          <ChevronDown className="h-5 w-5 transition-transform group-data-[state=open]:rotate-180" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {subreddits.map((subreddit) => (
+                              <SubredditCard
+                                key={subreddit.id}
+                                subreddit={subreddit}
+                                onToggleActive={handleToggleActive}
+                                onRemove={handleRemoveSubreddit}
+                              />
+                            ))}
+                          </div>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  )}
+                </TabsContent>
 
-          <TabsContent value="keywords" className="space-y-4">
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Add Keyword</h2>
-              <KeywordManager 
-                onAdd={handleAddKeyword}
-                isAdding={addKeyword.isPending}
-              />
-            </Card>
+                <TabsContent value="keywords" className="space-y-4">
+                  <Card className="p-6">
+                    <h2 className="text-xl font-semibold mb-4">Add Keyword</h2>
+                    <KeywordManager 
+                      onAdd={handleAddKeyword}
+                      isAdding={addKeyword.isPending}
+                    />
+                  </Card>
 
-            {keywords.length > 0 && (
-              <Collapsible defaultOpen>
-                <Card className="p-6">
-                  <CollapsibleTrigger className="flex items-center justify-between w-full group">
-                    <h2 className="text-xl font-semibold">Tracked Keywords ({keywords.length})</h2>
-                    <ChevronDown className="h-5 w-5 transition-transform group-data-[state=open]:rotate-180" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {keywords.map((keyword) => (
-                        <KeywordCard
-                          key={keyword.id}
-                          keyword={keyword}
-                          onToggle={handleToggleKeywordActive}
-                          onRemove={handleRemoveKeyword}
-                        />
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            )}
-          </TabsContent>
-        </Tabs>
+                  {keywords.length > 0 && (
+                    <Collapsible defaultOpen>
+                      <Card className="p-6">
+                        <CollapsibleTrigger className="flex items-center justify-between w-full group">
+                          <h2 className="text-xl font-semibold">Tracked Keywords ({keywords.length})</h2>
+                          <ChevronDown className="h-5 w-5 transition-transform group-data-[state=open]:rotate-180" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {keywords.map((keyword) => (
+                              <KeywordCard
+                                key={keyword.id}
+                                keyword={keyword}
+                                onToggle={handleToggleKeywordActive}
+                                onRemove={handleRemoveKeyword}
+                              />
+                            ))}
+                          </div>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         <div>
           <div className="flex items-center justify-between mb-4">
