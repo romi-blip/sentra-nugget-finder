@@ -13,9 +13,9 @@ Deno.serve(async (req) => {
   try {
     // Validate authentication (allows both user JWT and service role key)
     const authResult = await validateAuth(req);
-    if (!authResult.isValid) {
+    if (!authResult.valid) {
       return new Response(
-        JSON.stringify({ error: authResult.error }),
+        JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
