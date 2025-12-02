@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
               console.log(`Auto-analyzing keyword post: ${post.title}`);
               
               const { error: analyzeError } = await supabase.functions.invoke('analyze-reddit-post', {
-                body: { postId, post }
+                body: { post_id: postId, post }
               });
               
               if (analyzeError) {
