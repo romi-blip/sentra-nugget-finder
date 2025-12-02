@@ -46,6 +46,7 @@ const Engagement = () => {
     isLoading: isLoadingKeywords,
     addKeyword,
     toggleActive: toggleKeywordActive,
+    updateNegativeKeywords,
     removeKeyword
   } = useTrackedKeywords();
   
@@ -96,6 +97,10 @@ const Engagement = () => {
 
   const handleToggleKeywordActive = (id: string, isActive: boolean) => {
     toggleKeywordActive.mutate({ id, isActive });
+  };
+
+  const handleUpdateNegativeKeywords = (id: string, negativeKeywords: string[]) => {
+    updateNegativeKeywords.mutate({ id, negativeKeywords });
   };
 
   const handleRemoveKeyword = (id: string) => {
@@ -320,6 +325,7 @@ const Engagement = () => {
                                 keyword={keyword}
                                 onToggle={handleToggleKeywordActive}
                                 onRemove={handleRemoveKeyword}
+                                onUpdateNegativeKeywords={handleUpdateNegativeKeywords}
                               />
                             ))}
                           </div>

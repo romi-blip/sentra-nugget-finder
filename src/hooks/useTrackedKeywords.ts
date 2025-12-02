@@ -9,6 +9,7 @@ export interface TrackedKeyword {
   is_active: boolean;
   last_fetched_at: string | null;
   fetch_frequency_minutes: number;
+  negative_keywords: string[];
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +41,7 @@ export function useTrackedKeywords() {
           keyword,
           user_id: user.id,
           is_active: true,
+          negative_keywords: [],
         })
         .select()
         .single();
@@ -78,6 +80,24 @@ export function useTrackedKeywords() {
     },
   });
 
+  const updateNegativeKeywords = useMutation({
+    mutationFn: async ({ id, negativeKeywords }: { id: string; negativeKeywords: string[] }) => {
+      const { error } = await supabase
+        .from('tracked_keywords')
+        .update({ negative_keywords: negativeKeywords })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tracked-keywords'] });
+      toast.success('Negative keywords updated');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update negative keywords: ${error.message}`);
+    },
+  });
+
   const removeKeyword = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -98,6 +118,7 @@ export function useTrackedKeywords() {
     isLoading,
     addKeyword,
     toggleActive,
+    updateNegativeKeywords,
     removeKeyword,
   };
 }

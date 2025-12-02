@@ -1635,6 +1635,7 @@ export type Database = {
           is_active: boolean | null
           keyword: string
           last_fetched_at: string | null
+          negative_keywords: string[] | null
           updated_at: string | null
           user_id: string
         }
@@ -1645,6 +1646,7 @@ export type Database = {
           is_active?: boolean | null
           keyword: string
           last_fetched_at?: string | null
+          negative_keywords?: string[] | null
           updated_at?: string | null
           user_id: string
         }
@@ -1655,6 +1657,7 @@ export type Database = {
           is_active?: boolean | null
           keyword?: string
           last_fetched_at?: string | null
+          negative_keywords?: string[] | null
           updated_at?: string | null
           user_id?: string
         }
