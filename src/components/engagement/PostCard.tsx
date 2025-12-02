@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ExternalLink, MessageSquare, CheckCircle, RefreshCw, Loader2, ArrowUp } from 'lucide-react';
+import { ExternalLink, MessageSquare, CheckCircle, RefreshCw, Loader2, ArrowUp, Trash2 } from 'lucide-react';
 import { useRedditActions } from '@/hooks/useRedditActions';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -13,15 +13,16 @@ interface PostCardProps {
   onSelectChange?: (selected: boolean) => void;
   selectionMode?: boolean;
   isFetchingComments?: boolean;
+  onDelete?: (postId: string) => void;
 }
 
-export function PostCard({ post, onClick, isSelected, onSelectChange, selectionMode, isFetchingComments }: PostCardProps) {
+export function PostCard({ post, onClick, isSelected, onSelectChange, selectionMode, isFetchingComments, onDelete }: PostCardProps) {
   // Handle both object and array responses for post_reviews (one-to-one relationship)
   const review = Array.isArray(post.post_reviews) 
     ? post.post_reviews?.[0] 
     : post.post_reviews;
   const reply = post.suggested_replies?.[0];
-  const { analyzePost } = useRedditActions();
+  const { analyzePost, deletePost } = useRedditActions();
 
   // Check if comments are likely being fetched in background
   // (high priority posts with recent reviews but no comments yet)
@@ -56,6 +57,15 @@ export function PostCard({ post, onClick, isSelected, onSelectChange, selectionM
   const handleReanalyze = (e: React.MouseEvent) => {
     e.stopPropagation();
     analyzePost.mutate({ postId: post.id, post });
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete) {
+      onDelete(post.id);
+    } else {
+      deletePost.mutate(post.id);
+    }
   };
 
   return (
@@ -132,6 +142,16 @@ export function PostCard({ post, onClick, isSelected, onSelectChange, selectionM
               title={review ? "Re-analyze post" : "Analyze post"}
             >
               <RefreshCw className={`h-4 w-4 ${analyzePost.isPending ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={handleDelete}
+              disabled={deletePost.isPending}
+              title="Delete post"
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" asChild onClick={(e) => e.stopPropagation()}>
               <a href={post.link} target="_blank" rel="noopener noreferrer">

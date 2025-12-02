@@ -110,10 +110,63 @@ export function useRedditActions() {
     },
   });
 
+  const deletePost = useMutation({
+    mutationFn: async (postId: string) => {
+      const { error } = await supabase
+        .from('reddit_posts')
+        .delete()
+        .eq('id', postId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      toast({
+        title: "Post deleted",
+        description: "Successfully deleted the post.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete post",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePosts = useMutation({
+    mutationFn: async (postIds: string[]) => {
+      const { error } = await supabase
+        .from('reddit_posts')
+        .delete()
+        .in('id', postIds);
+      
+      if (error) throw error;
+      return postIds.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      toast({
+        title: "Posts deleted",
+        description: `Successfully deleted ${count} posts.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete posts",
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     refreshPosts,
     analyzePost,
     generateReply,
     refreshKeywordPosts,
+    deletePost,
+    deletePosts,
   };
 }
