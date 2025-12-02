@@ -315,13 +315,39 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Start automatic analysis of new posts in the background
-    if (newPostsToAnalyze.length > 0) {
-      console.log(`Starting automatic analysis for ${newPostsToAnalyze.length} new keyword posts...`);
+    // Also find existing unreviewed keyword posts to analyze
+    const keywordIds = keywords.map(k => k.id);
+    const { data: existingUnreviewedPosts } = await supabase
+      .from('reddit_posts')
+      .select(`
+        id, reddit_id, title, content, content_snippet, author, 
+        pub_date, upvotes, comment_count, subreddit_id, keyword_id,
+        post_reviews!left(id)
+      `)
+      .in('keyword_id', keywordIds)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    // Filter to posts without reviews
+    const postsNeedingAnalysis = (existingUnreviewedPosts || []).filter(
+      post => !post.post_reviews || post.post_reviews.length === 0
+    );
+
+    // Combine new posts and existing unreviewed posts
+    const allPostsToAnalyze = [
+      ...newPostsToAnalyze,
+      ...postsNeedingAnalysis
+        .filter(p => !newPostsToAnalyze.some(np => np.postId === p.id))
+        .map(p => ({ postId: p.id, post: p }))
+    ];
+
+    // Start automatic analysis in the background
+    if (allPostsToAnalyze.length > 0) {
+      console.log(`Starting automatic analysis for ${allPostsToAnalyze.length} keyword posts (${newPostsToAnalyze.length} new, ${postsNeedingAnalysis.length} existing unreviewed)...`);
       
       EdgeRuntime.waitUntil(
         (async () => {
-          for (const { postId, post } of newPostsToAnalyze) {
+          for (const { postId, post } of allPostsToAnalyze) {
             try {
               console.log(`Auto-analyzing keyword post: ${post.title}`);
               
@@ -335,12 +361,12 @@ Deno.serve(async (req) => {
                 console.log(`Successfully analyzed keyword post: ${post.title}`);
               }
               
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              await new Promise(resolve => setTimeout(resolve, 1500));
             } catch (err) {
               console.error(`Error auto-analyzing post ${postId}:`, err);
             }
           }
-          console.log('Completed automatic analysis of all new keyword posts');
+          console.log('Completed automatic analysis of all keyword posts');
         })()
       );
     }
