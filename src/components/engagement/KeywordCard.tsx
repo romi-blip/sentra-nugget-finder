@@ -1,9 +1,10 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tag, Trash2, Clock } from 'lucide-react';
+import { Tag, Trash2, Clock, RefreshCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { TrackedKeyword } from '@/hooks/useTrackedKeywords';
+import { useRedditActions } from '@/hooks/useRedditActions';
 
 interface KeywordCardProps {
   keyword: TrackedKeyword;
@@ -12,6 +13,7 @@ interface KeywordCardProps {
 }
 
 export function KeywordCard({ keyword, onToggle, onRemove }: KeywordCardProps) {
+  const { refreshKeywordPosts } = useRedditActions();
   return (
     <Card className={!keyword.is_active ? 'opacity-60' : ''}>
       <CardContent className="p-4">
@@ -34,6 +36,15 @@ export function KeywordCard({ keyword, onToggle, onRemove }: KeywordCardProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => refreshKeywordPosts.mutate()}
+              disabled={refreshKeywordPosts.isPending}
+              title="Refresh keyword posts"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshKeywordPosts.isPending ? 'animate-spin' : ''}`} />
+            </Button>
             <Switch
               checked={keyword.is_active}
               onCheckedChange={(checked) => onToggle(keyword.id, checked)}

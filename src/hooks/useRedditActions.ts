@@ -87,9 +87,33 @@ export function useRedditActions() {
     },
   });
 
+  const refreshKeywordPosts = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('fetch-keyword-posts');
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      queryClient.invalidateQueries({ queryKey: ['tracked-keywords'] });
+      toast({
+        title: "Keyword posts refreshed",
+        description: data?.message || "Successfully fetched keyword posts.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to refresh keyword posts",
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     refreshPosts,
     analyzePost,
     generateReply,
+    refreshKeywordPosts,
   };
 }
