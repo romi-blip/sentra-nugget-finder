@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import SEO from '@/components/SEO';
 import { useTrackedSubreddits } from '@/hooks/useTrackedSubreddits';
-import { useRedditPosts } from '@/hooks/useRedditPosts';
+import { useRedditPosts, type RedditPost } from '@/hooks/useRedditPosts';
 import { useRedditActions } from '@/hooks/useRedditActions';
 import { SubredditManager } from '@/components/engagement/SubredditManager';
 import { SubredditCard } from '@/components/engagement/SubredditCard';
@@ -58,14 +58,14 @@ const Engagement = () => {
   });
 
   // Apply client-side sorting
-  const posts = [...rawPosts].sort((a: any, b: any) => {
+  const posts: RedditPost[] = [...rawPosts].sort((a, b) => {
     switch (sortBy) {
       case 'comments':
         return (b.comment_count || 0) - (a.comment_count || 0);
       case 'priority':
         const priorityOrder = { high_priority: 3, medium_priority: 2, low_priority: 1 };
-        const aReview = Array.isArray(a.post_reviews) ? a.post_reviews[0] : a.post_reviews;
-        const bReview = Array.isArray(b.post_reviews) ? b.post_reviews[0] : b.post_reviews;
+        const aReview = Array.isArray((a as any).post_reviews) ? (a as any).post_reviews[0] : (a as any).post_reviews;
+        const bReview = Array.isArray((b as any).post_reviews) ? (b as any).post_reviews[0] : (b as any).post_reviews;
         const aPriority = priorityOrder[aReview?.recommendation as keyof typeof priorityOrder] || 0;
         const bPriority = priorityOrder[bReview?.recommendation as keyof typeof priorityOrder] || 0;
         return bPriority - aPriority;

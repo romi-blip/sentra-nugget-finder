@@ -15,6 +15,9 @@ export interface RedditPost {
   created_at: string;
   updated_at: string;
   upvotes: number | null;
+  comment_count: number | null;
+  comments_fetched_at: string | null;
+  top_comments: any | null;
 }
 
 interface UseRedditPostsOptions {
@@ -26,7 +29,10 @@ interface UseRedditPostsOptions {
 }
 
 export function useRedditPosts(options: UseRedditPostsOptions = {}) {
-  const { data: postsData, isLoading } = useQuery({
+  const { data: postsData, isLoading } = useQuery<{
+    posts: RedditPost[];
+    totalCount: number;
+  }>({
     queryKey: ['reddit-posts', options],
     queryFn: async () => {
       const page = options.page || 1;
@@ -34,38 +40,60 @@ export function useRedditPosts(options: UseRedditPostsOptions = {}) {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
+      // Build base query with appropriate joins based on filters
+      let selectClause = `
+        *,
+        post_reviews (*),
+        suggested_replies (*)
+      `;
+
+      // Use inner join for priority filter to exclude posts without matching reviews
+      if (options.priority && options.priority !== 'all') {
+        selectClause = `
+          *,
+          post_reviews!inner (*),
+          suggested_replies (*)
+        `;
+      }
+
       let query = supabase
         .from('reddit_posts')
-        .select(`
-          *,
-          post_reviews (*),
-          suggested_replies (*)
-        `, { count: 'exact' })
-        .order('pub_date', { ascending: false })
-        .range(from, to);
+        .select(selectClause, { count: 'exact' })
+        .order('pub_date', { ascending: false });
 
+      // Apply subreddit filter
       if (options.subredditIds && options.subredditIds.length > 0) {
         query = query.in('subreddit_id', options.subredditIds);
       }
+
+      // Apply priority filter at database level
+      if (options.priority && options.priority !== 'all') {
+        query = query.eq('post_reviews.recommendation', options.priority);
+      }
+
+      // Apply status filters at database level where possible
+      if (options.status) {
+        if (options.status === 'high_engagement') {
+          query = query.gte('comment_count', 50);
+        }
+        // Note: no_reply, has_reply, and posted filters need client-side handling
+        // due to complex relationship logic with suggested_replies
+      }
+
+      // Apply pagination after all filters
+      query = query.range(from, to);
 
       const { data, error, count } = await query;
       
       if (error) throw error;
       
-      // Filter by priority and status if needed
-      let filteredData = data;
+      // Cast data to proper type (using unknown as intermediate to satisfy TypeScript)
+      const typedData = (data || []) as unknown as RedditPost[];
       
-      // Normalize review to handle both object and array responses
-      if (options.priority && options.priority !== 'all') {
-        filteredData = filteredData.filter((post: any) => {
-          const review = post.post_reviews
-            ? (Array.isArray(post.post_reviews) ? post.post_reviews[0] : post.post_reviews)
-            : null;
-          return review?.recommendation === options.priority;
-        });
-      }
+      // Apply remaining client-side filters for complex reply logic
+      let filteredData = typedData;
       
-      if (options.status) {
+      if (options.status && options.status !== 'high_engagement') {
         if (options.status === 'no_reply') {
           filteredData = filteredData.filter((post: any) => 
             !post.suggested_replies || post.suggested_replies.length === 0
@@ -79,10 +107,6 @@ export function useRedditPosts(options: UseRedditPostsOptions = {}) {
           filteredData = filteredData.filter((post: any) => 
             post.suggested_replies && post.suggested_replies.length > 0 && 
             post.suggested_replies[0]?.status === 'posted'
-          );
-        } else if (options.status === 'high_engagement') {
-          filteredData = filteredData.filter((post: any) => 
-            post.comment_count >= 50
           );
         }
       }
