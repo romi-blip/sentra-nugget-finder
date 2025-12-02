@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts';
 
 const REDDIT_POST_REGEX = /(?:https?:\/\/)?(?:www\.)?reddit\.com\/r\/([^\/]+)\/comments\/([a-zA-Z0-9]+)(?:\/([^\/\?]+))?/;
 
@@ -9,6 +9,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate authentication (user JWT or service role for internal calls)
+    const auth = await validateAuth(req);
+    if (!auth.valid) {
+      return unauthorizedResponse();
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const apifyToken = Deno.env.get('APIFY_API_TOKEN');
@@ -19,31 +25,23 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get user from auth header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'No authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Get user ID from auth result (for user-specific queries)
+    const userId = auth.userId;
+    if (!userId && !auth.isServiceRole) {
+      return unauthorizedResponse();
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Fetch active keywords for this user
-    const { data: keywords, error: keywordsError } = await supabase
+    // Fetch active keywords for this user (or all if service role)
+    let keywordQuery = supabase
       .from('tracked_keywords')
       .select('*')
-      .eq('user_id', user.id)
       .eq('is_active', true);
+    
+    if (userId) {
+      keywordQuery = keywordQuery.eq('user_id', userId);
+    }
+    
+    const { data: keywords, error: keywordsError } = await keywordQuery;
 
     if (keywordsError) {
       console.error('Error fetching keywords:', keywordsError);

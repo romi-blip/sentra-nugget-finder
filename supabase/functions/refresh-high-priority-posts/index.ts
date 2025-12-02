@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.54.0';
-import { corsHeaders } from '../_shared/cors.ts';
+import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -10,6 +10,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate authentication (user JWT or service role for internal calls)
+    const auth = await validateAuth(req);
+    if (!auth.valid) {
+      return unauthorizedResponse();
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     console.log('Starting refresh of high priority posts...');
