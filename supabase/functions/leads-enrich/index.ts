@@ -45,11 +45,57 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
+  // Verify authentication
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) {
+    console.error('Missing Authorization header')
+    return new Response(
+      JSON.stringify({ success: false, error: 'Missing authorization header' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
   // Init Supabase admin client
   const supabaseClient = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   )
+
+  // Create auth client to verify user
+  const authClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+  )
+
+  // Verify the JWT token
+  const token = authHeader.replace('Bearer ', '')
+  const { data: { user }, error: authError } = await authClient.auth.getUser(token)
+  
+  if (authError || !user) {
+    console.error('Invalid token:', authError?.message)
+    return new Response(
+      JSON.stringify({ success: false, error: 'Invalid or expired token' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // Check if user has admin or super_admin role
+  const { data: userRole, error: roleError } = await supabaseClient
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', user.id)
+    .in('role', ['admin', 'super_admin'])
+    .single()
+
+  if (roleError || !userRole) {
+    console.error('User lacks required role:', user.id)
+    return new Response(
+      JSON.stringify({ success: false, error: 'Insufficient permissions. Admin or super_admin role required.' }),
+      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  console.log(`Authenticated user ${user.id} with role ${userRole.role}`)
 
   try {
     const { event_id } = await req.json()

@@ -75,7 +75,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.leads-enrich]
-verify_jwt = false
+verify_jwt = true
 
 [functions.fetch-reddit-posts]
 verify_jwt = false
