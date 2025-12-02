@@ -10,6 +10,7 @@ export interface TrackedKeyword {
   last_fetched_at: string | null;
   fetch_frequency_minutes: number;
   negative_keywords: string[];
+  search_comments: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -113,6 +114,40 @@ export function useTrackedKeywords() {
     },
   });
 
+  const toggleCommentSearch = useMutation({
+    mutationFn: async ({ id, searchComments }: { id: string; searchComments: boolean }) => {
+      const { error } = await supabase
+        .from('tracked_keywords')
+        .update({ search_comments: searchComments })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tracked-keywords'] });
+      toast.success('Comment search setting updated');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update comment search: ${error.message}`);
+    },
+  });
+
+  const refreshCommentSearch = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('fetch-keyword-comments');
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['tracked-keywords'] });
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      toast.success(`Comment search complete: ${data?.totalNewPosts || 0} new posts found`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to search comments: ${error.message}`);
+    },
+  });
+
   return {
     keywords,
     isLoading,
@@ -120,5 +155,7 @@ export function useTrackedKeywords() {
     toggleActive,
     updateNegativeKeywords,
     removeKeyword,
+    toggleCommentSearch,
+    refreshCommentSearch,
   };
 }

@@ -1464,6 +1464,7 @@ export type Database = {
           link: string
           pub_date: string | null
           reddit_id: string
+          source_type: string | null
           subreddit_id: string | null
           title: string
           top_comments: Json | null
@@ -1483,6 +1484,7 @@ export type Database = {
           link: string
           pub_date?: string | null
           reddit_id: string
+          source_type?: string | null
           subreddit_id?: string | null
           title: string
           top_comments?: Json | null
@@ -1502,6 +1504,7 @@ export type Database = {
           link?: string
           pub_date?: string | null
           reddit_id?: string
+          source_type?: string | null
           subreddit_id?: string | null
           title?: string
           top_comments?: Json | null
@@ -1636,6 +1639,7 @@ export type Database = {
           keyword: string
           last_fetched_at: string | null
           negative_keywords: string[] | null
+          search_comments: boolean | null
           updated_at: string | null
           user_id: string
         }
@@ -1647,6 +1651,7 @@ export type Database = {
           keyword: string
           last_fetched_at?: string | null
           negative_keywords?: string[] | null
+          search_comments?: boolean | null
           updated_at?: string | null
           user_id: string
         }
@@ -1658,6 +1663,7 @@ export type Database = {
           keyword?: string
           last_fetched_at?: string | null
           negative_keywords?: string[] | null
+          search_comments?: boolean | null
           updated_at?: string | null
           user_id?: string
         }
