@@ -347,7 +347,10 @@ const Engagement = () => {
 
               <Select 
                 value={selectedSubreddits.length === 0 ? 'all' : selectedSubreddits[0]} 
-                onValueChange={(value) => setSelectedSubreddits(value === 'all' ? [] : [value])}
+                onValueChange={(value) => {
+                  setSelectedSubreddits(value === 'all' ? [] : [value]);
+                  setCurrentPage(1);
+                }}
               >
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Filter by subreddit" />
@@ -357,6 +360,26 @@ const Engagement = () => {
                   {subreddits.map((subreddit) => (
                     <SelectItem key={subreddit.id} value={subreddit.id}>
                       r/{subreddit.subreddit_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select 
+                value={selectedKeywords.length === 0 ? 'all' : selectedKeywords[0]} 
+                onValueChange={(value) => {
+                  setSelectedKeywords(value === 'all' ? [] : [value]);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by keyword" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Keywords</SelectItem>
+                  {keywords.map((keyword) => (
+                    <SelectItem key={keyword.id} value={keyword.id}>
+                      {keyword.keyword}
                     </SelectItem>
                   ))}
                 </SelectContent>
