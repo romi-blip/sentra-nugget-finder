@@ -336,7 +336,7 @@ const Engagement = () => {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">Posts Feed</h2>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button 
                 variant={selectionMode ? "default" : "outline"}
                 onClick={toggleSelectionMode}
@@ -352,10 +352,10 @@ const Engagement = () => {
                   setCurrentPage(1);
                 }}
               >
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[150px] sm:w-[180px]">
                   <SelectValue placeholder="Filter by subreddit" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start">
                   <SelectItem value="all">All Subreddits</SelectItem>
                   {subreddits.map((subreddit) => (
                     <SelectItem key={subreddit.id} value={subreddit.id}>
@@ -372,10 +372,10 @@ const Engagement = () => {
                   setCurrentPage(1);
                 }}
               >
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[150px] sm:w-[180px]">
                   <SelectValue placeholder="Filter by keyword" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start">
                   <SelectItem value="all">All Keywords</SelectItem>
                   {keywords.map((keyword) => (
                     <SelectItem key={keyword.id} value={keyword.id}>
@@ -386,10 +386,10 @@ const Engagement = () => {
               </Select>
               
               <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[150px] sm:w-[180px]">
                   <SelectValue placeholder="Filter by priority" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start">
                   <SelectItem value="all">All Priorities</SelectItem>
                   <SelectItem value="high_priority">High Priority</SelectItem>
                   <SelectItem value="medium_priority">Medium Priority</SelectItem>
@@ -398,10 +398,10 @@ const Engagement = () => {
               </Select>
 
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[150px] sm:w-[180px]">
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start">
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="no_reply">No Reply</SelectItem>
                   <SelectItem value="has_reply">Has Reply</SelectItem>
@@ -411,10 +411,10 @@ const Engagement = () => {
               </Select>
 
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[150px] sm:w-[180px]">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start">
                   <SelectItem value="recent">Most Recent</SelectItem>
                   <SelectItem value="comments">Most Comments</SelectItem>
                   <SelectItem value="priority">Highest Priority</SelectItem>
