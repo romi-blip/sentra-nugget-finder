@@ -47,7 +47,8 @@ const Engagement = () => {
     addKeyword,
     toggleActive: toggleKeywordActive,
     updateNegativeKeywords,
-    removeKeyword
+    removeKeyword,
+    toggleCommentSearch
   } = useTrackedKeywords();
   
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
@@ -105,6 +106,10 @@ const Engagement = () => {
 
   const handleRemoveKeyword = (id: string) => {
     removeKeyword.mutate(id);
+  };
+
+  const handleToggleCommentSearch = (id: string, searchComments: boolean) => {
+    toggleCommentSearch.mutate({ id, searchComments });
   };
 
   const handleAddSubreddit = (name: string) => {
@@ -338,6 +343,7 @@ const Engagement = () => {
                                 onToggle={handleToggleKeywordActive}
                                 onRemove={handleRemoveKeyword}
                                 onUpdateNegativeKeywords={handleUpdateNegativeKeywords}
+                                onToggleCommentSearch={handleToggleCommentSearch}
                               />
                             ))}
                           </div>

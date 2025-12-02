@@ -118,3 +118,6 @@ verify_jwt = true
 
 [functions.apply-review-feedback]
 verify_jwt = true
+
+[functions.fetch-keyword-comments]
+verify_jwt = false

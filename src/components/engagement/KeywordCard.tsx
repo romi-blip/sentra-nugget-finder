@@ -3,7 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Tag, Trash2, Clock, RefreshCw, X, Plus, Ban } from 'lucide-react';
+import { Tag, Trash2, Clock, RefreshCw, X, Plus, Ban, MessageSquare } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import { TrackedKeyword } from '@/hooks/useTrackedKeywords';
 import { useRedditActions } from '@/hooks/useRedditActions';
@@ -18,9 +19,10 @@ interface KeywordCardProps {
   onToggle: (id: string, isActive: boolean) => void;
   onRemove: (id: string) => void;
   onUpdateNegativeKeywords: (id: string, negativeKeywords: string[]) => void;
+  onToggleCommentSearch: (id: string, searchComments: boolean) => void;
 }
 
-export function KeywordCard({ keyword, onToggle, onRemove, onUpdateNegativeKeywords }: KeywordCardProps) {
+export function KeywordCard({ keyword, onToggle, onRemove, onUpdateNegativeKeywords, onToggleCommentSearch }: KeywordCardProps) {
   const { refreshKeywordPosts } = useRedditActions();
   const [isOpen, setIsOpen] = useState(false);
   const [newNegativeKeyword, setNewNegativeKeyword] = useState('');
@@ -62,6 +64,12 @@ export function KeywordCard({ keyword, onToggle, onRemove, onUpdateNegativeKeywo
                   <Badge variant="outline" className="text-xs">
                     <Ban className="h-3 w-3 mr-1" />
                     {negativeKeywords.length} excluded
+                  </Badge>
+                )}
+                {keyword.search_comments && (
+                  <Badge variant="secondary" className="text-xs">
+                    <MessageSquare className="h-3 w-3 mr-1" />
+                    Comments
                   </Badge>
                 )}
               </div>
@@ -142,6 +150,28 @@ export function KeywordCard({ keyword, onToggle, onRemove, onUpdateNegativeKeywo
                 No negative keywords. Posts containing negative keywords will be filtered out during fetch.
               </p>
             )}
+            
+            <div className="flex items-center justify-between pt-2 border-t">
+              <div className="flex items-center gap-2">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">Search in comments</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Also search for this keyword in Reddit comments, not just post titles</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <Switch
+                checked={keyword.search_comments || false}
+                onCheckedChange={(checked) => onToggleCommentSearch(keyword.id, checked)}
+              />
+            </div>
           </CollapsibleContent>
         </Collapsible>
       </CardContent>
