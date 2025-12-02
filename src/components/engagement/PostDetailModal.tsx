@@ -118,7 +118,7 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>by {post.author || 'Unknown'}</span>
             <span>•</span>
-            <span>{new Date(post.pub_date).toLocaleDateString()}</span>
+            <span>{post.pub_date ? new Date(post.pub_date).toLocaleDateString() : 'Unknown date'}</span>
           </div>
 
           {post.content && (
