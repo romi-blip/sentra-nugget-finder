@@ -29,7 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MessageSquarePlus, TrendingUp, Clock, CheckCircle, CheckSquare, Square, FilterX, ChevronDown } from 'lucide-react';
+import { MessageSquarePlus, MessageSquare, TrendingUp, Clock, CheckCircle, CheckSquare, Square, FilterX, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Engagement = () => {
@@ -48,7 +48,8 @@ const Engagement = () => {
     toggleActive: toggleKeywordActive,
     updateNegativeKeywords,
     removeKeyword,
-    toggleCommentSearch
+    toggleCommentSearch,
+    refreshCommentSearch
   } = useTrackedKeywords();
   
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
@@ -335,6 +336,22 @@ const Engagement = () => {
                           <ChevronDown className="h-5 w-5 transition-transform group-data-[state=open]:rotate-180" />
                         </CollapsibleTrigger>
                         <CollapsibleContent className="mt-4">
+                          {keywords.some(k => k.search_comments) && (
+                            <div className="mb-4 flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => refreshCommentSearch.mutate()}
+                                disabled={refreshCommentSearch.isPending}
+                              >
+                                <MessageSquare className={`h-4 w-4 mr-2 ${refreshCommentSearch.isPending ? 'animate-pulse' : ''}`} />
+                                {refreshCommentSearch.isPending ? 'Searching Comments...' : 'Search Comments Now'}
+                              </Button>
+                              <span className="text-xs text-muted-foreground">
+                                ({keywords.filter(k => k.search_comments).length} keywords with comment search enabled)
+                              </span>
+                            </div>
+                          )}
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {keywords.map((keyword) => (
                               <KeywordCard
