@@ -65,8 +65,17 @@ Deno.serve(async (req) => {
       try {
         console.log(`Fetching posts for keyword: "${keyword.keyword}"`);
 
-        // Use Apify's Google Search Scraper
-        const searchQuery = `site:reddit.com "${keyword.keyword}"`;
+        // Build search query with negative keywords
+        const negativeKeywords = keyword.negative_keywords || [];
+        let searchQuery = `site:reddit.com "${keyword.keyword}"`;
+        
+        // Add negative keywords to exclude from search
+        if (negativeKeywords.length > 0) {
+          const excludeTerms = negativeKeywords.map(nk => `-"${nk}"`).join(' ');
+          searchQuery = `${searchQuery} ${excludeTerms}`;
+        }
+        
+        console.log(`Search query: ${searchQuery}`);
         
         const runResponse = await fetch(
           `https://api.apify.com/v2/acts/apify~google-search-scraper/runs?token=${apifyToken}`,
