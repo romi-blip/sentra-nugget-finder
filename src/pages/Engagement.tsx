@@ -61,7 +61,7 @@ const Engagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   
-  const { analyzePost } = useRedditActions();
+  const { analyzePost, deletePosts } = useRedditActions();
   const { toast } = useToast();
 
   const { posts: rawPosts, totalCount, isLoading: isLoadingPosts } = useRedditPosts({
@@ -171,6 +171,18 @@ const Engagement = () => {
       description: `Finished analyzing ${postsToAnalyze.length} posts.`,
     });
     setSelectedPosts(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    const postIds = Array.from(selectedPosts);
+    if (postIds.length === 0) return;
+    
+    try {
+      await deletePosts.mutateAsync(postIds);
+      setSelectedPosts(new Set());
+    } catch (error) {
+      console.error('Failed to delete posts:', error);
+    }
   };
 
   const handleClearFilters = () => {
@@ -456,12 +468,21 @@ const Engagement = () => {
                   </div>
                 </div>
                 {selectedPosts.size > 0 && (
-                  <Button 
-                    onClick={handleBulkAnalyze}
-                    disabled={analyzePost.isPending}
-                  >
-                    Analyze Selected
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleBulkAnalyze}
+                      disabled={analyzePost.isPending}
+                    >
+                      Analyze Selected ({selectedPosts.size})
+                    </Button>
+                    <Button 
+                      variant="destructive"
+                      onClick={handleBulkDelete}
+                      disabled={deletePosts.isPending}
+                    >
+                      Delete Selected ({selectedPosts.size})
+                    </Button>
+                  </div>
                 )}
               </div>
             </Card>
