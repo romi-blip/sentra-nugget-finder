@@ -140,69 +140,82 @@ Deno.serve(async (req) => {
 
         const searchResults = await datasetResponse.json();
         let keywordNewPosts = 0;
-        // Process each search result
-        for (const result of searchResults) {
-          const url = result.url;
-          if (!url) continue;
+        
+        console.log(`Processing ${searchResults.length} search pages for keyword "${keyword.keyword}"`);
+        
+        // Process each search page
+        for (const searchPage of searchResults) {
+          const organicResults = searchPage.organicResults || [];
+          console.log(`Found ${organicResults.length} organic results in search page`);
+          
+          // Process each organic result (actual Reddit post URL)
+          for (const result of organicResults) {
+            const url = result.url;
+            if (!url) continue;
 
-          const match = url.match(REDDIT_POST_REGEX);
-          if (!match) continue;
+            const match = url.match(REDDIT_POST_REGEX);
+            if (!match) {
+              console.log(`URL did not match Reddit pattern: ${url}`);
+              continue;
+            }
 
-          const [, subredditName, redditId] = match;
+            const [, subredditName, redditId] = match;
 
-          // Check if post already exists
-          const { data: existing } = await supabase
-            .from('reddit_posts')
-            .select('id')
-            .eq('reddit_id', redditId)
-            .single();
+            // Check if post already exists
+            const { data: existing } = await supabase
+              .from('reddit_posts')
+              .select('id')
+              .eq('reddit_id', redditId)
+              .single();
 
-          if (existing) continue;
+            if (existing) continue;
 
-          // Get or create subreddit entry
-          let subredditId = null;
-          const { data: subredditData } = await supabase
-            .from('tracked_subreddits')
-            .select('id')
-            .eq('subreddit_name', subredditName)
-            .eq('user_id', user.id)
-            .single();
+            // Get or create subreddit entry
+            let subredditId = null;
+            const { data: subredditData } = await supabase
+              .from('tracked_subreddits')
+              .select('id')
+              .eq('subreddit_name', subredditName)
+              .eq('user_id', user.id)
+              .single();
 
-          if (subredditData) {
-            subredditId = subredditData.id;
-          }
+            if (subredditData) {
+              subredditId = subredditData.id;
+            }
 
-          // Insert new post
-          const { data: insertedPost, error: insertError } = await supabase
-            .from('reddit_posts')
-            .insert({
-              reddit_id: redditId,
-              subreddit_id: subredditId,
-              keyword_id: keyword.id,
-              link: url,
-              title: result.title || 'No title',
-              author: null,
-              pub_date: null,
-              upvotes: 0,
-              comment_count: 0,
-              content: result.description || null,
-              content_snippet: result.description ? result.description.substring(0, 500) : null,
-            })
-            .select()
-            .single();
+            // Insert new post
+            const { data: insertedPost, error: insertError } = await supabase
+              .from('reddit_posts')
+              .insert({
+                reddit_id: redditId,
+                subreddit_id: subredditId,
+                keyword_id: keyword.id,
+                link: url,
+                title: result.title || 'No title',
+                author: null,
+                pub_date: null,
+                upvotes: 0,
+                comment_count: 0,
+                content: result.description || null,
+                content_snippet: result.description ? result.description.substring(0, 500) : null,
+              })
+              .select()
+              .single();
 
-          if (insertError) {
-            console.error('Error inserting post:', insertError);
-            continue;
-          }
+            if (insertError) {
+              console.error('Error inserting post:', insertError);
+              continue;
+            }
 
-          if (insertedPost) {
-            newPostsToAnalyze.push({
-              postId: insertedPost.id,
-              post: insertedPost
-            });
-            keywordNewPosts++;
-            totalNewPosts++;
+            if (insertedPost) {
+              newPostsToAnalyze.push({
+                postId: insertedPost.id,
+                post: insertedPost
+              });
+              keywordNewPosts++;
+              totalNewPosts++;
+              console.log(`Inserted new post: ${insertedPost.title}`);
+            }
           }
         }
 
