@@ -80,6 +80,9 @@ verify_jwt = false
 [functions.fetch-reddit-posts]
 verify_jwt = false
 
+[functions.fetch-keyword-posts]
+verify_jwt = false
+
 [functions.analyze-reddit-post]
 verify_jwt = false
 

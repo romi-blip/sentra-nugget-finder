@@ -3,7 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface RedditPost {
   id: string;
-  subreddit_id: string;
+  subreddit_id: string | null;
+  keyword_id: string | null;
   reddit_id: string;
   title: string;
   link: string;
@@ -22,6 +23,7 @@ export interface RedditPost {
 
 interface UseRedditPostsOptions {
   subredditIds?: string[];
+  keywordIds?: string[];
   priority?: string;
   status?: string;
   page?: number;
@@ -64,6 +66,11 @@ export function useRedditPosts(options: UseRedditPostsOptions = {}) {
       // Apply subreddit filter
       if (options.subredditIds && options.subredditIds.length > 0) {
         query = query.in('subreddit_id', options.subredditIds);
+      }
+
+      // Apply keyword filter
+      if (options.keywordIds && options.keywordIds.length > 0) {
+        query = query.in('keyword_id', options.keywordIds);
       }
 
       // Apply priority filter at database level
