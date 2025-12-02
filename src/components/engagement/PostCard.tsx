@@ -80,6 +80,11 @@ export function PostCard({ post, onClick, isSelected, onSelectChange, selectionM
               {review?.relevance_score && (
                 <Badge variant="outline">Score: {review.relevance_score}</Badge>
               )}
+              {post.keyword_id && (
+                <Badge variant="outline" className="bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800">
+                  Keyword Match
+                </Badge>
+              )}
               {reply && (
                 <Badge variant={reply.status === 'posted' ? 'default' : 'secondary'}>
                   {reply.status === 'posted' ? <CheckCircle className="h-3 w-3 mr-1" /> : <MessageSquare className="h-3 w-3 mr-1" />}

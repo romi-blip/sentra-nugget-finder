@@ -1460,10 +1460,11 @@ export type Database = {
           created_at: string | null
           id: string
           iso_date: string | null
+          keyword_id: string | null
           link: string
           pub_date: string | null
           reddit_id: string
-          subreddit_id: string
+          subreddit_id: string | null
           title: string
           top_comments: Json | null
           updated_at: string | null
@@ -1478,10 +1479,11 @@ export type Database = {
           created_at?: string | null
           id?: string
           iso_date?: string | null
+          keyword_id?: string | null
           link: string
           pub_date?: string | null
           reddit_id: string
-          subreddit_id: string
+          subreddit_id?: string | null
           title: string
           top_comments?: Json | null
           updated_at?: string | null
@@ -1496,16 +1498,24 @@ export type Database = {
           created_at?: string | null
           id?: string
           iso_date?: string | null
+          keyword_id?: string | null
           link?: string
           pub_date?: string | null
           reddit_id?: string
-          subreddit_id?: string
+          subreddit_id?: string | null
           title?: string
           top_comments?: Json | null
           updated_at?: string | null
           upvotes?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "reddit_posts_keyword_id_fkey"
+            columns: ["keyword_id"]
+            isOneToOne: false
+            referencedRelation: "tracked_keywords"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "reddit_posts_subreddit_id_fkey"
             columns: ["subreddit_id"]
@@ -1616,6 +1626,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tracked_keywords: {
+        Row: {
+          created_at: string | null
+          fetch_frequency_minutes: number | null
+          id: string
+          is_active: boolean | null
+          keyword: string
+          last_fetched_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          fetch_frequency_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          keyword: string
+          last_fetched_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          fetch_frequency_minutes?: number | null
+          id?: string
+          is_active?: boolean | null
+          keyword?: string
+          last_fetched_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       tracked_subreddits: {
         Row: {

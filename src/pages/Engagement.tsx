@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import SEO from '@/components/SEO';
 import { useTrackedSubreddits } from '@/hooks/useTrackedSubreddits';
+import { useTrackedKeywords } from '@/hooks/useTrackedKeywords';
 import { useRedditPosts, type RedditPost } from '@/hooks/useRedditPosts';
 import { useRedditActions } from '@/hooks/useRedditActions';
 import { SubredditManager } from '@/components/engagement/SubredditManager';
 import { SubredditCard } from '@/components/engagement/SubredditCard';
+import { KeywordManager } from '@/components/engagement/KeywordManager';
+import { KeywordCard } from '@/components/engagement/KeywordCard';
 import { PostCard } from '@/components/engagement/PostCard';
 import { PostDetailModal } from '@/components/engagement/PostDetailModal';
 import {
@@ -35,8 +38,17 @@ const Engagement = () => {
     toggleActive,
     removeSubreddit 
   } = useTrackedSubreddits();
+
+  const {
+    keywords,
+    isLoading: isLoadingKeywords,
+    addKeyword,
+    toggleActive: toggleKeywordActive,
+    removeKeyword
+  } = useTrackedKeywords();
   
   const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
   const [priority, setPriority] = useState<string>('all');
   const [status, setStatus] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('recent');
@@ -51,6 +63,7 @@ const Engagement = () => {
 
   const { posts: rawPosts, totalCount, isLoading: isLoadingPosts } = useRedditPosts({
     subredditIds: selectedSubreddits.length > 0 ? selectedSubreddits : undefined,
+    keywordIds: selectedKeywords.length > 0 ? selectedKeywords : undefined,
     priority: priority !== 'all' ? priority : undefined,
     status: status !== 'all' ? status : undefined,
     page: currentPage,
@@ -74,6 +87,18 @@ const Engagement = () => {
         return new Date(b.pub_date || 0).getTime() - new Date(a.pub_date || 0).getTime();
     }
   });
+
+  const handleAddKeyword = (keyword: string) => {
+    addKeyword.mutate(keyword);
+  };
+
+  const handleToggleKeywordActive = (id: string, isActive: boolean) => {
+    toggleKeywordActive.mutate({ id, isActive });
+  };
+
+  const handleRemoveKeyword = (id: string) => {
+    removeKeyword.mutate(id);
+  };
 
   const handleAddSubreddit = (name: string) => {
     addSubreddit.mutate(name);
@@ -143,6 +168,7 @@ const Engagement = () => {
 
   const handleClearFilters = () => {
     setSelectedSubreddits([]);
+    setSelectedKeywords([]);
     setPriority('all');
     setStatus('all');
     setSortBy('recent');
@@ -154,10 +180,11 @@ const Engagement = () => {
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = selectedSubreddits.length > 0 || priority !== 'all' || status !== 'all';
+  const hasActiveFilters = selectedSubreddits.length > 0 || selectedKeywords.length > 0 || priority !== 'all' || status !== 'all';
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const activeSubreddits = subreddits.filter(s => s.is_active).length;
+  const activeKeywords = keywords.filter(k => k.is_active).length;
   const postsToday = posts.filter((p: any) => {
     const postDate = new Date(p.pub_date);
     const today = new Date();
@@ -178,7 +205,7 @@ const Engagement = () => {
         <div>
           <h1 className="text-3xl font-bold mb-2">Reddit Engagement</h1>
           <p className="text-muted-foreground">
-            Track subreddits and get AI-powered engagement suggestions
+            Track subreddits, keywords and get AI-powered engagement suggestions
           </p>
         </div>
 
@@ -187,7 +214,7 @@ const Engagement = () => {
             <div className="flex items-center gap-3">
               <MessageSquarePlus className="h-8 w-8 text-primary" />
               <div>
-                <p className="text-2xl font-bold">{subreddits.length}</p>
+                <p className="text-2xl font-bold">{subreddits.length + keywords.length}</p>
                 <p className="text-xs text-muted-foreground">Total Tracked</p>
               </div>
             </div>
@@ -196,7 +223,7 @@ const Engagement = () => {
             <div className="flex items-center gap-3">
               <TrendingUp className="h-8 w-8 text-green-500" />
               <div>
-                <p className="text-2xl font-bold">{activeSubreddits}</p>
+                <p className="text-2xl font-bold">{activeSubreddits + activeKeywords}</p>
                 <p className="text-xs text-muted-foreground">Active</p>
               </div>
             </div>
@@ -221,13 +248,23 @@ const Engagement = () => {
           </Card>
         </div>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Add Subreddit</h2>
-          <SubredditManager 
-            onAdd={handleAddSubreddit}
-            isAdding={addSubreddit.isPending}
-          />
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Add Subreddit</h2>
+            <SubredditManager 
+              onAdd={handleAddSubreddit}
+              isAdding={addSubreddit.isPending}
+            />
+          </Card>
+
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Add Keyword</h2>
+            <KeywordManager 
+              onAdd={handleAddKeyword}
+              isAdding={addKeyword.isPending}
+            />
+          </Card>
+        </div>
 
         {subreddits.length > 0 && (
           <div>
@@ -239,6 +276,22 @@ const Engagement = () => {
                   subreddit={subreddit}
                   onToggleActive={handleToggleActive}
                   onRemove={handleRemoveSubreddit}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {keywords.length > 0 && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Tracked Keywords</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {keywords.map((keyword) => (
+                <KeywordCard
+                  key={keyword.id}
+                  keyword={keyword}
+                  onToggle={handleToggleKeywordActive}
+                  onRemove={handleRemoveKeyword}
                 />
               ))}
             </div>
