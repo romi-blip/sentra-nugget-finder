@@ -107,58 +107,46 @@ Deno.serve(async (req) => {
       console.log('Sample Apify item:', JSON.stringify(items[0]).substring(0, 500));
     }
 
-    // Create a map of reddit_id to scraped data - try multiple approaches
+    // Create a map of reddit_id to scraped data
     const scrapedDataMap = new Map();
-    const urlToDataMap = new Map();
+    
+    // Helper to extract clean reddit_id from URL
+    const extractRedditIdFromUrl = (url: string): string | null => {
+      const match = url.match(/\/comments\/([a-z0-9]+)/i);
+      return match ? match[1] : null;
+    };
     
     for (const item of items) {
-      // Try to extract reddit_id from various possible fields
-      let redditId = item.id || item.postId || item.name?.replace('t3_', '');
+      // Use parsedId first (clean ID without t3_ prefix), then try other fields
+      let redditId = item.parsedId || item.postId;
       
-      // Also try to extract from URL field if present
-      if (!redditId && item.url) {
-        const urlMatch = item.url.match(/\/comments\/([a-z0-9]+)/i);
-        if (urlMatch) {
-          redditId = urlMatch[1];
-        }
+      // If id has t3_ prefix, strip it
+      if (!redditId && item.id) {
+        redditId = item.id.replace(/^t3_/, '');
       }
       
-      // Also try permalink
-      if (!redditId && item.permalink) {
-        const permalinkMatch = item.permalink.match(/\/comments\/([a-z0-9]+)/i);
-        if (permalinkMatch) {
-          redditId = permalinkMatch[1];
-        }
+      // Extract from URL as fallback
+      if (!redditId && item.url) {
+        redditId = extractRedditIdFromUrl(item.url);
       }
       
       if (redditId) {
         console.log(`Mapped reddit_id: ${redditId}`);
         scrapedDataMap.set(redditId, item);
       }
-      
-      // Also create URL-based mapping as fallback
-      if (item.url) {
-        urlToDataMap.set(item.url, item);
-      }
     }
     
-    console.log(`ScrapedDataMap size: ${scrapedDataMap.size}, UrlToDataMap size: ${urlToDataMap.size}`);
+    console.log(`ScrapedDataMap size: ${scrapedDataMap.size}`);
     // Update posts with scraped data
     let updatedCount = 0;
     let errorCount = 0;
 
     for (const post of postsNeedingRefresh) {
       try {
-        // Try reddit_id first, then URL-based lookup
-        let scrapedData = scrapedDataMap.get(post.reddit_id);
+        const scrapedData = scrapedDataMap.get(post.reddit_id);
         
         if (!scrapedData) {
-          // Try URL-based lookup
-          scrapedData = urlToDataMap.get(post.link);
-        }
-        
-        if (!scrapedData) {
-          console.warn(`No scraped data found for post ${post.id} (reddit_id: ${post.reddit_id}, link: ${post.link})`);
+          console.warn(`No scraped data found for post ${post.id} (reddit_id: ${post.reddit_id})`);
           errorCount++;
           continue;
         }
@@ -177,10 +165,10 @@ Deno.serve(async (req) => {
         const { error: updateError } = await supabase
           .from('reddit_posts')
           .update({
-            author: scrapedData.author || scrapedData.authorName || null,
+            author: scrapedData.username || scrapedData.author || scrapedData.authorName || null,
             pub_date: pubDate,
             iso_date: pubDate,
-            upvotes: scrapedData.score || scrapedData.ups || scrapedData.upvotes || 0,
+            upvotes: scrapedData.upVotes || scrapedData.score || scrapedData.ups || scrapedData.upvotes || 0,
             comment_count: scrapedData.numberOfComments || scrapedData.numComments || scrapedData.num_comments || 0,
             content: scrapedData.body || scrapedData.selftext || scrapedData.text || null,
             content_snippet: (scrapedData.body || scrapedData.selftext || scrapedData.text || '').substring(0, 500) || null,
