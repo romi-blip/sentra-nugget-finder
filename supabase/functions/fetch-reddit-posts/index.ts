@@ -91,6 +91,7 @@ serve(async (req) => {
     }
 
     const results = [];
+    const newPostsToAnalyze: Array<{ postId: string; post: any }> = [];
 
     for (const subreddit of subreddits) {
       try {
@@ -150,8 +151,8 @@ serve(async (req) => {
 
           if (existing) continue;
 
-          // Insert new post
-          const { error: insertError } = await supabase
+          // Insert new post and get the inserted data
+          const { data: insertedPost, error: insertError } = await supabase
             .from('reddit_posts')
             .insert({
               reddit_id: redditId,
@@ -163,11 +164,21 @@ serve(async (req) => {
               iso_date: pubDate,
               content,
               content_snippet: content ? content.substring(0, 500) : null,
-            });
+            })
+            .select()
+            .single();
 
           if (insertError) {
             console.error('Error inserting post:', insertError);
             continue;
+          }
+
+          if (insertedPost) {
+            // Queue this post for automatic analysis
+            newPostsToAnalyze.push({
+              postId: insertedPost.id,
+              post: insertedPost
+            });
           }
 
           newPostsCount++;
@@ -195,9 +206,43 @@ serve(async (req) => {
       }
     }
 
+    // Start automatic analysis of new posts in the background
+    if (newPostsToAnalyze.length > 0) {
+      console.log(`Starting automatic analysis for ${newPostsToAnalyze.length} new posts...`);
+      
+      // Use background task to analyze posts without blocking response
+      EdgeRuntime.waitUntil(
+        (async () => {
+          for (const { postId, post } of newPostsToAnalyze) {
+            try {
+              console.log(`Auto-analyzing post: ${post.title}`);
+              
+              // Invoke analyze-reddit-post function
+              const { error: analyzeError } = await supabase.functions.invoke('analyze-reddit-post', {
+                body: { postId, post }
+              });
+              
+              if (analyzeError) {
+                console.error(`Failed to analyze post ${postId}:`, analyzeError);
+              } else {
+                console.log(`Successfully analyzed post: ${post.title}`);
+              }
+              
+              // Small delay between analyses to avoid overwhelming the system
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            } catch (err) {
+              console.error(`Error auto-analyzing post ${postId}:`, err);
+            }
+          }
+          console.log('Completed automatic analysis of all new posts');
+        })()
+      );
+    }
+
     return new Response(JSON.stringify({ 
       results,
-      message: 'Posts fetched. Use Re-analyze button to analyze individual posts.'
+      newPostsAnalyzing: newPostsToAnalyze.length,
+      message: `Posts fetched. ${newPostsToAnalyze.length} new posts queued for automatic analysis.`
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
