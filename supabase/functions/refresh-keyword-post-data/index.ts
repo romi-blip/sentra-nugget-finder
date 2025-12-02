@@ -5,8 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const REDDIT_POST_REGEX = /reddit\.com\/r\/([^\/]+)\/comments\/([^\/]+)/;
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -42,19 +40,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build list of URLs to scrape
+    // Build list of URLs to scrape - use trudax/reddit-scraper-lite which accepts startUrls
     const urlsToScrape = postsNeedingRefresh.map(post => ({ url: post.link }));
     console.log(`Scraping ${urlsToScrape.length} Reddit URLs via Apify...`);
 
-    // Start Apify actor run with correct input schema
+    // Start Apify actor run with trudax/reddit-scraper-lite
     const runResponse = await fetch(
-      `https://api.apify.com/v2/acts/crawlerbros~reddit-scraper/runs?token=${apifyToken}`,
+      `https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/runs?token=${apifyToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startUrls: urlsToScrape,
-          proxyConfiguration: {
+          maxPostCount: urlsToScrape.length,
+          maxComments: 0, // We only need post data, not comments
+          proxy: {
             useApifyProxy: true
           }
         })
@@ -104,7 +104,8 @@ Deno.serve(async (req) => {
     // Create a map of reddit_id to scraped data
     const scrapedDataMap = new Map();
     for (const item of items) {
-      const redditId = item.id || item.postId;
+      // trudax/reddit-scraper-lite returns different field names
+      const redditId = item.id || item.postId || item.name?.replace('t3_', '');
       if (redditId) {
         scrapedDataMap.set(redditId, item);
       }
@@ -129,6 +130,8 @@ Deno.serve(async (req) => {
           pubDate = new Date(scrapedData.createdAt).toISOString();
         } else if (scrapedData.created_utc) {
           pubDate = new Date(scrapedData.created_utc * 1000).toISOString();
+        } else if (scrapedData.created) {
+          pubDate = new Date(scrapedData.created * 1000).toISOString();
         } else if (scrapedData.date) {
           pubDate = new Date(scrapedData.date).toISOString();
         }
@@ -139,10 +142,10 @@ Deno.serve(async (req) => {
             author: scrapedData.author || scrapedData.authorName || null,
             pub_date: pubDate,
             iso_date: pubDate,
-            upvotes: scrapedData.score || scrapedData.upvotes || 0,
+            upvotes: scrapedData.score || scrapedData.ups || scrapedData.upvotes || 0,
             comment_count: scrapedData.numberOfComments || scrapedData.numComments || scrapedData.num_comments || 0,
-            content: scrapedData.body || scrapedData.selftext || null,
-            content_snippet: (scrapedData.body || scrapedData.selftext || '').substring(0, 500) || null,
+            content: scrapedData.body || scrapedData.selftext || scrapedData.text || null,
+            content_snippet: (scrapedData.body || scrapedData.selftext || scrapedData.text || '').substring(0, 500) || null,
           })
           .eq('id', post.id);
 
