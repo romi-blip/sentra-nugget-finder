@@ -8,6 +8,26 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate N8N API key for webhook authentication
+    const apiKey = req.headers.get('x-n8n-api-key')
+    const expectedApiKey = Deno.env.get('N8N_API_KEY')
+    
+    if (!expectedApiKey) {
+      console.error('N8N_API_KEY environment variable not configured')
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    if (!apiKey || apiKey !== expectedApiKey) {
+      console.warn('Unauthorized access attempt to leads-salesforce-callback')
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - valid API key required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
