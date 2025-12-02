@@ -98,6 +98,7 @@ Deno.serve(async (req) => {
         // Wait for run to complete (poll status)
         let attempts = 0;
         let runStatus = 'RUNNING';
+        let datasetId: string | null = null;
         while (runStatus === 'RUNNING' && attempts < 30) {
           await new Promise(resolve => setTimeout(resolve, 2000));
           const statusResponse = await fetch(
@@ -105,6 +106,9 @@ Deno.serve(async (req) => {
           );
           const statusData = await statusResponse.json();
           runStatus = statusData.data.status;
+          if (!datasetId && statusData.data.defaultDatasetId) {
+            datasetId = statusData.data.defaultDatasetId;
+          }
           attempts++;
         }
 
@@ -114,20 +118,28 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        if (!datasetId) {
+          console.error(`No dataset ID returned for keyword "${keyword.keyword}"`);
+          results.push({ keyword: keyword.keyword, status: 'error', message: 'No dataset ID from Apify run' });
+          continue;
+        }
+
         // Get results from dataset
-        const datasetResponse = await fetch(
-          `https://api.apify.com/v2/acts/apify~google-search-scraper/runs/${runId}/dataset/items?token=${apifyToken}`
-        );
+        const itemsUrl = new URL(`https://api.apify.com/v2/datasets/${datasetId}/items`);
+        itemsUrl.searchParams.set('token', apifyToken);
+        itemsUrl.searchParams.set('clean', 'true');
+        itemsUrl.searchParams.set('format', 'json');
+
+        const datasetResponse = await fetch(itemsUrl.toString());
         
         if (!datasetResponse.ok) {
-          console.error(`Failed to fetch dataset for keyword "${keyword.keyword}"`);
+          console.error(`Failed to fetch dataset for keyword "${keyword.keyword}": ${datasetResponse.status}`);
           results.push({ keyword: keyword.keyword, status: 'error', message: 'Dataset fetch failed' });
           continue;
         }
 
         const searchResults = await datasetResponse.json();
         let keywordNewPosts = 0;
-
         // Process each search result
         for (const result of searchResults) {
           const url = result.url;
