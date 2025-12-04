@@ -62,20 +62,20 @@ serve(async (req) => {
     
     console.log(`Fetching Reddit profile via Apify for: ${cleanUsername}`);
 
-    // Use Apify Reddit User Profile Posts Scraper to get profile data
-    const actorId = 'louisdeconinck~reddit-user-profile-posts-scraper';
+    // Use Apify Reddit User Info Scraper to get profile data
+    const actorId = 'louisdeconinck~reddit-user-info-scraper';
     const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`;
     
     // Actor requires startUrls format with Reddit user profile URLs
-    const profileUrl = `https://www.reddit.com/user/${cleanUsername}`;
+    const profileUrl = `https://www.reddit.com/user/${cleanUsername}/`;
+    
+    console.log(`Starting Apify actor for profile URL: ${profileUrl}`);
     
     const runResponse = await fetch(runUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         startUrls: [{ url: profileUrl }],
-        maxItems: 10,
-        sort: 'new',
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL'],
@@ -145,38 +145,27 @@ serve(async (req) => {
     }
 
     // Extract profile data from results
-    // The scraper returns posts/comments with author info
-    const firstItem = results[0];
-    const authorData = firstItem.author || {};
-    
-    // Calculate karma from items if available
-    let totalPostKarma = 0;
-    let totalCommentKarma = 0;
-    
-    for (const item of results) {
-      if (item.type === 'post' || !item.type) {
-        totalPostKarma += item.score || item.ups || 0;
-      } else if (item.type === 'comment') {
-        totalCommentKarma += item.score || item.ups || 0;
-      }
-    }
+    // The user info scraper returns profile data directly
+    const profileData = results[0];
+    console.log('Raw profile data:', JSON.stringify(profileData));
 
-    // Build profile record
+    // Build profile record from user info scraper output
     const profileRecord = {
       user_id: user.id,
       reddit_username: cleanUsername,
-      display_name: authorData.name || cleanUsername,
+      display_name: profileData.displayName || profileData.name || cleanUsername,
       profile_url: `https://www.reddit.com/user/${cleanUsername}`,
-      avatar_url: authorData.avatar || authorData.iconUrl || null,
-      link_karma: authorData.linkKarma || authorData.postKarma || totalPostKarma,
-      comment_karma: authorData.commentKarma || totalCommentKarma,
-      total_karma: (authorData.linkKarma || 0) + (authorData.commentKarma || 0) || 
-                   (authorData.totalKarma) || 
-                   totalPostKarma + totalCommentKarma,
-      account_created_at: authorData.createdAt ? new Date(authorData.createdAt).toISOString() : null,
-      is_verified: authorData.verified || false,
-      is_premium: authorData.isPremium || authorData.isGold || false,
-      description: authorData.description || authorData.publicDescription || null,
+      avatar_url: profileData.iconUrl || profileData.avatar || profileData.snoovatarImg || null,
+      link_karma: profileData.linkKarma || profileData.postKarma || 0,
+      comment_karma: profileData.commentKarma || 0,
+      total_karma: profileData.totalKarma || 
+                   ((profileData.linkKarma || 0) + (profileData.commentKarma || 0)),
+      account_created_at: profileData.createdAt ? 
+        new Date(profileData.createdAt * 1000).toISOString() : 
+        (profileData.created ? new Date(profileData.created).toISOString() : null),
+      is_verified: profileData.isVerified || profileData.verified || false,
+      is_premium: profileData.isPremium || profileData.isGold || false,
+      description: profileData.publicDescription || profileData.description || null,
       last_synced_at: new Date().toISOString(),
     };
 
@@ -201,41 +190,26 @@ serve(async (req) => {
 
     console.log(`Profile saved: ${profile.id}`);
 
-    // Save activity from results
-    for (const item of results) {
-      const activityRecord = {
-        profile_id: profile.id,
-        activity_type: item.type === 'comment' ? 'comment' : 'post',
-        reddit_id: item.id || item.name || `${Date.now()}_${Math.random()}`,
-        subreddit: item.subreddit || item.subredditName,
-        title: item.title || null,
-        content: item.body || item.selftext || null,
-        permalink: item.permalink ? 
-          (item.permalink.startsWith('http') ? item.permalink : `https://www.reddit.com${item.permalink}`) : 
-          null,
-        score: item.score || item.ups || 0,
-        num_comments: item.numComments || item.num_comments || 0,
-        posted_at: item.createdAt ? new Date(item.createdAt).toISOString() : 
-                   item.created_utc ? new Date(item.created_utc * 1000).toISOString() : 
-                   new Date().toISOString(),
-      };
-
-      const { error: activityError } = await supabase
-        .from('reddit_profile_activity')
-        .upsert(activityRecord, { onConflict: 'profile_id,reddit_id' });
-      
-      if (activityError) {
-        console.error('Error inserting activity:', activityError);
-      }
-    }
-
-    console.log(`Saved ${results.length} activity items`);
+    // Trigger activity sync in background (using the sync-reddit-profile-activity function)
+    // This will fetch posts and comments separately
+    console.log('Profile saved, triggering activity sync...');
+    
+    // Call sync function asynchronously
+    EdgeRuntime.waitUntil(
+      fetch(`${supabaseUrl}/functions/v1/sync-reddit-profile-activity`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ profile_id: profile.id }),
+      }).catch(err => console.error('Failed to trigger activity sync:', err))
+    );
 
     return new Response(JSON.stringify({ 
       success: true, 
       profile,
-      activityCount: results.length,
-      message: 'Profile and activity fetched successfully'
+      message: 'Profile fetched successfully. Activity sync in progress.'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
