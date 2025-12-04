@@ -161,6 +161,36 @@ export function useRedditActions() {
     },
   });
 
+  const deleteOldPosts = useMutation({
+    mutationFn: async () => {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 90);
+      
+      const { data, error } = await supabase
+        .from('reddit_posts')
+        .delete()
+        .lt('pub_date', cutoffDate.toISOString())
+        .select('id');
+      
+      if (error) throw error;
+      return data?.length || 0;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      toast({
+        title: "Old posts cleaned up",
+        description: `Successfully deleted ${count} posts older than 3 months.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete old posts",
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     refreshPosts,
     analyzePost,
@@ -168,5 +198,6 @@ export function useRedditActions() {
     refreshKeywordPosts,
     deletePost,
     deletePosts,
+    deleteOldPosts,
   };
 }

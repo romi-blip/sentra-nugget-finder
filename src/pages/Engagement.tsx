@@ -29,7 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MessageSquarePlus, MessageSquare, TrendingUp, Clock, CheckCircle, CheckSquare, Square, FilterX, ChevronDown } from 'lucide-react';
+import { MessageSquarePlus, MessageSquare, TrendingUp, Clock, CheckCircle, CheckSquare, Square, FilterX, ChevronDown, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Engagement = () => {
@@ -64,7 +64,7 @@ const Engagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   
-  const { analyzePost, deletePosts } = useRedditActions();
+  const { analyzePost, deletePosts, deleteOldPosts } = useRedditActions();
   const { toast } = useToast();
 
   const { posts: rawPosts, totalCount, isLoading: isLoadingPosts } = useRedditPosts({
@@ -484,6 +484,15 @@ const Engagement = () => {
                   Clear Filters
                 </Button>
               )}
+
+              <Button 
+                variant="outline" 
+                onClick={() => deleteOldPosts.mutate()}
+                disabled={deleteOldPosts.isPending}
+              >
+                <Trash2 className={`h-4 w-4 mr-2 ${deleteOldPosts.isPending ? 'animate-pulse' : ''}`} />
+                {deleteOldPosts.isPending ? 'Cleaning...' : 'Clean Old Posts'}
+              </Button>
             </div>
           </div>
 
