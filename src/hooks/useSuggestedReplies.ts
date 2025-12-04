@@ -44,7 +44,35 @@ export function useSuggestedReplies() {
     },
   });
 
+  const updateReplyProfile = useMutation({
+    mutationFn: async ({ 
+      replyId, 
+      profileId 
+    }: { 
+      replyId: string; 
+      profileId: string | null;
+    }) => {
+      const { error } = await supabase
+        .from('suggested_replies')
+        .update({ suggested_profile_id: profileId })
+        .eq('id', replyId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update reply profile",
+        variant: "destructive",
+      });
+    },
+  });
+
   return {
     updateReply,
+    updateReplyProfile,
   };
 }

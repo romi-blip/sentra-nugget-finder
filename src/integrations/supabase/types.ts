@@ -1739,6 +1739,7 @@ export type Database = {
           posted_by: string | null
           review_id: string | null
           status: string | null
+          suggested_profile_id: string | null
           suggested_reply: string
           updated_at: string | null
         }
@@ -1752,6 +1753,7 @@ export type Database = {
           posted_by?: string | null
           review_id?: string | null
           status?: string | null
+          suggested_profile_id?: string | null
           suggested_reply: string
           updated_at?: string | null
         }
@@ -1765,6 +1767,7 @@ export type Database = {
           posted_by?: string | null
           review_id?: string | null
           status?: string | null
+          suggested_profile_id?: string | null
           suggested_reply?: string
           updated_at?: string | null
         }
@@ -1781,6 +1784,13 @@ export type Database = {
             columns: ["review_id"]
             isOneToOne: false
             referencedRelation: "post_reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suggested_replies_suggested_profile_id_fkey"
+            columns: ["suggested_profile_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_profiles"
             referencedColumns: ["id"]
           },
         ]

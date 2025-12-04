@@ -10,10 +10,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, Copy, CheckCircle, RefreshCw } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ExternalLink, Copy, CheckCircle, RefreshCw, User } from 'lucide-react';
 import { useSuggestedReplies } from '@/hooks/useSuggestedReplies';
 import { useRedditActions } from '@/hooks/useRedditActions';
 import { useRedditComments } from '@/hooks/useRedditComments';
+import { useRedditProfiles } from '@/hooks/useRedditProfiles';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
@@ -25,23 +33,28 @@ interface PostDetailModalProps {
 }
 
 export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalProps) {
-  // Handle both object and array responses for post_reviews (one-to-one relationship)
   const review = post?.post_reviews 
     ? (Array.isArray(post.post_reviews) ? post.post_reviews[0] : post.post_reviews)
     : null;
   const reply = post?.suggested_replies?.[0];
   const [editedReply, setEditedReply] = useState(reply?.edited_reply || reply?.suggested_reply || '');
-  const { updateReply } = useSuggestedReplies();
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(reply?.suggested_profile_id || null);
+  const { updateReply, updateReplyProfile } = useSuggestedReplies();
+  const { managedProfiles } = useRedditProfiles('managed');
 
-  // Sync editedReply state when reply data changes
   useEffect(() => {
     setEditedReply(reply?.edited_reply || reply?.suggested_reply || '');
-  }, [reply?.edited_reply, reply?.suggested_reply]);
+    setSelectedProfileId(reply?.suggested_profile_id || null);
+  }, [reply?.edited_reply, reply?.suggested_reply, reply?.suggested_profile_id]);
+
   const { analyzePost, generateReply } = useRedditActions();
   const { fetchComments } = useRedditComments();
   const { toast } = useToast();
 
   if (!post) return null;
+
+  const selectedProfile = managedProfiles?.find(p => p.id === selectedProfileId);
+  const profileChanged = reply?.suggested_profile_id !== selectedProfileId;
 
   const handleCopyReply = () => {
     navigator.clipboard.writeText(editedReply);
@@ -80,7 +93,21 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
         postId: post.id,
         reviewId: review.id,
         post,
-        review
+        review,
+        profileId: selectedProfileId || undefined
+      });
+    }
+  };
+
+  const handleProfileChange = (profileId: string) => {
+    const newProfileId = profileId === 'auto' ? null : profileId;
+    setSelectedProfileId(newProfileId);
+    
+    // Update the profile in DB if reply exists
+    if (reply) {
+      updateReplyProfile.mutate({
+        replyId: reply.id,
+        profileId: newProfileId
       });
     }
   };
@@ -198,6 +225,83 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
               </TabsContent>
 
               <TabsContent value="reply" className="space-y-4">
+                {/* Profile Selector */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Post as Profile</label>
+                    {profileChanged && reply && (
+                      <Badge variant="outline" className="text-orange-600 border-orange-300">
+                        Profile changed - regenerate to update reply
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={selectedProfileId || 'auto'}
+                      onValueChange={handleProfileChange}
+                    >
+                      <SelectTrigger className="w-[250px]">
+                        <SelectValue placeholder="Auto-select best profile" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span>Auto-select best profile</span>
+                          </div>
+                        </SelectItem>
+                        {managedProfiles?.map((profile) => (
+                          <SelectItem key={profile.id} value={profile.id}>
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              <span>u/{profile.reddit_username}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {profileChanged && reply && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRegenerateReply}
+                        disabled={generateReply.isPending}
+                      >
+                        <RefreshCw className={`h-4 w-4 mr-1 ${generateReply.isPending ? 'animate-spin' : ''}`} />
+                        Regenerate
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Persona Preview */}
+                  {selectedProfile && (
+                    <Card className="p-3 bg-muted/50">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">u/{selectedProfile.reddit_username}</span>
+                            {selectedProfile.typical_tone && (
+                              <Badge variant="secondary" className="text-xs">
+                                {selectedProfile.typical_tone}
+                              </Badge>
+                            )}
+                          </div>
+                          {selectedProfile.writing_style && (
+                            <p className="text-xs text-muted-foreground">
+                              Style: {selectedProfile.writing_style}
+                            </p>
+                          )}
+                          {selectedProfile.expertise_areas && selectedProfile.expertise_areas.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Expertise: {selectedProfile.expertise_areas.slice(0, 3).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+                </div>
+
                 {reply ? (
                   <>
                     <div>
@@ -209,7 +313,7 @@ export function PostDetailModal({ post, open, onOpenChange }: PostDetailModalPro
                         className="font-mono text-sm"
                       />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button onClick={handleCopyReply} variant="outline">
                         <Copy className="h-4 w-4 mr-2" />
                         Copy to Clipboard
