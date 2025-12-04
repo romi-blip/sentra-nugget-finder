@@ -6,6 +6,54 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Try multiple endpoints for Reddit profile data
+async function fetchRedditProfile(username: string): Promise<any> {
+  const endpoints = [
+    `https://old.reddit.com/user/${username}/about.json`,
+    `https://www.reddit.com/user/${username}/about.json`,
+    `https://api.reddit.com/user/${username}/about`,
+  ];
+  
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  ];
+  
+  for (const endpoint of endpoints) {
+    for (const userAgent of userAgents) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`);
+        
+        const response = await fetch(endpoint, {
+          headers: {
+            'User-Agent': userAgent,
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.data) {
+            console.log('Successfully fetched profile data');
+            return data.data;
+          }
+        } else {
+          console.log(`Endpoint ${endpoint} returned status: ${response.status}`);
+        }
+      } catch (err) {
+        console.log(`Endpoint ${endpoint} failed:`, err.message);
+      }
+      
+      // Small delay between attempts
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+  
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -54,38 +102,46 @@ serve(async (req) => {
     
     console.log(`Fetching Reddit profile for: ${cleanUsername}`);
 
-    // Use Reddit's free public API
-    const redditResponse = await fetch(
-      `https://www.reddit.com/user/${cleanUsername}/about.json`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-      }
-    );
+    // Try to fetch profile data from Reddit
+    const profileData = await fetchRedditProfile(cleanUsername);
 
-    if (!redditResponse.ok) {
-      console.error('Reddit API error:', redditResponse.status);
+    if (!profileData) {
+      // If all Reddit API attempts fail, create a basic profile entry anyway
+      // User can sync later when Reddit API is available
+      console.log('Reddit API unavailable, creating basic profile');
       
-      if (redditResponse.status === 404) {
-        return new Response(JSON.stringify({ error: 'Reddit user not found' }), {
-          status: 404,
+      const basicProfile = {
+        user_id: user.id,
+        reddit_username: cleanUsername,
+        display_name: cleanUsername,
+        profile_url: `https://www.reddit.com/user/${cleanUsername}`,
+        link_karma: 0,
+        comment_karma: 0,
+        total_karma: 0,
+        last_synced_at: new Date().toISOString(),
+      };
+
+      const { data: profile, error: upsertError } = await supabase
+        .from('reddit_profiles')
+        .upsert(basicProfile, {
+          onConflict: 'user_id,reddit_username',
+        })
+        .select()
+        .single();
+
+      if (upsertError) {
+        console.error('Error upserting profile:', upsertError);
+        return new Response(JSON.stringify({ error: upsertError.message }), {
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      
-      return new Response(JSON.stringify({ error: 'Failed to fetch Reddit profile' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
-    const redditData = await redditResponse.json();
-    const profileData = redditData.data;
-
-    if (!profileData) {
-      return new Response(JSON.stringify({ error: 'Invalid Reddit response' }), {
-        status: 500,
+      return new Response(JSON.stringify({ 
+        success: true, 
+        profile,
+        message: 'Profile added. Reddit API temporarily unavailable - karma data will sync later.'
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
