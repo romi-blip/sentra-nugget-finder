@@ -1552,6 +1552,119 @@ export type Database = {
           },
         ]
       }
+      reddit_profile_activity: {
+        Row: {
+          activity_type: string
+          content: string | null
+          created_at: string | null
+          id: string
+          num_comments: number | null
+          permalink: string | null
+          posted_at: string | null
+          profile_id: string
+          reddit_id: string
+          score: number | null
+          subreddit: string | null
+          title: string | null
+        }
+        Insert: {
+          activity_type: string
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          num_comments?: number | null
+          permalink?: string | null
+          posted_at?: string | null
+          profile_id: string
+          reddit_id: string
+          score?: number | null
+          subreddit?: string | null
+          title?: string | null
+        }
+        Update: {
+          activity_type?: string
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          num_comments?: number | null
+          permalink?: string | null
+          posted_at?: string | null
+          profile_id?: string
+          reddit_id?: string
+          score?: number | null
+          subreddit?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reddit_profile_activity_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "reddit_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reddit_profiles: {
+        Row: {
+          account_created_at: string | null
+          avatar_url: string | null
+          comment_karma: number | null
+          created_at: string | null
+          description: string | null
+          display_name: string | null
+          id: string
+          is_active: boolean | null
+          is_premium: boolean | null
+          is_verified: boolean | null
+          last_synced_at: string | null
+          link_karma: number | null
+          profile_url: string | null
+          reddit_username: string
+          total_karma: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account_created_at?: string | null
+          avatar_url?: string | null
+          comment_karma?: number | null
+          created_at?: string | null
+          description?: string | null
+          display_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_premium?: boolean | null
+          is_verified?: boolean | null
+          last_synced_at?: string | null
+          link_karma?: number | null
+          profile_url?: string | null
+          reddit_username: string
+          total_karma?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account_created_at?: string | null
+          avatar_url?: string | null
+          comment_karma?: number | null
+          created_at?: string | null
+          description?: string | null
+          display_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_premium?: boolean | null
+          is_verified?: boolean | null
+          last_synced_at?: string | null
+          link_karma?: number | null
+          profile_url?: string | null
+          reddit_username?: string
+          total_karma?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       sales_enablement_assets: {
         Row: {
           content: string | null

@@ -4,12 +4,15 @@ import { useTrackedSubreddits } from '@/hooks/useTrackedSubreddits';
 import { useTrackedKeywords } from '@/hooks/useTrackedKeywords';
 import { useRedditPosts, type RedditPost, type TimeRange } from '@/hooks/useRedditPosts';
 import { useRedditActions } from '@/hooks/useRedditActions';
+import { useRedditProfiles } from '@/hooks/useRedditProfiles';
 import { SubredditManager } from '@/components/engagement/SubredditManager';
 import { SubredditCard } from '@/components/engagement/SubredditCard';
 import { KeywordManager } from '@/components/engagement/KeywordManager';
 import { KeywordCard } from '@/components/engagement/KeywordCard';
 import { PostCard } from '@/components/engagement/PostCard';
 import { PostDetailModal } from '@/components/engagement/PostDetailModal';
+import { RedditProfileManager } from '@/components/engagement/RedditProfileManager';
+import { RedditProfileActivityFeed } from '@/components/engagement/RedditProfileActivityFeed';
 import {
   Select,
   SelectContent,
@@ -40,6 +43,8 @@ const Engagement = () => {
     toggleActive,
     removeSubreddit 
   } = useTrackedSubreddits();
+
+  const { profiles } = useRedditProfiles();
 
   const {
     keywords,
@@ -284,9 +289,10 @@ const Engagement = () => {
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-4">
               <Tabs defaultValue="subreddits" className="w-full">
-                <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsList className="grid w-full max-w-lg grid-cols-3">
                   <TabsTrigger value="subreddits">Subreddits</TabsTrigger>
                   <TabsTrigger value="keywords">Keywords</TabsTrigger>
+                  <TabsTrigger value="profiles">Profiles ({profiles.length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="subreddits" className="space-y-4">
@@ -370,6 +376,14 @@ const Engagement = () => {
                         </CollapsibleContent>
                       </Card>
                     </Collapsible>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="profiles" className="space-y-4">
+                  <RedditProfileManager />
+                  
+                  {profiles.length > 0 && (
+                    <RedditProfileActivityFeed />
                   )}
                 </TabsContent>
               </Tabs>
