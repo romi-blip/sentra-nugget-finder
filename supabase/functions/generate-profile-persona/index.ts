@@ -9,8 +9,7 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    const authResult = await validateAuth(authHeader);
+    const authResult = await validateAuth(req);
     if (!authResult.valid) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
