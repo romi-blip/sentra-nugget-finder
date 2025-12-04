@@ -11,7 +11,7 @@ export const corsHeaders = {
  * 2. The service role key (for internal function-to-function calls)
  * 3. A valid internal secret (for cron jobs)
  */
-export async function validateAuth(req: Request): Promise<{ valid: boolean; userId?: string; isServiceRole?: boolean }> {
+export async function validateAuth(req: Request): Promise<{ valid: boolean; userId?: string; isServiceRole?: boolean; isScheduled?: boolean }> {
   const authHeader = req.headers.get('authorization');
   
   if (!authHeader) {
@@ -26,6 +26,11 @@ export async function validateAuth(req: Request): Promise<{ valid: boolean; user
   // Check if it's the service role key (internal function-to-function calls)
   if (token === serviceRoleKey) {
     return { valid: true, isServiceRole: true };
+  }
+
+  // Check if it's the anon key (scheduled cron jobs)
+  if (token === anonKey) {
+    return { valid: true, isScheduled: true };
   }
 
   // Try to validate as user JWT
