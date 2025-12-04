@@ -201,9 +201,6 @@ async function fetchUserKarma(username: string, apifyToken: string): Promise<any
         skipComments: true,
         skipUserPosts: true,
         skipCommunity: true,
-        proxyConfiguration: {
-          useApifyProxy: true,
-        },
       }),
     });
 
