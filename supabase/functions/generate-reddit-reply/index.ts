@@ -8,7 +8,6 @@ serve(async (req) => {
   }
 
   try {
-    // Validate authentication (user JWT or service role for internal calls)
     const auth = await validateAuth(req);
     if (!auth.valid) {
       return unauthorizedResponse();
@@ -19,8 +18,8 @@ serve(async (req) => {
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { post_id, review_id, post, review } = await req.json();
-    console.log('Generating reply for post:', post_id);
+    const { post_id, review_id, post, review, profile_id } = await req.json();
+    console.log('Generating reply for post:', post_id, 'with profile_id:', profile_id);
 
     if (!post_id || !review_id || !post || !review) {
       throw new Error('post_id, review_id, post, and review data are required');
@@ -35,9 +34,106 @@ serve(async (req) => {
 
     const subredditName = subreddit?.subreddit_name || 'unknown';
 
-    // Stage 1: Generate initial reply with strict brevity
-    const replyCreationPrompt = `You are a tired security practitioner on Reddit during lunch break. 
+    // Get managed profile with persona (either specified or auto-select best match)
+    let selectedProfile = null;
+    
+    if (profile_id) {
+      // Use specified profile
+      const { data: profile } = await supabase
+        .from('reddit_profiles')
+        .select('*')
+        .eq('id', profile_id)
+        .single();
+      selectedProfile = profile;
+    } else {
+      // Auto-select best matching managed profile with persona
+      const { data: managedProfiles } = await supabase
+        .from('reddit_profiles')
+        .select('*')
+        .eq('profile_type', 'managed')
+        .eq('is_active', true)
+        .not('persona_summary', 'is', null);
 
+      if (managedProfiles && managedProfiles.length > 0) {
+        // Use AI to select best profile based on post content
+        const profileSelectionPrompt = `Given the following Reddit post and available user personas, select the BEST profile to respond.
+
+POST DETAILS:
+Title: ${post.title}
+Subreddit: r/${subredditName}
+Content: ${post.content || post.content_snippet || 'No content'}
+Key Themes: ${review.key_themes}
+
+AVAILABLE PROFILES:
+${managedProfiles.map((p: any, i: number) => `
+${i + 1}. u/${p.reddit_username}
+   Expertise: ${p.expertise_areas?.join(', ') || 'General'}
+   Writing Style: ${p.writing_style || 'Unknown'}
+   Tone: ${p.typical_tone || 'Unknown'}
+   Summary: ${p.persona_summary || 'No summary'}
+`).join('\n')}
+
+Select the profile number that would be MOST credible and effective for this post based on:
+1. Expertise match with post topics
+2. Appropriate tone for the subreddit/situation
+3. Writing style fit
+
+Return ONLY the profile number (1, 2, 3, etc).`;
+
+        const selectionResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${lovableApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              { role: 'user', content: profileSelectionPrompt }
+            ],
+          }),
+        });
+
+        if (selectionResponse.ok) {
+          const selectionData = await selectionResponse.json();
+          const selectionText = selectionData.choices?.[0]?.message?.content?.trim();
+          const profileIndex = parseInt(selectionText) - 1;
+          
+          if (!isNaN(profileIndex) && profileIndex >= 0 && profileIndex < managedProfiles.length) {
+            selectedProfile = managedProfiles[profileIndex];
+            console.log('Auto-selected profile:', selectedProfile.reddit_username);
+          } else {
+            // Default to first profile if parsing fails
+            selectedProfile = managedProfiles[0];
+            console.log('Defaulting to first profile:', selectedProfile.reddit_username);
+          }
+        } else {
+          // Default to first profile if AI call fails
+          selectedProfile = managedProfiles[0];
+          console.log('AI selection failed, defaulting to first profile');
+        }
+      }
+    }
+
+    // Build persona-aware prompt
+    let personaContext = '';
+    if (selectedProfile && selectedProfile.persona_summary) {
+      personaContext = `
+YOU ARE REPLYING AS: u/${selectedProfile.reddit_username}
+
+YOUR PERSONA:
+- Writing Style: ${selectedProfile.writing_style || 'casual, authentic'}
+- Typical Tone: ${selectedProfile.typical_tone || 'helpful but direct'}
+- Expertise Areas: ${selectedProfile.expertise_areas?.join(', ') || 'security, technology'}
+- Background: ${selectedProfile.persona_summary}
+
+CRITICAL: Sound EXACTLY like this person based on their writing style and tone. Match their vocabulary, sentence structure, and personality.
+`;
+    }
+
+    // Stage 1: Generate initial reply with strict brevity
+    const replyCreationPrompt = `You are a tired security practitioner on Reddit during lunch break.
+${personaContext}
 ABSOLUTE RULES:
 1. MAXIMUM 1-4 SENTENCES. If you write 5+ sentences, you FAILED.
 2. Sound like a real person, not a consultant or vendor
@@ -99,6 +195,7 @@ Reasoning: ${review.reasoning}`;
 
     // Stage 2: Enforce brevity and humanize
     const humanizationPrompt = `Make this Reddit comment sound more human and enforce strict brevity.
+${selectedProfile ? `Match the writing style of u/${selectedProfile.reddit_username}: ${selectedProfile.writing_style || 'casual'}` : ''}
 
 CRITICAL RULES:
 1. MUST be 1-4 sentences max (cut anything longer)
@@ -160,6 +257,7 @@ ${initialReply}`;
           suggested_reply: suggestedReply,
           review_id,
           status: 'pending',
+          suggested_profile_id: selectedProfile?.id || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', existingReply.id)
@@ -176,7 +274,8 @@ ${initialReply}`;
           post_id,
           review_id,
           suggested_reply: suggestedReply,
-          status: 'pending'
+          status: 'pending',
+          suggested_profile_id: selectedProfile?.id || null
         })
         .select()
         .single();
@@ -185,7 +284,16 @@ ${initialReply}`;
       insertedReply = data;
     }
 
-    return new Response(JSON.stringify({ success: true, reply: insertedReply }), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      reply: insertedReply,
+      suggested_profile: selectedProfile ? {
+        id: selectedProfile.id,
+        username: selectedProfile.reddit_username,
+        writing_style: selectedProfile.writing_style,
+        typical_tone: selectedProfile.typical_tone
+      } : null
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

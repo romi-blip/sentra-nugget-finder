@@ -58,24 +58,28 @@ export function useRedditActions() {
   });
 
   const generateReply = useMutation({
-    mutationFn: async ({ postId, reviewId, post, review }: { 
+    mutationFn: async ({ postId, reviewId, post, review, profileId }: { 
       postId: string; 
       reviewId: string;
       post: any;
       review: any;
+      profileId?: string;
     }) => {
       const { data, error } = await supabase.functions.invoke('generate-reddit-reply', {
-        body: { post_id: postId, review_id: reviewId, post, review }
+        body: { post_id: postId, review_id: reviewId, post, review, profile_id: profileId }
       });
       
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
+      const profileInfo = data?.suggested_profile 
+        ? ` for u/${data.suggested_profile.username}` 
+        : '';
       toast({
         title: "Reply generated",
-        description: "Successfully generated new reply.",
+        description: `Successfully generated new reply${profileInfo}.`,
       });
     },
     onError: (error: any) => {
