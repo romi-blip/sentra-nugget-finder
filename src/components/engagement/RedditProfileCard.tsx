@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Trash2, ExternalLink, ChevronDown, ChevronUp, Award, MessageSquare, FileText } from 'lucide-react';
+import { RefreshCw, Trash2, ExternalLink, ChevronDown, ChevronUp, Award, MessageSquare, FileText, Sparkles, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -13,7 +13,10 @@ interface RedditProfileCardProps {
   onSync: () => void;
   onToggleActive: (is_active: boolean) => void;
   onRemove: () => void;
+  onGeneratePersona: () => void;
+  onUpdateType: (type: 'tracked' | 'managed') => void;
   isSyncing: boolean;
+  isGeneratingPersona: boolean;
 }
 
 export function RedditProfileCard({ 
@@ -21,7 +24,10 @@ export function RedditProfileCard({
   onSync, 
   onToggleActive, 
   onRemove,
-  isSyncing 
+  onGeneratePersona,
+  onUpdateType,
+  isSyncing,
+  isGeneratingPersona
 }: RedditProfileCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -34,6 +40,8 @@ export function RedditProfileCard({
   const accountAge = profile.account_created_at 
     ? formatDistanceToNow(new Date(profile.account_created_at), { addSuffix: false })
     : 'Unknown';
+
+  const isManaged = profile.profile_type === 'managed';
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -58,11 +66,19 @@ export function RedditProfileCard({
                   u/{profile.reddit_username}
                   <ExternalLink className="h-3 w-3" />
                 </a>
+                <Badge 
+                  variant={isManaged ? "default" : "outline"} 
+                  className="text-xs cursor-pointer"
+                  onClick={() => onUpdateType(isManaged ? 'tracked' : 'managed')}
+                >
+                  {isManaged ? (
+                    <><Users className="h-3 w-3 mr-1" />Managed</>
+                  ) : (
+                    <><User className="h-3 w-3 mr-1" />Tracked</>
+                  )}
+                </Badge>
                 {profile.is_premium && (
                   <Badge variant="secondary" className="text-xs">Premium</Badge>
-                )}
-                {profile.is_verified && (
-                  <Badge variant="outline" className="text-xs">Verified</Badge>
                 )}
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -126,6 +142,86 @@ export function RedditProfileCard({
 
             {profile.description && (
               <p className="text-xs text-muted-foreground">{profile.description}</p>
+            )}
+
+            {/* Persona Section - Only for Managed Profiles */}
+            {isManaged && (
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-primary" />
+                    AI Persona
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onGeneratePersona}
+                    disabled={isGeneratingPersona}
+                    className="h-6 text-xs"
+                  >
+                    {isGeneratingPersona ? (
+                      <>
+                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                        Generating...
+                      </>
+                    ) : profile.persona_summary ? (
+                      <>
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Regenerate
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Generate Persona
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {profile.persona_summary ? (
+                  <>
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                      {profile.persona_summary}
+                    </p>
+                    
+                    <div className="flex flex-wrap gap-1">
+                      {profile.writing_style && (
+                        <Badge variant="secondary" className="text-xs">
+                          Style: {profile.writing_style}
+                        </Badge>
+                      )}
+                      {profile.typical_tone && (
+                        <Badge variant="secondary" className="text-xs">
+                          Tone: {profile.typical_tone}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {profile.expertise_areas && profile.expertise_areas.length > 0 && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Expertise:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {profile.expertise_areas.map((area, idx) => (
+                            <Badge key={idx} variant="outline" className="text-xs">
+                              {area}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {profile.persona_generated_at && (
+                      <span className="text-xs text-muted-foreground block">
+                        Generated {formatDistanceToNow(new Date(profile.persona_generated_at), { addSuffix: true })}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    No persona generated yet. Sync profile activity first, then generate a persona.
+                  </p>
+                )}
+              </div>
             )}
 
             <div className="flex items-center justify-between">
