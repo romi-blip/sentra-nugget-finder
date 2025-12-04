@@ -20,14 +20,12 @@ serve(async (req) => {
     const authHeader = req.headers.get('authorization');
     const token = authHeader?.replace('Bearer ', '');
     
-    // Check for scheduled job (anon key) or service role
     const isScheduled = token === supabaseAnonKey;
     const isServiceRole = token === supabaseServiceKey;
     
     let userId: string | null = null;
     
     if (!isScheduled && !isServiceRole) {
-      // Validate user JWT
       const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader! } },
       });
@@ -46,7 +44,6 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const { profile_id } = body;
 
-    // Build query for profiles to sync
     let query = supabase
       .from('reddit_profiles')
       .select('*')
@@ -74,34 +71,49 @@ serve(async (req) => {
     for (const profile of profiles || []) {
       try {
         if (!apifyToken) {
-          console.log('APIFY_API_TOKEN not configured, skipping sync');
+          console.log('APIFY_API_TOKEN not configured');
           results.push({ profile_id: profile.id, status: 'error', error: 'APIFY_API_TOKEN not configured' });
           continue;
         }
 
-        // Use Apify to fetch both profile info and activity
-        const { profileData, activities } = await syncWithApify(profile, apifyToken);
+        const { activities, userInfo } = await syncWithApify(profile, apifyToken);
         
-        // Update profile with karma data from Apify
+        // Calculate karma from activities
+        let linkKarma = 0;
+        let commentKarma = 0;
+        
+        for (const item of activities) {
+          const score = item.score || item.ups || item.upvotes || 0;
+          const isComment = item.dataType === 'comment' || item.type === 'comment';
+          
+          if (isComment) {
+            commentKarma += score;
+          } else {
+            linkKarma += score;
+          }
+        }
+        
+        // Use userInfo if available, otherwise use calculated values
         const updateData: any = {
           last_synced_at: new Date().toISOString(),
         };
         
-        if (profileData) {
-          if (profileData.linkKarma !== undefined) updateData.link_karma = profileData.linkKarma;
-          if (profileData.commentKarma !== undefined) updateData.comment_karma = profileData.commentKarma;
-          if (profileData.totalKarma !== undefined) {
-            updateData.total_karma = profileData.totalKarma;
-          } else if (profileData.linkKarma !== undefined && profileData.commentKarma !== undefined) {
-            updateData.total_karma = profileData.linkKarma + profileData.commentKarma;
-          }
-          if (profileData.avatar) updateData.avatar_url = profileData.avatar.split('?')[0];
-          if (profileData.isPremium !== undefined) updateData.is_premium = profileData.isPremium;
-          if (profileData.createdAt) updateData.account_created_at = new Date(profileData.createdAt).toISOString();
-          if (profileData.description) updateData.description = profileData.description;
+        if (userInfo) {
+          updateData.link_karma = userInfo.linkKarma ?? linkKarma;
+          updateData.comment_karma = userInfo.commentKarma ?? commentKarma;
+          updateData.total_karma = userInfo.totalKarma ?? (updateData.link_karma + updateData.comment_karma);
+          if (userInfo.avatar) updateData.avatar_url = userInfo.avatar.split('?')[0];
+          if (userInfo.isPremium !== undefined) updateData.is_premium = userInfo.isPremium;
+          if (userInfo.createdAt) updateData.account_created_at = userInfo.createdAt;
+          if (userInfo.description) updateData.description = userInfo.description;
+        } else {
+          // Use calculated karma from activities (this is approximate)
+          updateData.link_karma = linkKarma;
+          updateData.comment_karma = commentKarma;
+          updateData.total_karma = linkKarma + commentKarma;
         }
         
-        console.log(`Updating profile with data:`, updateData);
+        console.log(`Updating profile with karma - link: ${updateData.link_karma}, comment: ${updateData.comment_karma}, total: ${updateData.total_karma}`);
         
         await supabase
           .from('reddit_profiles')
@@ -146,7 +158,6 @@ serve(async (req) => {
         console.log(`Saved ${savedCount} activities for ${profile.reddit_username}`);
         results.push({ profile_id: profile.id, status: 'success', activities: savedCount });
         
-        // Rate limit between profiles
         await new Promise(resolve => setTimeout(resolve, 2000));
         
       } catch (error) {
@@ -172,7 +183,7 @@ serve(async (req) => {
   }
 });
 
-async function syncWithApify(profile: any, apifyToken: string): Promise<{ profileData: any, activities: any[] }> {
+async function syncWithApify(profile: any, apifyToken: string): Promise<{ activities: any[], userInfo: any }> {
   console.log(`Syncing with Apify for: ${profile.reddit_username}`);
   
   const actorId = 'louisdeconinck~reddit-user-profile-posts-scraper';
@@ -183,7 +194,7 @@ async function syncWithApify(profile: any, apifyToken: string): Promise<{ profil
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       startUrls: [{ url: `https://www.reddit.com/user/${profile.reddit_username}` }],
-      maxItems: 50,
+      maxItems: 100,
       sort: 'new',
       proxyConfiguration: {
         useApifyProxy: true,
@@ -202,7 +213,7 @@ async function syncWithApify(profile: any, apifyToken: string): Promise<{ profil
   const runId = runData.data.id;
   console.log(`Apify run started: ${runId}`);
 
-  // Poll for completion (max 120 seconds)
+  // Poll for completion
   let attempts = 0;
   while (attempts < 24) {
     await new Promise(resolve => setTimeout(resolve, 5000));
@@ -222,7 +233,6 @@ async function syncWithApify(profile: any, apifyToken: string): Promise<{ profil
     attempts++;
   }
 
-  // Fetch results
   const resultsResponse = await fetch(
     `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apifyToken}`
   );
@@ -230,101 +240,28 @@ async function syncWithApify(profile: any, apifyToken: string): Promise<{ profil
   
   console.log(`Got ${results.length} items from Apify`);
   
-  // Extract profile data from results (first item often contains profile info)
-  let profileData = null;
-  const activities: any[] = [];
+  // Log first item to see structure
+  if (results.length > 0) {
+    console.log('First item keys:', Object.keys(results[0]));
+    console.log('First item sample:', JSON.stringify(results[0]).substring(0, 500));
+  }
   
+  // Check if any item contains user profile info
+  let userInfo = null;
   for (const item of results) {
-    // Check if this item contains profile metadata
-    if (item.linkKarma !== undefined || item.commentKarma !== undefined || item.totalKarma !== undefined) {
-      profileData = item;
-      console.log('Found profile data in results:', {
-        linkKarma: item.linkKarma,
-        commentKarma: item.commentKarma,
-        totalKarma: item.totalKarma,
-      });
-    }
-    
-    // Add as activity if it has content
-    if (item.id || item.name || item.reddit_id) {
-      activities.push(item);
-    }
-  }
-  
-  // If no profile data found in results, try to fetch it separately
-  if (!profileData) {
-    console.log('No profile data in activity results, trying dedicated profile scraper...');
-    profileData = await fetchProfileDataFromApify(profile.reddit_username, apifyToken);
-  }
-  
-  return { profileData, activities };
-}
-
-async function fetchProfileDataFromApify(username: string, apifyToken: string): Promise<any> {
-  try {
-    // Try the crawlerbros reddit-scraper which can fetch user profiles
-    const actorId = 'crawlerbros~reddit-scraper';
-    const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`;
-    
-    const runResponse = await fetch(runUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        startUrls: [{ url: `https://www.reddit.com/user/${username}` }],
-        maxItems: 1,
-        proxyConfiguration: {
-          useApifyProxy: true,
-        },
-      }),
-    });
-
-    if (!runResponse.ok) {
-      console.log('Profile scraper not available');
-      return null;
-    }
-
-    const runData = await runResponse.json();
-    const runId = runData.data.id;
-
-    // Wait for completion (shorter timeout)
-    let attempts = 0;
-    while (attempts < 12) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      const statusResponse = await fetch(
-        `https://api.apify.com/v2/actor-runs/${runId}?token=${apifyToken}`
-      );
-      const statusData = await statusResponse.json();
-      
-      if (statusData.data.status === 'SUCCEEDED') break;
-      if (statusData.data.status === 'FAILED' || statusData.data.status === 'ABORTED') {
-        return null;
-      }
-      
-      attempts++;
-    }
-
-    const resultsResponse = await fetch(
-      `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apifyToken}`
-    );
-    const results = await resultsResponse.json();
-    
-    if (results.length > 0) {
-      const item = results[0];
-      return {
-        linkKarma: item.link_karma || item.linkKarma,
-        commentKarma: item.comment_karma || item.commentKarma,
-        totalKarma: item.total_karma || item.totalKarma,
-        avatar: item.icon_img || item.avatar || item.avatar_url,
-        isPremium: item.is_gold || item.is_premium || item.isPremium,
-        createdAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : item.createdAt,
-        description: item.subreddit?.public_description || item.description,
+    if (item.user && typeof item.user === 'object') {
+      userInfo = {
+        linkKarma: item.user.link_karma || item.user.linkKarma,
+        commentKarma: item.user.comment_karma || item.user.commentKarma,
+        totalKarma: item.user.total_karma || item.user.totalKarma,
+        avatar: item.user.icon_img || item.user.avatar,
+        isPremium: item.user.is_gold || item.user.is_premium,
+        createdAt: item.user.created_utc ? new Date(item.user.created_utc * 1000).toISOString() : null,
       };
+      console.log('Found user info in item:', userInfo);
+      break;
     }
-    
-    return null;
-  } catch (error) {
-    console.error('Error fetching profile data:', error);
-    return null;
   }
+  
+  return { activities: results, userInfo };
 }
