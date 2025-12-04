@@ -76,38 +76,39 @@ serve(async (req) => {
           continue;
         }
 
-        const { activities, userInfo } = await syncWithApify(profile, apifyToken);
+        // Step 1: Fetch accurate karma using practicaltools/apify-reddit-api
+        console.log(`Fetching karma for: ${profile.reddit_username}`);
+        const karmaData = await fetchUserKarma(profile.reddit_username, apifyToken);
         
-        // Calculate karma from activities
-        let linkKarma = 0;
-        let commentKarma = 0;
+        // Step 2: Fetch activities using existing actor
+        const activities = await fetchUserActivities(profile, apifyToken);
         
-        for (const item of activities) {
-          const score = item.score || item.ups || item.upvotes || 0;
-          const isComment = item.dataType === 'comment' || item.type === 'comment';
-          
-          if (isComment) {
-            commentKarma += score;
-          } else {
-            linkKarma += score;
-          }
-        }
-        
-        // Use userInfo if available, otherwise use calculated values
+        // Update profile with karma data
         const updateData: any = {
           last_synced_at: new Date().toISOString(),
         };
         
-        if (userInfo) {
-          updateData.link_karma = userInfo.linkKarma ?? linkKarma;
-          updateData.comment_karma = userInfo.commentKarma ?? commentKarma;
-          updateData.total_karma = userInfo.totalKarma ?? (updateData.link_karma + updateData.comment_karma);
-          if (userInfo.avatar) updateData.avatar_url = userInfo.avatar.split('?')[0];
-          if (userInfo.isPremium !== undefined) updateData.is_premium = userInfo.isPremium;
-          if (userInfo.createdAt) updateData.account_created_at = userInfo.createdAt;
-          if (userInfo.description) updateData.description = userInfo.description;
+        if (karmaData) {
+          updateData.link_karma = karmaData.postKarma || 0;
+          updateData.comment_karma = karmaData.commentKarma || 0;
+          updateData.total_karma = (karmaData.postKarma || 0) + (karmaData.commentKarma || 0);
+          if (karmaData.avatar) updateData.avatar_url = karmaData.avatar.split('?')[0];
+          if (karmaData.isPremium !== undefined) updateData.is_premium = karmaData.isPremium;
+          if (karmaData.createdAt) updateData.account_created_at = karmaData.createdAt;
+          if (karmaData.description) updateData.description = karmaData.description;
         } else {
-          // Use calculated karma from activities (this is approximate)
+          // Fallback: calculate karma from activities
+          let linkKarma = 0;
+          let commentKarma = 0;
+          for (const item of activities) {
+            const score = item.score || item.ups || item.upvotes || 0;
+            const isComment = item.dataType === 'comment' || item.type === 'comment';
+            if (isComment) {
+              commentKarma += score;
+            } else {
+              linkKarma += score;
+            }
+          }
           updateData.link_karma = linkKarma;
           updateData.comment_karma = commentKarma;
           updateData.total_karma = linkKarma + commentKarma;
@@ -156,7 +157,7 @@ serve(async (req) => {
         }
 
         console.log(`Saved ${savedCount} activities for ${profile.reddit_username}`);
-        results.push({ profile_id: profile.id, status: 'success', activities: savedCount });
+        results.push({ profile_id: profile.id, status: 'success', activities: savedCount, karma: updateData });
         
         await new Promise(resolve => setTimeout(resolve, 2000));
         
@@ -183,8 +184,95 @@ serve(async (req) => {
   }
 });
 
-async function syncWithApify(profile: any, apifyToken: string): Promise<{ activities: any[], userInfo: any }> {
-  console.log(`Syncing with Apify for: ${profile.reddit_username}`);
+// Fetch accurate karma data using practicaltools/apify-reddit-api
+async function fetchUserKarma(username: string, apifyToken: string): Promise<any> {
+  try {
+    const actorId = 'practicaltools~apify-reddit-api';
+    const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`;
+    
+    console.log(`Starting karma fetch with practicaltools/apify-reddit-api for: ${username}`);
+    
+    const runResponse = await fetch(runUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        startUrls: [{ url: `https://www.reddit.com/user/${username}` }],
+        maxItems: 1,
+        skipComments: true,
+        skipUserPosts: true,
+        skipCommunity: true,
+        proxyConfiguration: {
+          useApifyProxy: true,
+        },
+      }),
+    });
+
+    if (!runResponse.ok) {
+      const errorText = await runResponse.text();
+      console.error('Failed to start karma fetch actor:', errorText);
+      return null;
+    }
+
+    const runData = await runResponse.json();
+    const runId = runData.data.id;
+    console.log(`Karma fetch run started: ${runId}`);
+
+    // Poll for completion (shorter timeout since we only want profile data)
+    let attempts = 0;
+    while (attempts < 12) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      const statusResponse = await fetch(
+        `https://api.apify.com/v2/actor-runs/${runId}?token=${apifyToken}`
+      );
+      const statusData = await statusResponse.json();
+      
+      console.log(`Karma fetch status: ${statusData.data.status}`);
+      
+      if (statusData.data.status === 'SUCCEEDED') break;
+      if (statusData.data.status === 'FAILED' || statusData.data.status === 'ABORTED') {
+        console.error(`Karma fetch run ${statusData.data.status}`);
+        return null;
+      }
+      
+      attempts++;
+    }
+
+    const resultsResponse = await fetch(
+      `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apifyToken}`
+    );
+    const results = await resultsResponse.json();
+    
+    console.log(`Karma fetch got ${results.length} items`);
+    
+    if (results.length > 0) {
+      const item = results[0];
+      console.log('Karma data keys:', Object.keys(item));
+      console.log('Karma data sample:', JSON.stringify(item).substring(0, 800));
+      
+      // Extract karma data from the response
+      // The actor returns user profile data with postKarma and commentKarma
+      return {
+        postKarma: item.postKarma ?? item.link_karma ?? item.linkKarma ?? null,
+        commentKarma: item.commentKarma ?? item.comment_karma ?? null,
+        avatar: item.userIcon ?? item.icon_img ?? item.avatar ?? item.avatar_url ?? null,
+        isPremium: item.isPremium ?? item.is_premium ?? item.isGold ?? item.is_gold ?? null,
+        createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : 
+                   item.created_utc ? new Date(item.created_utc * 1000).toISOString() : null,
+        description: item.description ?? item.publicDescription ?? item.subreddit?.public_description ?? null,
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching karma:', error);
+    return null;
+  }
+}
+
+// Fetch user activities using louisdeconinck/reddit-user-profile-posts-scraper
+async function fetchUserActivities(profile: any, apifyToken: string): Promise<any[]> {
+  console.log(`Fetching activities for: ${profile.reddit_username}`);
   
   const actorId = 'louisdeconinck~reddit-user-profile-posts-scraper';
   const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`;
@@ -205,13 +293,13 @@ async function syncWithApify(profile: any, apifyToken: string): Promise<{ activi
 
   if (!runResponse.ok) {
     const errorText = await runResponse.text();
-    console.error('Failed to start Apify actor:', errorText);
-    throw new Error('Failed to start Apify actor');
+    console.error('Failed to start activity actor:', errorText);
+    throw new Error('Failed to start Apify activity actor');
   }
 
   const runData = await runResponse.json();
   const runId = runData.data.id;
-  console.log(`Apify run started: ${runId}`);
+  console.log(`Activity fetch run started: ${runId}`);
 
   // Poll for completion
   let attempts = 0;
@@ -223,11 +311,11 @@ async function syncWithApify(profile: any, apifyToken: string): Promise<{ activi
     );
     const statusData = await statusResponse.json();
     
-    console.log(`Run status: ${statusData.data.status}`);
+    console.log(`Activity fetch status: ${statusData.data.status}`);
     
     if (statusData.data.status === 'SUCCEEDED') break;
     if (statusData.data.status === 'FAILED' || statusData.data.status === 'ABORTED') {
-      throw new Error(`Apify run ${statusData.data.status}`);
+      throw new Error(`Activity fetch run ${statusData.data.status}`);
     }
     
     attempts++;
@@ -238,30 +326,7 @@ async function syncWithApify(profile: any, apifyToken: string): Promise<{ activi
   );
   const results = await resultsResponse.json();
   
-  console.log(`Got ${results.length} items from Apify`);
+  console.log(`Got ${results.length} activities from Apify`);
   
-  // Log first item to see structure
-  if (results.length > 0) {
-    console.log('First item keys:', Object.keys(results[0]));
-    console.log('First item sample:', JSON.stringify(results[0]).substring(0, 500));
-  }
-  
-  // Check if any item contains user profile info
-  let userInfo = null;
-  for (const item of results) {
-    if (item.user && typeof item.user === 'object') {
-      userInfo = {
-        linkKarma: item.user.link_karma || item.user.linkKarma,
-        commentKarma: item.user.comment_karma || item.user.commentKarma,
-        totalKarma: item.user.total_karma || item.user.totalKarma,
-        avatar: item.user.icon_img || item.user.avatar,
-        isPremium: item.user.is_gold || item.user.is_premium,
-        createdAt: item.user.created_utc ? new Date(item.user.created_utc * 1000).toISOString() : null,
-      };
-      console.log('Found user info in item:', userInfo);
-      break;
-    }
-  }
-  
-  return { activities: results, userInfo };
+  return results;
 }
