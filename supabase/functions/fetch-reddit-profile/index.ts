@@ -76,6 +76,10 @@ serve(async (req) => {
         startUrls: [{ url: profileUrl }],
         maxItems: 10,
         sort: 'new',
+        proxyConfiguration: {
+          useApifyProxy: true,
+          apifyProxyGroups: ['RESIDENTIAL'],
+        },
       }),
     });
 
