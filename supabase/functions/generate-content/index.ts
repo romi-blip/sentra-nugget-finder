@@ -9,6 +9,19 @@ const corsHeaders = {
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
+// Competitor domains that must NEVER be linked to in content
+const COMPETITOR_DOMAINS = [
+  'cyera.io',
+  'cyera.com',
+  'varonis.com',
+  'bigid.com',
+  'securiti.ai',
+  'securiti.com',
+  'concentric.ai',
+  'symmetrysystems.com',
+  'symmetry-systems.com',
+];
+
 // Type for the structured blog post output
 interface BlogPostStructure {
   title: string;
@@ -22,6 +35,48 @@ interface BlogPostStructure {
     title: string;
     url?: string;
   }>;
+}
+
+// Check if a URL belongs to a competitor
+function isCompetitorUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return COMPETITOR_DOMAINS.some(domain => 
+      hostname === domain || hostname.endsWith('.' + domain)
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Remove competitor URLs from markdown content
+function removeCompetitorLinks(content: string): { content: string; removedCount: number } {
+  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+  let removedCount = 0;
+  
+  const filteredContent = content.replace(markdownLinkRegex, (match, linkText, url) => {
+    if (isCompetitorUrl(url)) {
+      console.log(`Removing competitor link: ${url}`);
+      removedCount++;
+      // Return just the link text without the URL
+      return linkText;
+    }
+    return match;
+  });
+  
+  return { content: filteredContent, removedCount };
+}
+
+// Filter competitor URLs from sources array
+function filterCompetitorSources(sources: Array<{ title: string; url?: string }> | undefined): Array<{ title: string; url?: string }> {
+  if (!sources) return [];
+  return sources.filter(source => {
+    if (source.url && isCompetitorUrl(source.url)) {
+      console.log(`Filtering competitor source: ${source.url}`);
+      return false;
+    }
+    return true;
+  });
 }
 
 // Extract all URLs from research notes for validation
@@ -120,11 +175,12 @@ function formatBlogPost(data: BlogPostStructure): string {
     lines.push('');
   }
   
-  // Sources/References (if provided)
-  if (data.sources && data.sources.length > 0) {
+  // Sources/References (if provided) - filter out competitor sources
+  const filteredSources = filterCompetitorSources(data.sources);
+  if (filteredSources && filteredSources.length > 0) {
     lines.push('## References');
     lines.push('');
-    for (const source of data.sources) {
+    for (const source of filteredSources) {
       if (source.url) {
         lines.push(`- [${source.title}](${source.url})`);
       } else {
@@ -143,7 +199,7 @@ const blogPostTool = {
   type: "function",
   function: {
     name: "create_blog_post",
-    description: "Create a structured blog post with proper sections. IMPORTANT: Only use URLs that appear in the research notes. Each inline link must support the specific claim it's attached to.",
+    description: "Create a structured blog post with proper sections. IMPORTANT: Only use URLs that appear in the research notes. Each inline link must support the specific claim it's attached to. NEVER link to competitor websites.",
     parameters: {
       type: "object",
       properties: {
@@ -167,7 +223,7 @@ const blogPostTool = {
               },
               content: { 
                 type: "string", 
-                description: "Section content with paragraphs separated by double newlines. CRITICAL: When citing statistics, data points, or external research, use inline markdown links [claim text](URL) where the URL comes DIRECTLY from the research notes. Do NOT invent URLs. Only link claims that have corresponding URLs in the research notes." 
+                description: "Section content with paragraphs separated by double newlines. CRITICAL: When citing statistics, data points, or external research, use inline markdown links [claim text](URL) where the URL comes DIRECTLY from the research notes. Do NOT invent URLs. Only link claims that have corresponding URLs in the research notes. NEVER link to competitor websites (Cyera, Varonis, BigID, Securiti, Concentric, Symmetry Systems)." 
               }
             },
             required: ["heading", "content"]
@@ -179,12 +235,12 @@ const blogPostTool = {
         },
         sources: {
           type: "array",
-          description: "List of sources actually cited in the content. Only include sources whose URLs appear in the research notes and were used in the content.",
+          description: "List of sources actually cited in the content. Only include sources whose URLs appear in the research notes and were used in the content. Do NOT include competitor websites.",
           items: {
             type: "object",
             properties: {
               title: { type: "string", description: "Source title or description" },
-              url: { type: "string", description: "Source URL - must be from research notes" }
+              url: { type: "string", description: "Source URL - must be from research notes and NOT a competitor website" }
             },
             required: ["title"]
           }
@@ -246,6 +302,17 @@ CRITICAL LINKING RULES:
 4. If a claim doesn't have a supporting URL in the research notes, do not add a link for it
 5. Links should be contextually relevant - the link text should describe what the user will find
 
+**COMPETITOR RESTRICTION - EXTREMELY IMPORTANT:**
+You must NEVER include links to competitor websites in the content. The following companies are competitors and their domains must NOT be linked:
+- Cyera (cyera.io, cyera.com)
+- Varonis (varonis.com)
+- BigID (bigid.com)
+- Securiti AI (securiti.ai, securiti.com)
+- Concentric AI (concentric.ai)
+- Symmetry Systems (symmetrysystems.com)
+
+You may reference competitor information for context (e.g., "competitors in the DSPM space"), but you must NEVER include actual links to their websites. If research notes contain competitor URLs, DO NOT use them in the content.
+
 IMPORTANT: You MUST use the create_blog_post function to structure your response. Do not write free-form text.`;
 
     const userPrompt = `Write a blog post based on the following:
@@ -269,6 +336,11 @@ Create a compelling blog post with:
 - Place links naturally within sentences, not as standalone references
 - If you cannot find a URL in the research notes for a claim, do NOT add a link - just state the claim without linking
 - The link text should describe what the source is about, not generic text like "click here"
+
+**COMPETITOR LINK RESTRICTION:**
+- NEVER link to: Cyera, Varonis, BigID, Securiti AI, Concentric AI, or Symmetry Systems websites
+- If research notes contain competitor URLs, ignore them when creating links
+- You may mention competitors by name for context, but NEVER link to their domains
 
 Use the create_blog_post function to structure your response.`;
 
@@ -311,7 +383,14 @@ Use the create_blog_post function to structure your response.`;
     console.log('Received structured blog post data:', JSON.stringify(blogPostData, null, 2).substring(0, 500) + '...');
 
     // Format the structured data into proper markdown
-    const formattedContent = formatBlogPost(blogPostData);
+    let formattedContent = formatBlogPost(blogPostData);
+    
+    // Post-generation filtering: Remove any competitor links that slipped through
+    const { content: filteredContent, removedCount } = removeCompetitorLinks(formattedContent);
+    if (removedCount > 0) {
+      console.log(`Removed ${removedCount} competitor link(s) from generated content`);
+      formattedContent = filteredContent;
+    }
     
     // Validate URLs in generated content
     if (researchUrls.size > 0) {
@@ -341,6 +420,7 @@ Use the create_blog_post function to structure your response.`;
 - Keep ALL blank lines exactly as they are
 - Keep all # and ## heading markers exactly as they are
 - PRESERVE ALL MARKDOWN LINKS [text](url) exactly as they are - do not modify or remove any links
+- Ensure NO competitor links (cyera.io, varonis.com, bigid.com, securiti.ai, concentric.ai, symmetrysystems.com) appear in the output
 - Output ONLY the revised content, nothing else
 - Do NOT add any commentary, notes, or explanations
 
@@ -375,6 +455,13 @@ ${formattedContent}`;
     if (humanizationResponse.ok) {
       const humanizationData = await humanizationResponse.json();
       finalContent = humanizationData.choices[0].message.content;
+      
+      // Final competitor link removal after humanization (belt and suspenders)
+      const { content: finalFiltered, removedCount: finalRemovedCount } = removeCompetitorLinks(finalContent);
+      if (finalRemovedCount > 0) {
+        console.log(`Removed ${finalRemovedCount} competitor link(s) after humanization`);
+        finalContent = finalFiltered;
+      }
       
       // Minimal cleanup - just em dashes and normalize blank lines
       finalContent = finalContent
