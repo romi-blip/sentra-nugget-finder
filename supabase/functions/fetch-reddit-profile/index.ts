@@ -23,14 +23,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const apifyToken = Deno.env.get('APIFY_API_TOKEN');
-    
-    if (!apifyToken) {
-      return new Response(JSON.stringify({ error: 'APIFY_API_TOKEN not configured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
     
     // Create client for user auth
     const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
@@ -60,112 +52,60 @@ serve(async (req) => {
     // Clean username (remove u/ prefix if present)
     const cleanUsername = reddit_username.replace(/^u\//, '').trim();
     
-    console.log(`Fetching Reddit profile via Apify for: ${cleanUsername}`);
+    console.log(`Fetching Reddit profile for: ${cleanUsername}`);
 
-    // Use Apify Reddit User Info Scraper to get profile data
-    const actorId = 'louisdeconinck~reddit-user-info-scraper';
-    const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`;
-    
-    // Actor requires startUrls format with Reddit user profile URLs
-    const profileUrl = `https://www.reddit.com/user/${cleanUsername}/`;
-    
-    console.log(`Starting Apify actor for profile URL: ${profileUrl}`);
-    
-    const runResponse = await fetch(runUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        startUrls: [{ url: profileUrl }],
-        proxyConfiguration: {
-          useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL'],
+    // Use Reddit's free public API
+    const redditResponse = await fetch(
+      `https://www.reddit.com/user/${cleanUsername}/about.json`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
-      }),
-    });
+      }
+    );
 
-    if (!runResponse.ok) {
-      const errorText = await runResponse.text();
-      console.error('Failed to start Apify actor:', errorText);
-      return new Response(JSON.stringify({ error: 'Failed to start profile scraper' }), {
+    if (!redditResponse.ok) {
+      console.error('Reddit API error:', redditResponse.status);
+      
+      if (redditResponse.status === 404) {
+        return new Response(JSON.stringify({ error: 'Reddit user not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      return new Response(JSON.stringify({ error: 'Failed to fetch Reddit profile' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const runData = await runResponse.json();
-    const runId = runData.data.id;
-    console.log(`Apify run started: ${runId}`);
+    const redditData = await redditResponse.json();
+    const profileData = redditData.data;
 
-    // Poll for completion (max 90 seconds)
-    let attempts = 0;
-    const maxAttempts = 18;
-    
-    while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      const statusResponse = await fetch(
-        `https://api.apify.com/v2/actor-runs/${runId}?token=${apifyToken}`
-      );
-      const statusData = await statusResponse.json();
-      
-      if (statusData.data.status === 'SUCCEEDED') {
-        console.log('Apify run completed');
-        break;
-      } else if (statusData.data.status === 'FAILED' || statusData.data.status === 'ABORTED') {
-        console.error('Apify run failed:', statusData.data.status);
-        return new Response(JSON.stringify({ error: 'Profile scraper failed' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      
-      attempts++;
-    }
-
-    if (attempts >= maxAttempts) {
-      return new Response(JSON.stringify({ error: 'Profile scraper timed out' }), {
-        status: 504,
+    if (!profileData) {
+      return new Response(JSON.stringify({ error: 'Invalid Reddit response' }), {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Fetch results
-    const resultsResponse = await fetch(
-      `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apifyToken}`
-    );
-    const results = await resultsResponse.json();
-    
-    console.log(`Got ${results.length} items from Apify`);
+    console.log('Reddit profile data received for:', profileData.name);
 
-    if (!results || results.length === 0) {
-      return new Response(JSON.stringify({ error: 'No profile data found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Extract profile data from results
-    // The user info scraper returns profile data directly
-    const profileData = results[0];
-    console.log('Raw profile data:', JSON.stringify(profileData));
-
-    // Build profile record from user info scraper output
+    // Build profile record
     const profileRecord = {
       user_id: user.id,
-      reddit_username: cleanUsername,
-      display_name: profileData.displayName || profileData.name || cleanUsername,
-      profile_url: `https://www.reddit.com/user/${cleanUsername}`,
-      avatar_url: profileData.iconUrl || profileData.avatar || profileData.snoovatarImg || null,
-      link_karma: profileData.linkKarma || profileData.postKarma || 0,
-      comment_karma: profileData.commentKarma || 0,
-      total_karma: profileData.totalKarma || 
-                   ((profileData.linkKarma || 0) + (profileData.commentKarma || 0)),
-      account_created_at: profileData.createdAt ? 
-        new Date(profileData.createdAt * 1000).toISOString() : 
-        (profileData.created ? new Date(profileData.created).toISOString() : null),
-      is_verified: profileData.isVerified || profileData.verified || false,
-      is_premium: profileData.isPremium || profileData.isGold || false,
-      description: profileData.publicDescription || profileData.description || null,
+      reddit_username: profileData.name || cleanUsername,
+      display_name: profileData.subreddit?.display_name_prefixed || profileData.name || cleanUsername,
+      profile_url: `https://www.reddit.com/user/${profileData.name || cleanUsername}`,
+      avatar_url: profileData.icon_img?.split('?')[0] || profileData.snoovatar_img || null,
+      link_karma: profileData.link_karma || 0,
+      comment_karma: profileData.comment_karma || 0,
+      total_karma: profileData.total_karma || ((profileData.link_karma || 0) + (profileData.comment_karma || 0)),
+      account_created_at: profileData.created_utc ? new Date(profileData.created_utc * 1000).toISOString() : null,
+      is_verified: profileData.verified || false,
+      is_premium: profileData.is_gold || false,
+      description: profileData.subreddit?.public_description || null,
       last_synced_at: new Date().toISOString(),
     };
 
@@ -190,26 +130,10 @@ serve(async (req) => {
 
     console.log(`Profile saved: ${profile.id}`);
 
-    // Trigger activity sync in background (using the sync-reddit-profile-activity function)
-    // This will fetch posts and comments separately
-    console.log('Profile saved, triggering activity sync...');
-    
-    // Call sync function asynchronously
-    EdgeRuntime.waitUntil(
-      fetch(`${supabaseUrl}/functions/v1/sync-reddit-profile-activity`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({ profile_id: profile.id }),
-      }).catch(err => console.error('Failed to trigger activity sync:', err))
-    );
-
     return new Response(JSON.stringify({ 
       success: true, 
       profile,
-      message: 'Profile fetched successfully. Activity sync in progress.'
+      message: 'Profile fetched successfully'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
