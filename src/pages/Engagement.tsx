@@ -2,7 +2,7 @@ import { useState } from 'react';
 import SEO from '@/components/SEO';
 import { useTrackedSubreddits } from '@/hooks/useTrackedSubreddits';
 import { useTrackedKeywords } from '@/hooks/useTrackedKeywords';
-import { useRedditPosts, type RedditPost } from '@/hooks/useRedditPosts';
+import { useRedditPosts, type RedditPost, type TimeRange } from '@/hooks/useRedditPosts';
 import { useRedditActions } from '@/hooks/useRedditActions';
 import { SubredditManager } from '@/components/engagement/SubredditManager';
 import { SubredditCard } from '@/components/engagement/SubredditCard';
@@ -56,6 +56,7 @@ const Engagement = () => {
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
   const [priority, setPriority] = useState<string>('all');
   const [status, setStatus] = useState<string>('all');
+  const [timeRange, setTimeRange] = useState<TimeRange>('3months');
   const [sortBy, setSortBy] = useState<string>('recent');
   const [selectedPost, setSelectedPost] = useState<any>(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -71,6 +72,7 @@ const Engagement = () => {
     keywordIds: selectedKeywords.length > 0 ? selectedKeywords : undefined,
     priority: priority !== 'all' ? priority : undefined,
     status: status !== 'all' ? status : undefined,
+    timeRange: timeRange,
     page: currentPage,
     pageSize: pageSize,
   });
@@ -196,6 +198,7 @@ const Engagement = () => {
     setSelectedKeywords([]);
     setPriority('all');
     setStatus('all');
+    setTimeRange('3months');
     setSortBy('recent');
     setCurrentPage(1);
   };
@@ -205,7 +208,7 @@ const Engagement = () => {
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = selectedSubreddits.length > 0 || selectedKeywords.length > 0 || priority !== 'all' || status !== 'all';
+  const hasActiveFilters = selectedSubreddits.length > 0 || selectedKeywords.length > 0 || priority !== 'all' || status !== 'all' || timeRange !== '3months';
   const totalPages = Math.ceil(totalCount / pageSize);
 
   const activeSubreddits = subreddits.filter(s => s.is_active).length;
@@ -448,6 +451,19 @@ const Engagement = () => {
                   <SelectItem value="has_reply">Has Reply</SelectItem>
                   <SelectItem value="posted">Posted</SelectItem>
                   <SelectItem value="high_engagement">High Engagement (50+ comments)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
+                <SelectTrigger className="w-[150px] sm:w-[180px]">
+                  <SelectValue placeholder="Time range" />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">Past Week</SelectItem>
+                  <SelectItem value="month">Past Month</SelectItem>
+                  <SelectItem value="3months">Past 3 Months</SelectItem>
                 </SelectContent>
               </Select>
 

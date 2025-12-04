@@ -21,11 +21,14 @@ export interface RedditPost {
   top_comments: any | null;
 }
 
+export type TimeRange = 'all' | 'today' | 'week' | 'month' | '3months';
+
 interface UseRedditPostsOptions {
   subredditIds?: string[];
   keywordIds?: string[];
   priority?: string;
   status?: string;
+  timeRange?: TimeRange;
   page?: number;
   pageSize?: number;
 }
@@ -85,6 +88,26 @@ export function useRedditPosts(options: UseRedditPostsOptions = {}) {
         }
         // Note: no_reply, has_reply, and posted filters need client-side handling
         // due to complex relationship logic with suggested_replies
+      }
+
+      // Apply time range filter
+      if (options.timeRange && options.timeRange !== 'all') {
+        const cutoffDate = new Date();
+        switch (options.timeRange) {
+          case 'today':
+            cutoffDate.setDate(cutoffDate.getDate() - 1);
+            break;
+          case 'week':
+            cutoffDate.setDate(cutoffDate.getDate() - 7);
+            break;
+          case 'month':
+            cutoffDate.setDate(cutoffDate.getDate() - 30);
+            break;
+          case '3months':
+            cutoffDate.setDate(cutoffDate.getDate() - 90);
+            break;
+        }
+        query = query.gte('pub_date', cutoffDate.toISOString());
       }
 
       // Apply pagination after all filters
