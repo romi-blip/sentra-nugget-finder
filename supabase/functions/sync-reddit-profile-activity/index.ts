@@ -6,54 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Try multiple endpoints for Reddit profile data
-async function fetchRedditProfileData(username: string): Promise<any> {
-  const endpoints = [
-    `https://old.reddit.com/user/${username}/about.json`,
-    `https://www.reddit.com/user/${username}/about.json`,
-    `https://api.reddit.com/user/${username}/about`,
-  ];
-  
-  const userAgents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-    'Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0',
-  ];
-  
-  for (const endpoint of endpoints) {
-    for (const userAgent of userAgents) {
-      try {
-        console.log(`Trying endpoint: ${endpoint}`);
-        
-        const response = await fetch(endpoint, {
-          headers: {
-            'User-Agent': userAgent,
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data?.data) {
-            console.log('Successfully fetched profile data');
-            return data.data;
-          }
-        } else {
-          console.log(`Endpoint ${endpoint} returned status: ${response.status}`);
-        }
-      } catch (err) {
-        console.log(`Endpoint ${endpoint} failed:`, err.message);
-      }
-      
-      // Small delay between attempts
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-  }
-  
-  return null;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -105,7 +57,6 @@ serve(async (req) => {
     } else if (userId) {
       query = query.eq('user_id', userId);
     }
-    // If scheduled, sync all active profiles
 
     const { data: profiles, error: profilesError } = await query;
 
@@ -122,38 +73,78 @@ serve(async (req) => {
     
     for (const profile of profiles || []) {
       try {
-        // Update karma from Reddit API using multi-endpoint approach
-        const profileData = await fetchRedditProfileData(profile.reddit_username);
+        if (!apifyToken) {
+          console.log('APIFY_API_TOKEN not configured, skipping sync');
+          results.push({ profile_id: profile.id, status: 'error', error: 'APIFY_API_TOKEN not configured' });
+          continue;
+        }
+
+        // Use Apify to fetch both profile info and activity
+        const { profileData, activities } = await syncWithApify(profile, apifyToken);
+        
+        // Update profile with karma data from Apify
+        const updateData: any = {
+          last_synced_at: new Date().toISOString(),
+        };
         
         if (profileData) {
-          console.log(`Updating karma for ${profile.reddit_username}`);
-          await supabase
-            .from('reddit_profiles')
-            .update({
-              link_karma: profileData.link_karma || 0,
-              comment_karma: profileData.comment_karma || 0,
-              total_karma: profileData.total_karma || (profileData.link_karma || 0) + (profileData.comment_karma || 0),
-              avatar_url: profileData.icon_img?.split('?')[0] || profile.avatar_url,
-              is_premium: profileData.is_gold || false,
-              last_synced_at: new Date().toISOString(),
-            })
-            .eq('id', profile.id);
-        } else {
-          console.log(`Could not fetch Reddit data for ${profile.reddit_username}, updating sync time only`);
-          await supabase
-            .from('reddit_profiles')
-            .update({ last_synced_at: new Date().toISOString() })
-            .eq('id', profile.id);
+          if (profileData.linkKarma !== undefined) updateData.link_karma = profileData.linkKarma;
+          if (profileData.commentKarma !== undefined) updateData.comment_karma = profileData.commentKarma;
+          if (profileData.totalKarma !== undefined) {
+            updateData.total_karma = profileData.totalKarma;
+          } else if (profileData.linkKarma !== undefined && profileData.commentKarma !== undefined) {
+            updateData.total_karma = profileData.linkKarma + profileData.commentKarma;
+          }
+          if (profileData.avatar) updateData.avatar_url = profileData.avatar.split('?')[0];
+          if (profileData.isPremium !== undefined) updateData.is_premium = profileData.isPremium;
+          if (profileData.createdAt) updateData.account_created_at = new Date(profileData.createdAt).toISOString();
+          if (profileData.description) updateData.description = profileData.description;
+        }
+        
+        console.log(`Updating profile with data:`, updateData);
+        
+        await supabase
+          .from('reddit_profiles')
+          .update(updateData)
+          .eq('id', profile.id);
+
+        // Save activities
+        let savedCount = 0;
+        for (const item of activities) {
+          const activityType = item.dataType === 'comment' || item.type === 'comment' ? 'comment' : 'post';
+          const redditId = item.id || item.name || item.reddit_id;
+          
+          if (!redditId) continue;
+          
+          let postedAt = null;
+          if (item.createdAt) postedAt = new Date(item.createdAt).toISOString();
+          else if (item.created_utc) postedAt = new Date(item.created_utc * 1000).toISOString();
+          else if (item.publishedAt) postedAt = new Date(item.publishedAt).toISOString();
+          
+          const activityRecord = {
+            profile_id: profile.id,
+            activity_type: activityType,
+            reddit_id: redditId,
+            subreddit: item.subreddit || item.subredditName || item.communityName,
+            title: item.title || null,
+            content: item.body || item.selftext || item.text || null,
+            permalink: item.permalink ? 
+              (item.permalink.startsWith('http') ? item.permalink : `https://www.reddit.com${item.permalink}`) : 
+              item.url || null,
+            score: item.score || item.ups || item.upvotes || 0,
+            num_comments: item.numComments || item.num_comments || item.numberOfComments || 0,
+            posted_at: postedAt,
+          };
+
+          const { error: upsertError } = await supabase
+            .from('reddit_profile_activity')
+            .upsert(activityRecord, { onConflict: 'profile_id,reddit_id' });
+          
+          if (!upsertError) savedCount++;
         }
 
-        // Sync activity via Apify
-        if (apifyToken) {
-          await syncActivity(profile, supabase, apifyToken);
-        } else {
-          console.log('APIFY_API_TOKEN not configured, skipping activity sync');
-        }
-
-        results.push({ profile_id: profile.id, status: 'success' });
+        console.log(`Saved ${savedCount} activities for ${profile.reddit_username}`);
+        results.push({ profile_id: profile.id, status: 'success', activities: savedCount });
         
         // Rate limit between profiles
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -181,8 +172,8 @@ serve(async (req) => {
   }
 });
 
-async function syncActivity(profile: any, supabase: any, apifyToken: string) {
-  console.log(`Syncing activity for: ${profile.reddit_username}`);
+async function syncWithApify(profile: any, apifyToken: string): Promise<{ profileData: any, activities: any[] }> {
+  console.log(`Syncing with Apify for: ${profile.reddit_username}`);
   
   const actorId = 'louisdeconinck~reddit-user-profile-posts-scraper';
   const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`;
@@ -192,7 +183,7 @@ async function syncActivity(profile: any, supabase: any, apifyToken: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       startUrls: [{ url: `https://www.reddit.com/user/${profile.reddit_username}` }],
-      maxItems: 30,
+      maxItems: 50,
       sort: 'new',
       proxyConfiguration: {
         useApifyProxy: true,
@@ -211,9 +202,9 @@ async function syncActivity(profile: any, supabase: any, apifyToken: string) {
   const runId = runData.data.id;
   console.log(`Apify run started: ${runId}`);
 
-  // Poll for completion (max 90 seconds)
+  // Poll for completion (max 120 seconds)
   let attempts = 0;
-  while (attempts < 18) {
+  while (attempts < 24) {
     await new Promise(resolve => setTimeout(resolve, 5000));
     
     const statusResponse = await fetch(
@@ -231,62 +222,109 @@ async function syncActivity(profile: any, supabase: any, apifyToken: string) {
     attempts++;
   }
 
-  // Fetch and save results
+  // Fetch results
   const resultsResponse = await fetch(
     `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apifyToken}`
   );
   const results = await resultsResponse.json();
   
-  console.log(`Got ${results.length} activity items from Apify`);
-
-  let savedCount = 0;
+  console.log(`Got ${results.length} items from Apify`);
+  
+  // Extract profile data from results (first item often contains profile info)
+  let profileData = null;
+  const activities: any[] = [];
+  
   for (const item of results) {
-    // Parse activity type - the actor returns posts and comments
-    const activityType = item.dataType === 'comment' || item.type === 'comment' ? 'comment' : 'post';
-    
-    // Extract reddit_id from various possible fields
-    const redditId = item.id || item.name || item.reddit_id;
-    
-    if (!redditId) {
-      console.log('Skipping item without reddit_id:', item);
-      continue;
+    // Check if this item contains profile metadata
+    if (item.linkKarma !== undefined || item.commentKarma !== undefined || item.totalKarma !== undefined) {
+      profileData = item;
+      console.log('Found profile data in results:', {
+        linkKarma: item.linkKarma,
+        commentKarma: item.commentKarma,
+        totalKarma: item.totalKarma,
+      });
     }
     
-    // Parse posted_at from various date formats
-    let postedAt = null;
-    if (item.createdAt) {
-      postedAt = new Date(item.createdAt).toISOString();
-    } else if (item.created_utc) {
-      postedAt = new Date(item.created_utc * 1000).toISOString();
-    } else if (item.publishedAt) {
-      postedAt = new Date(item.publishedAt).toISOString();
-    }
-    
-    const activityRecord = {
-      profile_id: profile.id,
-      activity_type: activityType,
-      reddit_id: redditId,
-      subreddit: item.subreddit || item.subredditName || item.communityName,
-      title: item.title || null,
-      content: item.body || item.selftext || item.text || null,
-      permalink: item.permalink ? 
-        (item.permalink.startsWith('http') ? item.permalink : `https://www.reddit.com${item.permalink}`) : 
-        item.url || null,
-      score: item.score || item.ups || item.upvotes || 0,
-      num_comments: item.numComments || item.num_comments || item.numberOfComments || 0,
-      posted_at: postedAt,
-    };
-
-    const { error: upsertError } = await supabase
-      .from('reddit_profile_activity')
-      .upsert(activityRecord, { onConflict: 'profile_id,reddit_id' });
-    
-    if (upsertError) {
-      console.error('Error upserting activity:', upsertError);
-    } else {
-      savedCount++;
+    // Add as activity if it has content
+    if (item.id || item.name || item.reddit_id) {
+      activities.push(item);
     }
   }
+  
+  // If no profile data found in results, try to fetch it separately
+  if (!profileData) {
+    console.log('No profile data in activity results, trying dedicated profile scraper...');
+    profileData = await fetchProfileDataFromApify(profile.reddit_username, apifyToken);
+  }
+  
+  return { profileData, activities };
+}
 
-  console.log(`Saved ${savedCount} activities for ${profile.reddit_username}`);
+async function fetchProfileDataFromApify(username: string, apifyToken: string): Promise<any> {
+  try {
+    // Try the crawlerbros reddit-scraper which can fetch user profiles
+    const actorId = 'crawlerbros~reddit-scraper';
+    const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`;
+    
+    const runResponse = await fetch(runUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        startUrls: [{ url: `https://www.reddit.com/user/${username}` }],
+        maxItems: 1,
+        proxyConfiguration: {
+          useApifyProxy: true,
+        },
+      }),
+    });
+
+    if (!runResponse.ok) {
+      console.log('Profile scraper not available');
+      return null;
+    }
+
+    const runData = await runResponse.json();
+    const runId = runData.data.id;
+
+    // Wait for completion (shorter timeout)
+    let attempts = 0;
+    while (attempts < 12) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      const statusResponse = await fetch(
+        `https://api.apify.com/v2/actor-runs/${runId}?token=${apifyToken}`
+      );
+      const statusData = await statusResponse.json();
+      
+      if (statusData.data.status === 'SUCCEEDED') break;
+      if (statusData.data.status === 'FAILED' || statusData.data.status === 'ABORTED') {
+        return null;
+      }
+      
+      attempts++;
+    }
+
+    const resultsResponse = await fetch(
+      `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apifyToken}`
+    );
+    const results = await resultsResponse.json();
+    
+    if (results.length > 0) {
+      const item = results[0];
+      return {
+        linkKarma: item.link_karma || item.linkKarma,
+        commentKarma: item.comment_karma || item.commentKarma,
+        totalKarma: item.total_karma || item.totalKarma,
+        avatar: item.icon_img || item.avatar || item.avatar_url,
+        isPremium: item.is_gold || item.is_premium || item.isPremium,
+        createdAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : item.createdAt,
+        description: item.subreddit?.public_description || item.description,
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching profile data:', error);
+    return null;
+  }
 }
