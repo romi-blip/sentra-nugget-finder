@@ -121,3 +121,9 @@ verify_jwt = true
 
 [functions.fetch-keyword-comments]
 verify_jwt = false
+
+[functions.fetch-reddit-profile]
+verify_jwt = true
+
+[functions.sync-reddit-profile-activity]
+verify_jwt = false
