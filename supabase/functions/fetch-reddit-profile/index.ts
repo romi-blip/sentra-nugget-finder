@@ -66,14 +66,16 @@ serve(async (req) => {
     const actorId = 'louisdeconinck~reddit-user-profile-posts-scraper';
     const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`;
     
+    // Actor requires startUrls format with Reddit user profile URLs
+    const profileUrl = `https://www.reddit.com/user/${cleanUsername}`;
+    
     const runResponse = await fetch(runUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        usernames: [cleanUsername],
-        maxItems: 10, // Minimal posts just to get profile data
+        startUrls: [{ url: profileUrl }],
+        maxItems: 10,
         sort: 'new',
-        includeComments: true,
       }),
     });
 
