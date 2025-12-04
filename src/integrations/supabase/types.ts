@@ -1613,17 +1613,23 @@ export type Database = {
           created_at: string | null
           description: string | null
           display_name: string | null
+          expertise_areas: string[] | null
           id: string
           is_active: boolean | null
           is_premium: boolean | null
           is_verified: boolean | null
           last_synced_at: string | null
           link_karma: number | null
+          persona_generated_at: string | null
+          persona_summary: string | null
+          profile_type: string
           profile_url: string | null
           reddit_username: string
           total_karma: number | null
+          typical_tone: string | null
           updated_at: string | null
           user_id: string
+          writing_style: string | null
         }
         Insert: {
           account_created_at?: string | null
@@ -1632,17 +1638,23 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           display_name?: string | null
+          expertise_areas?: string[] | null
           id?: string
           is_active?: boolean | null
           is_premium?: boolean | null
           is_verified?: boolean | null
           last_synced_at?: string | null
           link_karma?: number | null
+          persona_generated_at?: string | null
+          persona_summary?: string | null
+          profile_type?: string
           profile_url?: string | null
           reddit_username: string
           total_karma?: number | null
+          typical_tone?: string | null
           updated_at?: string | null
           user_id: string
+          writing_style?: string | null
         }
         Update: {
           account_created_at?: string | null
@@ -1651,17 +1663,23 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           display_name?: string | null
+          expertise_areas?: string[] | null
           id?: string
           is_active?: boolean | null
           is_premium?: boolean | null
           is_verified?: boolean | null
           last_synced_at?: string | null
           link_karma?: number | null
+          persona_generated_at?: string | null
+          persona_summary?: string | null
+          profile_type?: string
           profile_url?: string | null
           reddit_username?: string
           total_karma?: number | null
+          typical_tone?: string | null
           updated_at?: string | null
           user_id?: string
+          writing_style?: string | null
         }
         Relationships: []
       }

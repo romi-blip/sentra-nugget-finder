@@ -88,7 +88,7 @@ serve(async (req) => {
     // Service client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { reddit_username } = await req.json();
+    const { reddit_username, profile_type = 'tracked' } = await req.json();
     
     if (!reddit_username) {
       return new Response(JSON.stringify({ error: 'Missing reddit_username' }), {
@@ -118,6 +118,7 @@ serve(async (req) => {
         link_karma: 0,
         comment_karma: 0,
         total_karma: 0,
+        profile_type: profile_type,
         last_synced_at: new Date().toISOString(),
       };
 
@@ -162,6 +163,7 @@ serve(async (req) => {
       is_verified: profileData.verified || false,
       is_premium: profileData.is_gold || false,
       description: profileData.subreddit?.public_description || null,
+      profile_type: profile_type,
       last_synced_at: new Date().toISOString(),
     };
 
