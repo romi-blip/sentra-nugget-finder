@@ -1292,6 +1292,30 @@ export type Database = {
           },
         ]
       }
+      leaderboard: {
+        Row: {
+          created_at: string
+          id: string
+          score: number
+          user_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          score: number
+          user_id: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          score?: number
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
       outreach_sequences: {
         Row: {
           campaign_id: string

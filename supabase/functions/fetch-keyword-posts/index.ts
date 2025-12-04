@@ -2,6 +2,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts';
 
 const REDDIT_POST_REGEX = /(?:https?:\/\/)?(?:www\.)?reddit\.com\/r\/([^\/]+)\/comments\/([a-zA-Z0-9]+)(?:\/([^\/\?]+))?/;
+const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+
+function isPostTooOld(pubDate: string | null): boolean {
+  if (!pubDate) return false; // Allow posts without dates to be filtered in UI
+  const postTime = new Date(pubDate).getTime();
+  const cutoffTime = Date.now() - THREE_MONTHS_MS;
+  return postTime < cutoffTime;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -211,6 +219,12 @@ Deno.serve(async (req) => {
                   }
 
                   const pubDate = postData.created_utc ? new Date(postData.created_utc * 1000).toISOString() : null;
+
+                  // Skip posts older than 3 months
+                  if (isPostTooOld(pubDate)) {
+                    console.log(`Skipping old post ${redditId} from ${pubDate}`);
+                    continue;
+                  }
 
                   // Insert with full Reddit data
                   const { data: insertedPost, error: insertError } = await supabase
