@@ -321,7 +321,7 @@ export const ContentReviewPanel: React.FC<ContentReviewPanelProps> = ({
         onClose={() => setDocxUploadOpen(false)}
         contentItemId={contentItemId}
         onSuccess={() => {
-          setDocxUploadOpen(false);
+          // Don't close here - let the dialog handle its own closing after user reviews results
           onDocxSuccess();
         }}
         uploadDocxReview={uploadDocxReview}

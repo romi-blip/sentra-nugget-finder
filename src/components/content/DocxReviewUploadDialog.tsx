@@ -135,7 +135,21 @@ export const DocxReviewUploadDialog: React.FC<DocxReviewUploadDialogProps> = ({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent 
+        className="sm:max-w-lg"
+        onInteractOutside={(e) => {
+          // Prevent closing on outside click when viewing results
+          if (result) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevent closing on escape when viewing results
+          if (result) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileUp className="h-5 w-5" />
