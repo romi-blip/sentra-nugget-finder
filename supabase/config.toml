@@ -130,3 +130,6 @@ verify_jwt = false
 
 [functions.generate-profile-persona]
 verify_jwt = true
+
+[functions.process-docx-review]
+verify_jwt = true

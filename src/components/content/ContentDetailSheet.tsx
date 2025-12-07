@@ -102,6 +102,8 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
     isApplyingFeedback,
     addFeedback,
     isAddingFeedback,
+    uploadDocxReview,
+    isUploadingDocx,
   } = useContentReview(item?.id);
 
   // Get the appropriate content based on status
@@ -357,6 +359,10 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
                 isReviewing={isReviewing}
                 isApplying={isApplyingFeedback}
                 isAddingFeedback={isAddingFeedback}
+                contentItemId={item.id}
+                uploadDocxReview={uploadDocxReview}
+                isUploadingDocx={isUploadingDocx}
+                onDocxSuccess={() => setActiveTab("content")}
               />
             </TabsContent>
           )}

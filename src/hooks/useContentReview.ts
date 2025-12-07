@@ -142,6 +142,47 @@ export const useContentReview = (contentItemId?: string) => {
     },
   });
 
+  // Upload DOCX review mutation
+  const uploadDocxReviewMutation = useMutation({
+    mutationFn: async ({ contentItemId: itemId, file }: { contentItemId: string; file: File }) => {
+      // Convert file to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const { data, error } = await supabase.functions.invoke('process-docx-review', {
+        body: { 
+          contentItemId: itemId, 
+          filename: file.name,
+          fileData: base64 
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['content-review', contentItemId] });
+      queryClient.invalidateQueries({ queryKey: ['content-plan-items'] });
+      queryClient.invalidateQueries({ queryKey: ['reviewer-patterns'] });
+      toast({ 
+        title: "DOCX Review Processed",
+        description: `${data.commentsProcessed} comments analyzed, ${data.patternsCreated} patterns added`
+      });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Failed to process DOCX review", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    },
+  });
+
   return {
     review: reviewQuery.data,
     isLoadingReview: reviewQuery.isLoading,
@@ -151,6 +192,9 @@ export const useContentReview = (contentItemId?: string) => {
     isApplyingFeedback: applyFeedbackMutation.isPending,
     addFeedback: addFeedbackMutation.mutate,
     isAddingFeedback: addFeedbackMutation.isPending,
+    uploadDocxReview: uploadDocxReviewMutation.mutate,
+    isUploadingDocx: uploadDocxReviewMutation.isPending,
+    docxUploadResult: uploadDocxReviewMutation.data,
   };
 };
 
