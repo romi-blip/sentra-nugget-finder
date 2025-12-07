@@ -26,6 +26,8 @@ interface ProcessingResult {
   commentsProcessed: number;
   patternsCreated: number;
   revisionsApplied: boolean;
+  originalContent?: string;
+  revisedContent?: string;
   summary: {
     comments: Array<{
       category: string;
@@ -44,8 +46,8 @@ interface DocxReviewUploadDialogProps {
   open: boolean;
   onClose: () => void;
   contentItemId: string;
-  onSuccess: () => void;
-  uploadDocxReview: (params: { contentItemId: string; file: File }) => void;
+  onSuccess: (result: ProcessingResult) => void;
+  uploadDocxReview: (params: { contentItemId: string; file: File }) => Promise<ProcessingResult>;
   isUploading: boolean;
 }
 
@@ -60,6 +62,8 @@ export const DocxReviewUploadDialog: React.FC<DocxReviewUploadDialogProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [result, setResult] = useState<ProcessingResult | null>(null);
+  const [viewMode, setViewMode] = useState<'revised' | 'original'>('revised');
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -93,14 +97,23 @@ export const DocxReviewUploadDialog: React.FC<DocxReviewUploadDialogProps> = ({
     }
   }, [toast]);
 
-  const handleUpload = () => {
-    if (!selectedFile) return;
-    uploadDocxReview({ contentItemId, file: selectedFile });
+  const handleUpload = async () => {
+    if (!selectedFile || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      const response = await uploadDocxReview({ contentItemId, file: selectedFile });
+      setResult(response);
+    } catch (error) {
+      // Error toast is handled by the hook
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleClose = () => {
     setSelectedFile(null);
     setResult(null);
+    setViewMode('revised');
     onClose();
   };
 
@@ -232,8 +245,42 @@ export const DocxReviewUploadDialog: React.FC<DocxReviewUploadDialogProps> = ({
                 </div>
               </div>
 
+              {/* Content comparison toggle */}
+              {result.originalContent && result.revisedContent && (
+                <div className="flex items-center gap-2 mb-2">
+                  <Button
+                    variant={viewMode === 'revised' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('revised')}
+                  >
+                    View Revised
+                  </Button>
+                  <Button
+                    variant={viewMode === 'original' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('original')}
+                  >
+                    View Original
+                  </Button>
+                </div>
+              )}
+
               <ScrollArea className="h-[250px]">
                 <div className="space-y-4 pr-4">
+                  {/* Content preview based on view mode */}
+                  {result.originalContent && result.revisedContent && (
+                    <div className="mb-4">
+                      <h4 className="font-medium mb-2 flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        {viewMode === 'revised' ? 'Revised Content' : 'Original Content'}
+                      </h4>
+                      <div className="text-sm bg-muted/50 rounded p-3 max-h-[150px] overflow-y-auto whitespace-pre-wrap font-mono text-xs">
+                        {(viewMode === 'revised' ? result.revisedContent : result.originalContent).slice(0, 1500)}
+                        {(viewMode === 'revised' ? result.revisedContent : result.originalContent).length > 1500 && '...'}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Comments processed */}
                   {result.summary.comments.length > 0 && (
                     <div>
@@ -278,7 +325,7 @@ export const DocxReviewUploadDialog: React.FC<DocxReviewUploadDialogProps> = ({
               </ScrollArea>
 
               <div className="flex justify-end">
-                <Button onClick={() => { handleClose(); onSuccess(); }}>
+                <Button onClick={() => { onSuccess(result); handleClose(); }}>
                   View Updated Content
                 </Button>
               </div>

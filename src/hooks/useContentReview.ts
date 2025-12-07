@@ -144,7 +144,18 @@ export const useContentReview = (contentItemId?: string) => {
 
   // Upload DOCX review mutation
   const uploadDocxReviewMutation = useMutation({
-    mutationFn: async ({ contentItemId: itemId, file }: { contentItemId: string; file: File }) => {
+    mutationFn: async ({ contentItemId: itemId, file }: { contentItemId: string; file: File }): Promise<{
+      success: boolean;
+      commentsProcessed: number;
+      patternsCreated: number;
+      revisionsApplied: boolean;
+      originalContent?: string;
+      revisedContent?: string;
+      summary: {
+        comments: Array<{ category: string; severity: string; issue: string; instruction: string }>;
+        patternsAdded: Array<{ type: string; pattern: string }>;
+      };
+    }> => {
       // Convert file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -193,6 +204,7 @@ export const useContentReview = (contentItemId?: string) => {
     addFeedback: addFeedbackMutation.mutate,
     isAddingFeedback: addFeedbackMutation.isPending,
     uploadDocxReview: uploadDocxReviewMutation.mutate,
+    uploadDocxReviewAsync: uploadDocxReviewMutation.mutateAsync,
     isUploadingDocx: uploadDocxReviewMutation.isPending,
     docxUploadResult: uploadDocxReviewMutation.data,
   };
