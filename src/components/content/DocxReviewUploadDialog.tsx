@@ -125,7 +125,16 @@ export const DocxReviewUploadDialog: React.FC<DocxReviewUploadDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog 
+      open={open} 
+      onOpenChange={(isOpen) => {
+        // Only allow closing via explicit button clicks when viewing results
+        // Prevent accidental closure from escape key or outside clicks
+        if (!isOpen && !result) {
+          handleClose();
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

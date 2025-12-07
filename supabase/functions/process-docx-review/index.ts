@@ -23,6 +23,7 @@ interface ProcessedComment {
   instruction: string;
   action_type: 'modify' | 'remove' | 'add' | 'conditional' | 'clarify';
   target_content: string;
+  replacement_term?: string;  // Exact term from reviewer to use
   decision_needed?: string;
   conservative_action?: string;
 }
@@ -135,6 +136,10 @@ serve(async (req) => {
     // Humanize the revised content to remove AI patterns
     revisedContent = await humanizeContent(openaiApiKey, revisedContent);
     console.log('Content humanized');
+
+    // Programmatic cleanup for patterns GPT might miss (like em dashes)
+    revisedContent = removeEmDashes(revisedContent);
+    console.log('Em dashes removed programmatically');
 
     // Extract patterns for reviewer agent
     const patterns = await extractPatterns(openaiApiKey, processedComments);
@@ -349,8 +354,24 @@ For each comment, determine:
    - "conditional" - Requires a decision/approval before action (e.g., "get approval", "if approved", "check with...")
    - "clarify" - Needs more context before applying
 5. Target Content: The EXACT text/section from the original content that this comment applies to. Quote the specific sentences or paragraph.
-6. A clear, specific instruction for how to fix it
-7. If action_type is "conditional", note what decision is needed and what conservative action to take
+6. Replacement Term: If the reviewer suggests a SPECIFIC replacement term, capture it EXACTLY
+7. A clear, specific instruction for how to fix it
+8. If action_type is "conditional", note what decision is needed and what conservative action to take
+
+CRITICAL: EXTRACT REVIEWER'S EXACT REPLACEMENT TERMS
+When a reviewer suggests specific wording, you MUST capture their exact suggested term:
+- "say X instead of Y" → replacement_term: "X" (use X exactly, not a synonym)
+- "don't say live, say monitoring or continuously monitoring" → replacement_term: "continuous monitoring" (NOT "real-time" which means the same as "live")
+- "add classification" or "include X" → replacement_term includes the exact term
+- "discovery only doesn't say much" + "add classification/scanning" → replacement_term: "discovery and classification"
+- NEVER substitute synonyms for the reviewer's exact words. If they say "continuous", use "continuous" not "real-time"
+
+EXAMPLES:
+- Comment: "we don't do it live. Better to just say monitoring, or continuously monitoring"
+  → replacement_term: "continuous monitoring" (NOT "real-time monitoring" which has the same meaning as "live")
+  
+- Comment: "discovery only doesn't say much - add classification/scanning"  
+  → replacement_term: "discovery and classification"
 
 CRITICAL DETECTION RULES FOR "REMOVE" ACTION:
 - "Why should we say that?" → action_type: "remove"
@@ -409,6 +430,10 @@ ${comments.map((c, i) => `${i + 1}. Comment: "${c.commentText}" (by ${c.author})
                       type: 'string', 
                       description: 'The EXACT text/section from the content that this comment applies to. Quote the specific sentences or entire paragraph that should be modified/removed.'
                     },
+                    replacement_term: {
+                      type: 'string',
+                      description: 'If reviewer suggests specific wording, capture their EXACT term (e.g., "continuous monitoring" not "real-time monitoring", "discovery and classification" not just "discovery")'
+                    },
                     instruction: { type: 'string', description: 'How to fix this issue' },
                     decision_needed: { type: 'string', description: 'For conditional comments: what decision/approval is needed' },
                     conservative_action: { type: 'string', description: 'For conditional comments: what to do if approval cannot be obtained (usually remove)' },
@@ -443,6 +468,7 @@ ${comments.map((c, i) => `${i + 1}. Comment: "${c.commentText}" (by ${c.author})
     instruction: ac.instruction,
     action_type: ac.action_type || 'modify',
     target_content: ac.target_content || '',
+    replacement_term: ac.replacement_term,
     decision_needed: ac.decision_needed,
     conservative_action: ac.conservative_action,
   }));
@@ -453,12 +479,17 @@ async function reviseContent(
   content: string,
   processedComments: ProcessedComment[]
 ): Promise<string> {
-  // Format comments with action types and target content for precise revision
+  // Format comments with action types, target content, and replacement terms for precise revision
   const formattedFeedback = processedComments.map((c, i) => {
     let feedbackLine = `${i + 1}. [${c.severity.toUpperCase()}] [ACTION: ${c.action_type.toUpperCase()}] ${c.category}
    Target content: "${c.target_content}"
    Issue: ${c.issue}
    Instruction: ${c.instruction}`;
+    
+    // Include the exact replacement term if provided
+    if (c.replacement_term) {
+      feedbackLine += `\n   >>> USE EXACT TERM: "${c.replacement_term}" <<< (Do NOT use synonyms - use this term exactly as written)`;
+    }
     
     if (c.action_type === 'conditional' && c.conservative_action) {
       feedbackLine += `\n   Conservative action (since approval not possible): ${c.conservative_action}`;
@@ -689,6 +720,42 @@ ${content}`;
     console.warn('Humanization error:', error);
     return content;
   }
+}
+
+// Programmatically remove em dashes that GPT might miss
+function removeEmDashes(content: string): string {
+  // Replace em dashes (—) with appropriate alternatives
+  // Pattern: word — word → word, word (most common case)
+  let cleaned = content;
+  
+  // Em dash surrounded by spaces → comma with single space
+  cleaned = cleaned.replace(/ — /g, ', ');
+  
+  // Em dash at start of clause → comma
+  cleaned = cleaned.replace(/— /g, ', ');
+  
+  // Em dash at end of word → comma
+  cleaned = cleaned.replace(/ —/g, ',');
+  
+  // Any remaining standalone em dashes → comma
+  cleaned = cleaned.replace(/—/g, ', ');
+  
+  // Also handle en dashes (–) which are sometimes used similarly
+  cleaned = cleaned.replace(/ – /g, ', ');
+  cleaned = cleaned.replace(/– /g, ', ');
+  cleaned = cleaned.replace(/ –/g, ',');
+  cleaned = cleaned.replace(/–/g, ', ');
+  
+  // Clean up double spaces
+  cleaned = cleaned.replace(/  +/g, ' ');
+  
+  // Clean up ", ," patterns
+  cleaned = cleaned.replace(/, ,/g, ',');
+  
+  // Clean up ",," patterns
+  cleaned = cleaned.replace(/,,/g, ',');
+  
+  return cleaned;
 }
 
 async function checkDuplicatePattern(supabase: any, pattern: FeedbackPattern): Promise<boolean> {
