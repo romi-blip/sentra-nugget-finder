@@ -324,9 +324,12 @@ export const DocxReviewUploadDialog: React.FC<DocxReviewUploadDialogProps> = ({
                 </div>
               </ScrollArea>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={handleClose}>
+                  Close
+                </Button>
                 <Button onClick={() => { onSuccess(result); handleClose(); }}>
-                  View Updated Content
+                  Apply & View Content
                 </Button>
               </div>
             </div>
