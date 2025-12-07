@@ -11,9 +11,11 @@ import {
   RefreshCw, 
   Wand2,
   MessageSquarePlus,
-  Loader2
+  Loader2,
+  FileUp
 } from "lucide-react";
 import { ReviewerFeedbackDialog } from "./ReviewerFeedbackDialog";
+import { DocxReviewUploadDialog } from "./DocxReviewUploadDialog";
 
 interface ContentReview {
   id: string;
@@ -52,6 +54,10 @@ interface ContentReviewPanelProps {
   isReviewing?: boolean;
   isApplying?: boolean;
   isAddingFeedback?: boolean;
+  contentItemId: string;
+  uploadDocxReview: (params: { contentItemId: string; file: File }) => void;
+  isUploadingDocx?: boolean;
+  onDocxSuccess: () => void;
 }
 
 const severityColors: Record<string, string> = {
@@ -92,8 +98,13 @@ export const ContentReviewPanel: React.FC<ContentReviewPanelProps> = ({
   isReviewing,
   isApplying,
   isAddingFeedback,
+  contentItemId,
+  uploadDocxReview,
+  isUploadingDocx,
+  onDocxSuccess,
 }) => {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [docxUploadOpen, setDocxUploadOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -265,6 +276,20 @@ export const ContentReviewPanel: React.FC<ContentReviewPanelProps> = ({
               Add Feedback to Reviewer
             </Button>
           )}
+
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setDocxUploadOpen(true)}
+            disabled={isUploadingDocx}
+          >
+            {isUploadingDocx ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileUp className="h-4 w-4 mr-2" />
+            )}
+            Upload DOCX Review
+          </Button>
         </div>
       </div>
 
@@ -276,6 +301,18 @@ export const ContentReviewPanel: React.FC<ContentReviewPanelProps> = ({
           setFeedbackDialogOpen(false);
         }}
         isLoading={isAddingFeedback}
+      />
+
+      <DocxReviewUploadDialog
+        open={docxUploadOpen}
+        onClose={() => setDocxUploadOpen(false)}
+        contentItemId={contentItemId}
+        onSuccess={() => {
+          setDocxUploadOpen(false);
+          onDocxSuccess();
+        }}
+        uploadDocxReview={uploadDocxReview}
+        isUploading={isUploadingDocx || false}
       />
     </ScrollArea>
   );
