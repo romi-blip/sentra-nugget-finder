@@ -102,7 +102,7 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
     isApplyingFeedback,
     addFeedback,
     isAddingFeedback,
-    uploadDocxReview,
+    uploadDocxReviewAsync,
     isUploadingDocx,
   } = useContentReview(item?.id);
 
@@ -360,7 +360,7 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
                 isApplying={isApplyingFeedback}
                 isAddingFeedback={isAddingFeedback}
                 contentItemId={item.id}
-                uploadDocxReview={uploadDocxReview}
+                uploadDocxReview={uploadDocxReviewAsync}
                 isUploadingDocx={isUploadingDocx}
                 onDocxSuccess={() => setActiveTab("content")}
               />

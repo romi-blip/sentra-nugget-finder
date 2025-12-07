@@ -88,6 +88,9 @@ serve(async (req) => {
       });
     }
 
+    // Store original content for comparison
+    const originalContent = contentItem.content;
+
     console.log(`Processing DOCX review for content item: ${contentItemId}`);
 
     // Decode base64 file data
@@ -178,6 +181,8 @@ serve(async (req) => {
       commentsProcessed: comments.length,
       patternsCreated,
       revisionsApplied: true,
+      originalContent,
+      revisedContent,
       summary: {
         comments: processedComments.map(c => ({
           category: c.category,
@@ -375,26 +380,31 @@ Apply each piece of feedback carefully while:
 - Making targeted changes rather than rewriting everything
 - Keeping the word count similar (800-1200 words)
 
-Return only the revised content in markdown format.`
+IMPORTANT: Return ONLY the revised markdown content. Do NOT include any delimiters like --- at the start or end. Do NOT wrap the content in code blocks. Start directly with the content.`
         },
         {
           role: 'user',
           content: `Original content:
----
+
 ${content}
----
 
 Reviewer feedback to apply:
 ${processedComments.map((c, i) => `${i + 1}. [${c.severity.toUpperCase()}] ${c.category}: ${c.issue}
    Fix: ${c.instruction}`).join('\n\n')}`
         }
       ],
-      temperature: 0.3,
     }),
   });
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || content;
+  let revisedContent = data.choices?.[0]?.message?.content || content;
+  
+  // Strip any leading --- or code block markers GPT might add
+  revisedContent = revisedContent.replace(/^[\s]*---[\s]*\n/, '');
+  revisedContent = revisedContent.replace(/^[\s]*```(?:markdown|md)?\s*\n/, '');
+  revisedContent = revisedContent.replace(/\n```[\s]*$/, '');
+  
+  return revisedContent;
 }
 
 async function extractPatterns(

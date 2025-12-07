@@ -45,6 +45,19 @@ interface ContentReview {
   created_at: string;
 }
 
+interface ProcessingResult {
+  success: boolean;
+  commentsProcessed: number;
+  patternsCreated: number;
+  revisionsApplied: boolean;
+  originalContent?: string;
+  revisedContent?: string;
+  summary: {
+    comments: Array<{ category: string; severity: string; issue: string; instruction: string }>;
+    patternsAdded: Array<{ type: string; pattern: string }>;
+  };
+}
+
 interface ContentReviewPanelProps {
   review: ContentReview | null;
   isLoading?: boolean;
@@ -55,7 +68,7 @@ interface ContentReviewPanelProps {
   isApplying?: boolean;
   isAddingFeedback?: boolean;
   contentItemId: string;
-  uploadDocxReview: (params: { contentItemId: string; file: File }) => void;
+  uploadDocxReview: (params: { contentItemId: string; file: File }) => Promise<ProcessingResult>;
   isUploadingDocx?: boolean;
   onDocxSuccess: () => void;
 }

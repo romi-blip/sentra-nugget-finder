@@ -6,15 +6,19 @@
 export const normalizeAiContent = (content: string): string => {
   let cleanedContent = content;
 
-  // 1. Strip YAML frontmatter (--- blocks at beginning)
+  // 1. Strip YAML frontmatter (--- blocks at beginning) - only match valid YAML with key: value pairs
   cleanedContent = cleanedContent.replace(
-    /^[\s]*```(?:markdown|md)?\s*\n---[\s\S]*?---\s*\n```[\s]*/m,
+    /^[\s]*```(?:markdown|md)?\s*\n---\n(?:[a-zA-Z_-]+:\s*[^\n]*\n)+---\s*\n```[\s]*/m,
     ''
   );
+  // Only strip actual YAML frontmatter (key: value pairs between --- delimiters at start)
   cleanedContent = cleanedContent.replace(
-    /^[\s]*---[\s\S]*?---[\s]*/m,
+    /^---\n(?:[a-zA-Z_-]+:\s*[^\n]*\n)+---\n*/,
     ''
   );
+  
+  // 1b. Strip any leading --- that GPT might add (not valid frontmatter)
+  cleanedContent = cleanedContent.replace(/^[\s]*---[\s]*\n/, '');
   
   // 2. Strip standalone metadata lines at the beginning
   cleanedContent = cleanedContent.replace(
