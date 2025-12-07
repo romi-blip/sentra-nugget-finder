@@ -36,7 +36,10 @@ interface TrackedChange {
   author: string;
   date: string;
   text: string;
-  context: string;
+  precedingText: string;    // Text immediately before the insertion/deletion point
+  followingText: string;    // Text immediately after the insertion/deletion point
+  originalPhrase: string;   // What the content currently says (without the change)
+  newPhrase: string;        // What it should say (with the change applied)
 }
 
 interface FeedbackPattern {
@@ -144,17 +147,30 @@ serve(async (req) => {
     const trackedChanges = await extractTrackedChanges(bytes);
     console.log(`Extracted ${trackedChanges.length} tracked changes from DOCX`);
 
-    // Convert tracked changes to comment format for unified processing
-    const trackedChangeComments: ExtractedComment[] = trackedChanges.map(change => ({
-      author: change.author,
-      date: change.date,
-      commentText: change.type === 'insertion' 
-        ? `[TRACKED INSERTION] Reviewer directly added this text: "${change.text}"`
-        : `[TRACKED DELETION] Reviewer directly removed this text: "${change.text}"`,
-      anchorText: change.context || change.text,
-      isTrackedChange: true,
-      changeType: change.type,
-    }));
+    // Convert tracked changes to comment format with explicit FIND/REPLACE instructions
+    const trackedChangeComments: ExtractedComment[] = trackedChanges.map(change => {
+      if (change.type === 'insertion') {
+        // For insertions: provide explicit before → after transformation
+        return {
+          author: change.author,
+          date: change.date,
+          commentText: `[TRACKED INSERTION] FIND: "${change.originalPhrase}" → REPLACE WITH: "${change.newPhrase}"`,
+          anchorText: change.originalPhrase,
+          isTrackedChange: true,
+          changeType: change.type,
+        };
+      } else {
+        // For deletions: explicit text to remove
+        return {
+          author: change.author,
+          date: change.date,
+          commentText: `[TRACKED DELETION] DELETE THIS TEXT: "${change.text}"`,
+          anchorText: change.text,
+          isTrackedChange: true,
+          changeType: change.type,
+        };
+      }
+    });
 
     // Combine comments and tracked changes
     const allFeedback = [...comments, ...trackedChangeComments];
@@ -296,7 +312,34 @@ async function extractTrackedChanges(fileBytes: Uint8Array): Promise<TrackedChan
       return changes;
     }
 
-    // Extract insertions: <w:ins w:author="..." w:date="...">...<w:t>text</w:t>...</w:ins>
+    // Helper to extract text from XML fragment
+    const extractText = (xml: string): string => {
+      let text = '';
+      const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+      let match;
+      while ((match = textRegex.exec(xml)) !== null) {
+        text += match[1];
+      }
+      return text;
+    };
+
+    // Helper to extract text from deletions
+    const extractDeletedText = (xml: string): string => {
+      let text = '';
+      const delTextRegex = /<w:delText[^>]*>([^<]*)<\/w:delText>/g;
+      let match;
+      while ((match = delTextRegex.exec(xml)) !== null) {
+        text += match[1];
+      }
+      // Also check regular w:t
+      const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+      while ((match = textRegex.exec(xml)) !== null) {
+        text += match[1];
+      }
+      return text;
+    };
+
+    // Extract insertions with surrounding context for find-and-replace
     const insertionRegex = /<w:ins\s+([^>]*)>([\s\S]*?)<\/w:ins>/g;
     let match;
     
@@ -307,39 +350,45 @@ async function extractTrackedChanges(fileBytes: Uint8Array): Promise<TrackedChan
       const authorMatch = attributes.match(/w:author="([^"]*)"/);
       const dateMatch = attributes.match(/w:date="([^"]*)"/);
       
-      // Extract text from insertion
-      let insertedText = '';
-      const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-      let textMatch;
-      while ((textMatch = textRegex.exec(content)) !== null) {
-        insertedText += textMatch[1];
-      }
+      const insertedText = extractText(content).trim();
       
-      if (insertedText.trim()) {
-        // Try to get surrounding context
-        const startPos = Math.max(0, match.index - 200);
-        const endPos = Math.min(documentXml.length, match.index + match[0].length + 200);
-        const contextXml = documentXml.slice(startPos, endPos);
+      if (insertedText) {
+        // Get preceding text (look back up to 150 chars of XML, extract text)
+        const precedingXml = documentXml.slice(Math.max(0, match.index - 500), match.index);
+        // Get text from preceding XML, take last ~50 chars
+        let precedingTextAll = extractText(precedingXml);
+        const precedingText = precedingTextAll.slice(-50).trim();
         
-        // Extract context text
-        let contextText = '';
-        const contextTextRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-        let ctxMatch;
-        while ((ctxMatch = contextTextRegex.exec(contextXml)) !== null) {
-          contextText += ctxMatch[1] + ' ';
-        }
+        // Get following text (look ahead up to 150 chars of XML, extract text)
+        const followingXml = documentXml.slice(match.index + match[0].length, match.index + match[0].length + 500);
+        let followingTextAll = extractText(followingXml);
+        const followingText = followingTextAll.slice(0, 50).trim();
+        
+        // Build original phrase (what the doc currently says without the insertion)
+        const originalPhrase = (precedingText + ' ' + followingText).trim();
+        // Build new phrase (what it should say with the insertion)
+        const newPhrase = (precedingText + insertedText + followingText).trim();
         
         changes.push({
           type: 'insertion',
           author: authorMatch ? authorMatch[1] : 'Unknown',
           date: dateMatch ? dateMatch[1] : '',
-          text: insertedText.trim(),
-          context: contextText.trim().slice(0, 200),
+          text: insertedText,
+          precedingText,
+          followingText,
+          originalPhrase,
+          newPhrase,
         });
+        
+        console.log(`  Tracked insertion: "${insertedText}"`);
+        console.log(`    Preceding: "${precedingText}"`);
+        console.log(`    Following: "${followingText}"`);
+        console.log(`    Original phrase: "${originalPhrase}"`);
+        console.log(`    New phrase: "${newPhrase}"`);
       }
     }
     
-    // Extract deletions: <w:del w:author="..." w:date="...">...<w:delText>text</w:delText>...</w:del>
+    // Extract deletions
     const deletionRegex = /<w:del\s+([^>]*)>([\s\S]*?)<\/w:del>/g;
     
     while ((match = deletionRegex.exec(documentXml)) !== null) {
@@ -349,37 +398,25 @@ async function extractTrackedChanges(fileBytes: Uint8Array): Promise<TrackedChan
       const authorMatch = attributes.match(/w:author="([^"]*)"/);
       const dateMatch = attributes.match(/w:date="([^"]*)"/);
       
-      // Extract text from deletion (uses <w:delText> instead of <w:t>)
-      let deletedText = '';
-      const delTextRegex = /<w:delText[^>]*>([^<]*)<\/w:delText>/g;
-      let textMatch;
-      while ((textMatch = delTextRegex.exec(content)) !== null) {
-        deletedText += textMatch[1];
-      }
+      const deletedText = extractDeletedText(content).trim();
       
-      // Also check for regular <w:t> inside deletions
-      const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-      while ((textMatch = textRegex.exec(content)) !== null) {
-        deletedText += textMatch[1];
-      }
-      
-      if (deletedText.trim()) {
+      if (deletedText) {
         changes.push({
           type: 'deletion',
           author: authorMatch ? authorMatch[1] : 'Unknown',
           date: dateMatch ? dateMatch[1] : '',
-          text: deletedText.trim(),
-          context: '',
+          text: deletedText,
+          precedingText: '',
+          followingText: '',
+          originalPhrase: deletedText,
+          newPhrase: '',
         });
+        
+        console.log(`  Tracked deletion: "${deletedText}"`);
       }
     }
 
     console.log(`Successfully parsed ${changes.length} tracked changes from document.xml`);
-    
-    // Log details for debugging
-    changes.forEach((change, i) => {
-      console.log(`  ${i + 1}. [${change.type.toUpperCase()}] by ${change.author}: "${change.text.slice(0, 50)}${change.text.length > 50 ? '...' : ''}"`);
-    });
 
   } catch (error) {
     console.error('Error extracting tracked changes:', error);
@@ -520,14 +557,19 @@ For each item, determine:
 8. A clear, specific instruction for how to fix it
 9. If action_type is "conditional", note what decision is needed and what conservative action to take
 
-=== TRACKED CHANGES (MANDATORY) ===
-When you see [TRACKED INSERTION] or [TRACKED DELETION] comments:
-- These are DIRECT EDITS the reviewer made in Track Changes mode - they are NOT suggestions
-- [TRACKED INSERTION] → action_type: "add", severity: "critical" - MUST be applied exactly as written
-- [TRACKED DELETION] → action_type: "remove", severity: "critical" - MUST be removed from content
-- The text in quotes after "directly added/removed this text:" is the EXACT text to add or remove
-- replacement_term for insertions should be the EXACT inserted text
+=== TRACKED CHANGES AS FIND-REPLACE (MANDATORY) ===
+When you see [TRACKED INSERTION] with "FIND: X → REPLACE WITH: Y":
+- action_type: "modify" (NOT "add" - this is a text substitution)
+- severity: "critical" - MUST be applied exactly as written
+- target_content: The FIND phrase (X) - this is what to locate in the document
+- replacement_term: The REPLACE WITH phrase (Y) - this is the complete replacement
+- This is a LITERAL string replacement - find X and replace with Y exactly
 - These edits take priority over regular comments
+
+When you see [TRACKED DELETION] with "DELETE THIS TEXT: X":
+- action_type: "remove", severity: "critical"
+- target_content: The exact text X that must be removed
+- These edits MUST be applied exactly as written
 
 === LINK REPLACEMENT RULES ===
 When a reviewer asks to "find a better link" or says a link is wrong:
@@ -700,9 +742,12 @@ async function reviseContent(
           role: 'system',
           content: `You are an expert content editor. Revise the following content based on human reviewer feedback.
 
-=== TRACKED CHANGES ARE MANDATORY ===
-Items marked [TRACKED CHANGE - MANDATORY] are direct edits the reviewer made. Apply them EXACTLY:
-- [ACTION: ADD] with [TRACKED CHANGE] → INSERT the exact text provided at the correct location
+=== TRACKED CHANGES ARE MANDATORY STRING REPLACEMENTS ===
+Items marked [TRACKED CHANGE - MANDATORY] are direct edits the reviewer made. Apply them as LITERAL string replacements:
+- When feedback contains FIND/REPLACE format: Locate the exact FIND text and replace it with the exact REPLACE WITH text
+- This is a direct string substitution - no interpretation needed
+- Example: If feedback says FIND "cloud and SaaS" → REPLACE WITH "cloud, on-prem, and SaaS"
+  You must find "cloud and SaaS" in the content and replace it with "cloud, on-prem, and SaaS"
 - [ACTION: REMOVE] with [TRACKED CHANGE] → DELETE the exact text from the content
 - These are NOT suggestions - they are edits the reviewer already made in Word
 
