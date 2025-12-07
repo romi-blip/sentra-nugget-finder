@@ -13,6 +13,8 @@ interface ExtractedComment {
   date: string;
   commentText: string;
   anchorText: string;
+  isTrackedChange?: boolean;
+  changeType?: 'insertion' | 'deletion';
 }
 
 interface ProcessedComment {
@@ -24,8 +26,17 @@ interface ProcessedComment {
   action_type: 'modify' | 'remove' | 'add' | 'conditional' | 'clarify';
   target_content: string;
   replacement_term?: string;  // Exact term from reviewer to use
+  replacement_link?: string;  // Replacement link for "find better link" comments
   decision_needed?: string;
   conservative_action?: string;
+}
+
+interface TrackedChange {
+  type: 'insertion' | 'deletion';
+  author: string;
+  date: string;
+  text: string;
+  context: string;
 }
 
 interface FeedbackPattern {
@@ -34,6 +45,26 @@ interface FeedbackPattern {
   feedback_instruction: string;
   priority: string;
 }
+
+// Sentra link fallbacks for "find better link" comments
+const SENTRA_LINK_FALLBACKS: Record<string, string> = {
+  'genai': 'https://www.sentra.io/use-cases/secure-ai-agents',
+  'ai': 'https://www.sentra.io/use-cases/secure-ai-agents',
+  'governance': 'https://www.sentra.io/use-cases/secure-ai-agents',
+  'dspm': 'https://www.sentra.io/platform/dspm',
+  'data security': 'https://www.sentra.io/platform/dspm',
+  'detection': 'https://www.sentra.io/platform/data-detection-and-response',
+  'ddr': 'https://www.sentra.io/platform/data-detection-and-response',
+  'response': 'https://www.sentra.io/platform/data-detection-and-response',
+  'compliance': 'https://www.sentra.io/use-cases/regulatory-compliance',
+  'regulatory': 'https://www.sentra.io/use-cases/regulatory-compliance',
+  'classification': 'https://www.sentra.io/platform/data-discovery-and-classification',
+  'discovery': 'https://www.sentra.io/platform/data-discovery-and-classification',
+  'cloud': 'https://www.sentra.io/platform/cloud-native-data-security',
+  'multi-cloud': 'https://www.sentra.io/platform/cloud-native-data-security',
+  'jagger': 'https://www.sentra.io/use-cases/secure-ai-agents',
+  'default': 'https://www.sentra.io',
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -109,15 +140,36 @@ serve(async (req) => {
     const comments = await extractDocxComments(bytes);
     console.log(`Extracted ${comments.length} comments from DOCX`);
 
-    if (comments.length === 0) {
+    // Extract tracked changes (insertions/deletions) from DOCX
+    const trackedChanges = await extractTrackedChanges(bytes);
+    console.log(`Extracted ${trackedChanges.length} tracked changes from DOCX`);
+
+    // Convert tracked changes to comment format for unified processing
+    const trackedChangeComments: ExtractedComment[] = trackedChanges.map(change => ({
+      author: change.author,
+      date: change.date,
+      commentText: change.type === 'insertion' 
+        ? `[TRACKED INSERTION] Reviewer directly added this text: "${change.text}"`
+        : `[TRACKED DELETION] Reviewer directly removed this text: "${change.text}"`,
+      anchorText: change.context || change.text,
+      isTrackedChange: true,
+      changeType: change.type,
+    }));
+
+    // Combine comments and tracked changes
+    const allFeedback = [...comments, ...trackedChangeComments];
+
+    if (allFeedback.length === 0) {
       return new Response(JSON.stringify({ 
-        error: 'No comments found in the uploaded document',
-        message: 'Please ensure the Word document contains reviewer comments (not just track changes)'
+        error: 'No comments or tracked changes found in the uploaded document',
+        message: 'Please ensure the Word document contains reviewer comments or tracked changes'
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log(`Total feedback items (comments + tracked changes): ${allFeedback.length}`);
 
     // Get OpenAI API key
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -126,8 +178,8 @@ serve(async (req) => {
     }
 
     // Analyze comments with GPT
-    const processedComments = await analyzeComments(openaiApiKey, comments, contentItem.content);
-    console.log(`Analyzed ${processedComments.length} comments`);
+    const processedComments = await analyzeComments(openaiApiKey, allFeedback, contentItem.content);
+    console.log(`Analyzed ${processedComments.length} feedback items`);
 
     // Revise content based on comments
     let revisedContent = await reviseContent(openaiApiKey, contentItem.content, processedComments);
@@ -141,8 +193,9 @@ serve(async (req) => {
     revisedContent = removeEmDashes(revisedContent);
     console.log('Em dashes removed programmatically');
 
-    // Extract patterns for reviewer agent
-    const patterns = await extractPatterns(openaiApiKey, processedComments);
+    // Extract patterns for reviewer agent (only from regular comments, not tracked changes)
+    const regularComments = processedComments.filter(c => !c.original.isTrackedChange);
+    const patterns = await extractPatterns(openaiApiKey, regularComments);
     console.log(`Extracted ${patterns.length} patterns for reviewer agent`);
 
     // Save patterns to database (checking for duplicates)
@@ -184,14 +237,15 @@ serve(async (req) => {
         content_item_id: contentItemId,
         status: 'completed',
         overall_score: null,
-        review_summary: `DOCX review processed: ${comments.length} comments, ${patternsCreated} patterns added`,
-        human_feedback: comments.map(c => c.commentText).join('\n\n'),
+        review_summary: `DOCX review processed: ${comments.length} comments, ${trackedChanges.length} tracked changes, ${patternsCreated} patterns added`,
+        human_feedback: allFeedback.map(c => c.commentText).join('\n\n'),
         feedback_applied: true,
       });
 
     return new Response(JSON.stringify({
       success: true,
       commentsProcessed: comments.length,
+      trackedChangesProcessed: trackedChanges.length,
       patternsCreated,
       revisionsApplied: true,
       originalContent,
@@ -204,8 +258,11 @@ serve(async (req) => {
           instruction: c.instruction,
           action_type: c.action_type,
           target_content: c.target_content,
+          replacement_term: c.replacement_term,
+          replacement_link: c.replacement_link,
           decision_needed: c.decision_needed,
           conservative_action: c.conservative_action,
+          isTrackedChange: c.original.isTrackedChange,
         })),
         patternsAdded: patterns.slice(0, patternsCreated).map(p => ({
           type: p.feedback_type,
@@ -226,6 +283,110 @@ serve(async (req) => {
     });
   }
 });
+
+async function extractTrackedChanges(fileBytes: Uint8Array): Promise<TrackedChange[]> {
+  const changes: TrackedChange[] = [];
+  
+  try {
+    const zip = await JSZip.loadAsync(fileBytes);
+    const documentXml = await zip.file('word/document.xml')?.async('string');
+    
+    if (!documentXml) {
+      console.log('No document.xml found in DOCX');
+      return changes;
+    }
+
+    // Extract insertions: <w:ins w:author="..." w:date="...">...<w:t>text</w:t>...</w:ins>
+    const insertionRegex = /<w:ins\s+([^>]*)>([\s\S]*?)<\/w:ins>/g;
+    let match;
+    
+    while ((match = insertionRegex.exec(documentXml)) !== null) {
+      const attributes = match[1];
+      const content = match[2];
+      
+      const authorMatch = attributes.match(/w:author="([^"]*)"/);
+      const dateMatch = attributes.match(/w:date="([^"]*)"/);
+      
+      // Extract text from insertion
+      let insertedText = '';
+      const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+      let textMatch;
+      while ((textMatch = textRegex.exec(content)) !== null) {
+        insertedText += textMatch[1];
+      }
+      
+      if (insertedText.trim()) {
+        // Try to get surrounding context
+        const startPos = Math.max(0, match.index - 200);
+        const endPos = Math.min(documentXml.length, match.index + match[0].length + 200);
+        const contextXml = documentXml.slice(startPos, endPos);
+        
+        // Extract context text
+        let contextText = '';
+        const contextTextRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+        let ctxMatch;
+        while ((ctxMatch = contextTextRegex.exec(contextXml)) !== null) {
+          contextText += ctxMatch[1] + ' ';
+        }
+        
+        changes.push({
+          type: 'insertion',
+          author: authorMatch ? authorMatch[1] : 'Unknown',
+          date: dateMatch ? dateMatch[1] : '',
+          text: insertedText.trim(),
+          context: contextText.trim().slice(0, 200),
+        });
+      }
+    }
+    
+    // Extract deletions: <w:del w:author="..." w:date="...">...<w:delText>text</w:delText>...</w:del>
+    const deletionRegex = /<w:del\s+([^>]*)>([\s\S]*?)<\/w:del>/g;
+    
+    while ((match = deletionRegex.exec(documentXml)) !== null) {
+      const attributes = match[1];
+      const content = match[2];
+      
+      const authorMatch = attributes.match(/w:author="([^"]*)"/);
+      const dateMatch = attributes.match(/w:date="([^"]*)"/);
+      
+      // Extract text from deletion (uses <w:delText> instead of <w:t>)
+      let deletedText = '';
+      const delTextRegex = /<w:delText[^>]*>([^<]*)<\/w:delText>/g;
+      let textMatch;
+      while ((textMatch = delTextRegex.exec(content)) !== null) {
+        deletedText += textMatch[1];
+      }
+      
+      // Also check for regular <w:t> inside deletions
+      const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+      while ((textMatch = textRegex.exec(content)) !== null) {
+        deletedText += textMatch[1];
+      }
+      
+      if (deletedText.trim()) {
+        changes.push({
+          type: 'deletion',
+          author: authorMatch ? authorMatch[1] : 'Unknown',
+          date: dateMatch ? dateMatch[1] : '',
+          text: deletedText.trim(),
+          context: '',
+        });
+      }
+    }
+
+    console.log(`Successfully parsed ${changes.length} tracked changes from document.xml`);
+    
+    // Log details for debugging
+    changes.forEach((change, i) => {
+      console.log(`  ${i + 1}. [${change.type.toUpperCase()}] by ${change.author}: "${change.text.slice(0, 50)}${change.text.length > 50 ? '...' : ''}"`);
+    });
+
+  } catch (error) {
+    console.error('Error extracting tracked changes:', error);
+  }
+
+  return changes;
+}
 
 async function extractDocxComments(fileBytes: Uint8Array): Promise<ExtractedComment[]> {
   const comments: ExtractedComment[] = [];
@@ -341,9 +502,9 @@ async function analyzeComments(
       messages: [
         {
           role: 'system',
-          content: `You are an expert content reviewer. Analyze the following comments from a human reviewer.
+          content: `You are an expert content reviewer. Analyze the following comments and tracked changes from a human reviewer.
 
-For each comment, determine:
+For each item, determine:
 1. Category: One of "style", "accuracy", "tone", "structure", "messaging", or "general"
 2. Severity: One of "critical", "major", "minor", or "suggestion"
 3. The specific issue being pointed out
@@ -355,40 +516,49 @@ For each comment, determine:
    - "clarify" - Needs more context before applying
 5. Target Content: The EXACT text/section from the original content that this comment applies to. Quote the specific sentences or paragraph.
 6. Replacement Term: If the reviewer suggests a SPECIFIC replacement term, capture it EXACTLY
-7. A clear, specific instruction for how to fix it
-8. If action_type is "conditional", note what decision is needed and what conservative action to take
+7. Replacement Link: If the comment is about finding a better link, suggest an appropriate Sentra link
+8. A clear, specific instruction for how to fix it
+9. If action_type is "conditional", note what decision is needed and what conservative action to take
 
-CRITICAL: EXTRACT REVIEWER'S EXACT REPLACEMENT TERMS
-When a reviewer suggests specific wording, you MUST capture their exact suggested term:
+=== TRACKED CHANGES (MANDATORY) ===
+When you see [TRACKED INSERTION] or [TRACKED DELETION] comments:
+- These are DIRECT EDITS the reviewer made in Track Changes mode - they are NOT suggestions
+- [TRACKED INSERTION] → action_type: "add", severity: "critical" - MUST be applied exactly as written
+- [TRACKED DELETION] → action_type: "remove", severity: "critical" - MUST be removed from content
+- The text in quotes after "directly added/removed this text:" is the EXACT text to add or remove
+- replacement_term for insertions should be the EXACT inserted text
+- These edits take priority over regular comments
+
+=== LINK REPLACEMENT RULES ===
+When a reviewer asks to "find a better link" or says a link is wrong:
+1. If about GenAI/AI/Jagger → replacement_link: "https://www.sentra.io/use-cases/secure-ai-agents"
+2. If about DSPM/data security → replacement_link: "https://www.sentra.io/platform/dspm"
+3. If about detection/DDR → replacement_link: "https://www.sentra.io/platform/data-detection-and-response"
+4. If about compliance/regulatory → replacement_link: "https://www.sentra.io/use-cases/regulatory-compliance"
+5. If about classification/discovery → replacement_link: "https://www.sentra.io/platform/data-discovery-and-classification"
+6. If no clear category → replacement_link: "https://www.sentra.io" and flag for review
+7. NEVER just remove a link without either replacing it or flagging for review
+
+=== CONSERVATIVE EDITING RULES ===
+- ONLY modify/remove content that has an EXPLICIT comment or tracked change attached
+- Do NOT proactively remove content you think might be problematic
+- If content lists third-party companies and there's no comment about them, KEEP them
+- When in doubt, PRESERVE original content
+- Only act on what the reviewer explicitly flagged
+
+=== EXACT TERM EXTRACTION ===
+When a reviewer suggests specific wording, CAPTURE their exact suggested term:
 - "say X instead of Y" → replacement_term: "X" (use X exactly, not a synonym)
 - "don't say live, say monitoring or continuously monitoring" → replacement_term: "continuous monitoring" (NOT "real-time" which means the same as "live")
 - "add classification" or "include X" → replacement_term includes the exact term
-- "discovery only doesn't say much" + "add classification/scanning" → replacement_term: "discovery and classification"
-- NEVER substitute synonyms for the reviewer's exact words. If they say "continuous", use "continuous" not "real-time"
+- NEVER substitute synonyms for the reviewer's exact words
 
-EXAMPLES:
-- Comment: "we don't do it live. Better to just say monitoring, or continuously monitoring"
-  → replacement_term: "continuous monitoring" (NOT "real-time monitoring" which has the same meaning as "live")
-  
-- Comment: "discovery only doesn't say much - add classification/scanning"  
-  → replacement_term: "discovery and classification"
-
-CRITICAL DETECTION RULES FOR "REMOVE" ACTION:
+=== REMOVE ACTION TRIGGERS ===
 - "Why should we say that?" → action_type: "remove"
-- "Why is this here?" → action_type: "remove"
 - "This is obvious" → action_type: "remove"
-- "The obvious" → action_type: "remove"
 - "Unnecessary" or "redundant" → action_type: "remove"
-- "People already know this" → action_type: "remove"
-- "Readers understand this" → action_type: "remove"
-- "We are already there" → action_type: "remove" (implies content states the obvious)
-- "Looking ahead" or "Next steps" sections that describe what the product already does → action_type: "remove"
-- If reviewer implies the product ALREADY HAS what the content describes as PLANNED → action_type: "remove"
-
-CRITICAL DETECTION RULES FOR "CONDITIONAL" ACTION:
-- Asks for "approval" or mentions needing to "check" → action_type: "conditional"
-- Wants to add a name, customer, or detail pending approval → action_type: "conditional"
-- For conditional comments, conservative_action should usually be to REMOVE the uncertain content
+- "We are already there" → action_type: "remove"
+- [TRACKED DELETION] → action_type: "remove" (MANDATORY)
 
 Return a JSON array of analyzed comments.`
         },
@@ -399,8 +569,8 @@ Return a JSON array of analyzed comments.`
 ${content.slice(0, 6000)}
 ---
 
-Comments from human reviewer:
-${comments.map((c, i) => `${i + 1}. Comment: "${c.commentText}" (by ${c.author})
+Comments and tracked changes from human reviewer:
+${comments.map((c, i) => `${i + 1}. ${c.isTrackedChange ? '[TRACKED CHANGE] ' : ''}Comment: "${c.commentText}" (by ${c.author})
    Attached to text: "${c.anchorText || 'Not specified - identify from context'}"`).join('\n\n')}`
         }
       ],
@@ -432,7 +602,11 @@ ${comments.map((c, i) => `${i + 1}. Comment: "${c.commentText}" (by ${c.author})
                     },
                     replacement_term: {
                       type: 'string',
-                      description: 'If reviewer suggests specific wording, capture their EXACT term (e.g., "continuous monitoring" not "real-time monitoring", "discovery and classification" not just "discovery")'
+                      description: 'If reviewer suggests specific wording or tracked insertion, capture the EXACT term'
+                    },
+                    replacement_link: {
+                      type: 'string',
+                      description: 'For "find better link" comments, the appropriate Sentra URL to use'
                     },
                     instruction: { type: 'string', description: 'How to fix this issue' },
                     decision_needed: { type: 'string', description: 'For conditional comments: what decision/approval is needed' },
@@ -469,6 +643,7 @@ ${comments.map((c, i) => `${i + 1}. Comment: "${c.commentText}" (by ${c.author})
     action_type: ac.action_type || 'modify',
     target_content: ac.target_content || '',
     replacement_term: ac.replacement_term,
+    replacement_link: ac.replacement_link,
     decision_needed: ac.decision_needed,
     conservative_action: ac.conservative_action,
   }));
@@ -481,7 +656,8 @@ async function reviseContent(
 ): Promise<string> {
   // Format comments with action types, target content, and replacement terms for precise revision
   const formattedFeedback = processedComments.map((c, i) => {
-    let feedbackLine = `${i + 1}. [${c.severity.toUpperCase()}] [ACTION: ${c.action_type.toUpperCase()}] ${c.category}
+    const isTrackedChange = c.original.isTrackedChange;
+    let feedbackLine = `${i + 1}. [${c.severity.toUpperCase()}] [ACTION: ${c.action_type.toUpperCase()}]${isTrackedChange ? ' [TRACKED CHANGE - MANDATORY]' : ''} ${c.category}
    Target content: "${c.target_content}"
    Issue: ${c.issue}
    Instruction: ${c.instruction}`;
@@ -491,12 +667,21 @@ async function reviseContent(
       feedbackLine += `\n   >>> USE EXACT TERM: "${c.replacement_term}" <<< (Do NOT use synonyms - use this term exactly as written)`;
     }
     
+    // Include replacement link if provided
+    if (c.replacement_link) {
+      feedbackLine += `\n   >>> USE THIS LINK: ${c.replacement_link} <<<`;
+    }
+    
     if (c.action_type === 'conditional' && c.conservative_action) {
       feedbackLine += `\n   Conservative action (since approval not possible): ${c.conservative_action}`;
     }
     
     if (c.action_type === 'remove') {
       feedbackLine += `\n   >>> DELETE THE ABOVE TARGET CONTENT ENTIRELY <<<`;
+    }
+    
+    if (c.action_type === 'add' && isTrackedChange) {
+      feedbackLine += `\n   >>> INSERT THIS TEXT EXACTLY: "${c.replacement_term}" <<<`;
     }
     
     return feedbackLine;
@@ -515,7 +700,13 @@ async function reviseContent(
           role: 'system',
           content: `You are an expert content editor. Revise the following content based on human reviewer feedback.
 
-CRITICAL RULES FOR EACH ACTION TYPE:
+=== TRACKED CHANGES ARE MANDATORY ===
+Items marked [TRACKED CHANGE - MANDATORY] are direct edits the reviewer made. Apply them EXACTLY:
+- [ACTION: ADD] with [TRACKED CHANGE] → INSERT the exact text provided at the correct location
+- [ACTION: REMOVE] with [TRACKED CHANGE] → DELETE the exact text from the content
+- These are NOT suggestions - they are edits the reviewer already made in Word
+
+=== CRITICAL RULES FOR EACH ACTION TYPE ===
 
 1. For "REMOVE" actions: 
    - Find the EXACT "Target content" quoted in the feedback
@@ -526,36 +717,34 @@ CRITICAL RULES FOR EACH ACTION TYPE:
 
 2. For "MODIFY" actions: Make targeted changes to the specified target content while preserving structure.
 
-3. For "ADD" actions: Insert new content at the appropriate location.
+3. For "ADD" actions: Insert new content at the appropriate location. For tracked insertions, use the EXACT text provided.
 
 4. For "CONDITIONAL" actions: Take the CONSERVATIVE action provided. Since we cannot get approval in this automated process, if the conservative action says to remove, then REMOVE the content entirely.
 
 5. For "CLARIFY" actions: Make your best judgment based on context.
 
-SECTION REMOVAL RULES:
+=== LINK REPLACEMENT ===
+When feedback includes ">>> USE THIS LINK: [url] <<<", replace the existing link with that URL.
+
+=== CONSERVATIVE EDITING ===
+- ONLY modify content that has explicit feedback attached
+- Do NOT make additional changes beyond what's explicitly requested
+- If content mentions third-party companies without a comment about them, KEEP those mentions
+- Preserve content that wasn't flagged by the reviewer
+
+=== SECTION REMOVAL RULES ===
 - When target content is a "Looking ahead" or "Next Steps" paragraph → DELETE THE ENTIRE SECTION
 - When target content describes future plans that already exist as features → DELETE ENTIRELY  
 - When a heading has no content remaining after removal → DELETE the heading too
 - After removing sections, ensure remaining content flows logically
 
-INTERPRETATION GUIDE - THESE ALL MEAN "REMOVE":
-- "Why should we say that?" = REMOVE that content
-- "This is obvious" = REMOVE that content
-- "The obvious" = REMOVE that content
-- "Readers already know this" = REMOVE that content
-- "Unnecessary" = REMOVE that content
-- "We are already there" = REMOVE that content (product already has this capability)
-- "Get quote approval" without approval = REMOVE the quote
-- "Add customer name if approved" without approval = REMOVE the reference
-
 BE DECISIVE. When feedback says to remove, remove completely. Don't soften or rephrase - DELETE.
+When feedback provides exact replacement text, use it EXACTLY - no synonyms or rewording.
 
 Preserve:
 - Overall voice and tone (for content that stays)
-- Embedded links and formatting
+- Embedded links and formatting (unless specifically flagged for replacement)
 - Logical flow (adjust transitions after removals)
-
-Word count WILL decrease when sections are removed - this is expected and correct.
 
 IMPORTANT: Return ONLY the revised markdown content. No delimiters, no code blocks, no explanations. Start directly with the content.`
         },
@@ -680,6 +869,8 @@ async function humanizeContent(apiKey: string, content: string): Promise<string>
 - Keep ALL blank lines exactly as they are
 - Keep all # and ## heading markers exactly as they are
 - PRESERVE ALL MARKDOWN LINKS [text](url) exactly as they are
+- Do NOT make any content changes beyond humanization
+- Do NOT remove or modify third-party company names
 - Output ONLY the revised content, nothing else
 
 **Content to humanize:**
@@ -695,7 +886,7 @@ ${content}`;
       body: JSON.stringify({
         model: 'gpt-4.1-2025-04-14',
         messages: [
-          { role: 'system', content: 'You are an expert editor. You humanize AI content while preserving exact markdown structure and all links. Output only the edited content with no commentary.' },
+          { role: 'system', content: 'You are an expert editor. You humanize AI content while preserving exact markdown structure and all links. Do not make content changes beyond humanization. Output only the edited content with no commentary.' },
           { role: 'user', content: humanizationPrompt }
         ],
         max_tokens: 4000,
