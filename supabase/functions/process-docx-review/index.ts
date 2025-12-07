@@ -22,6 +22,7 @@ interface ProcessedComment {
   issue: string;
   instruction: string;
   action_type: 'modify' | 'remove' | 'add' | 'conditional' | 'clarify';
+  target_content: string;
   decision_needed?: string;
   conservative_action?: string;
 }
@@ -193,6 +194,7 @@ serve(async (req) => {
           issue: c.issue,
           instruction: c.instruction,
           action_type: c.action_type,
+          target_content: c.target_content,
           decision_needed: c.decision_needed,
           conservative_action: c.conservative_action,
         })),
@@ -231,14 +233,54 @@ async function extractDocxComments(fileBytes: Uint8Array): Promise<ExtractedComm
     }
 
     // Parse comments using regex (simple XML parsing)
-    const commentRegex = /<w:comment[^>]*w:author="([^"]*)"[^>]*w:date="([^"]*)"[^>]*>([\s\S]*?)<\/w:comment>/g;
+    // Match comment with id attribute for anchor text lookup
+    const commentRegex = /<w:comment[^>]*w:id="(\d+)"[^>]*w:author="([^"]*)"[^>]*w:date="([^"]*)"[^>]*>([\s\S]*?)<\/w:comment>/g;
     const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+    
+    // Build a map of comment IDs to anchor text from document.xml
+    const anchorTextMap: Record<string, string> = {};
+    const documentXml = await zip.file('word/document.xml')?.async('string');
+    
+    if (documentXml) {
+      // Extract text between commentRangeStart and commentRangeEnd for each comment ID
+      // Pattern: find all text between <w:commentRangeStart w:id="X"/> and <w:commentRangeEnd w:id="X"/>
+      const idRegex = /<w:commentRangeStart[^>]*w:id="(\d+)"[^>]*\/>/g;
+      let idMatch;
+      
+      while ((idMatch = idRegex.exec(documentXml)) !== null) {
+        const commentId = idMatch[1];
+        const startPos = idMatch.index + idMatch[0].length;
+        
+        // Find the corresponding end tag
+        const endPattern = new RegExp(`<w:commentRangeEnd[^>]*w:id="${commentId}"[^>]*/>`);
+        const endMatch = endPattern.exec(documentXml.slice(startPos));
+        
+        if (endMatch) {
+          const anchorXml = documentXml.slice(startPos, startPos + endMatch.index);
+          
+          // Extract text from anchor region
+          let anchorText = '';
+          let textMatch;
+          const localTextRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+          while ((textMatch = localTextRegex.exec(anchorXml)) !== null) {
+            anchorText += textMatch[1];
+          }
+          
+          if (anchorText.trim()) {
+            anchorTextMap[commentId] = anchorText.trim();
+          }
+        }
+      }
+      
+      console.log(`Extracted anchor text for ${Object.keys(anchorTextMap).length} comments`);
+    }
     
     let match;
     while ((match = commentRegex.exec(commentsXml)) !== null) {
-      const author = match[1];
-      const date = match[2];
-      const content = match[3];
+      const commentId = match[1];
+      const author = match[2];
+      const date = match[3];
+      const content = match[4];
       
       // Extract text from comment content
       let commentText = '';
@@ -252,20 +294,9 @@ async function extractDocxComments(fileBytes: Uint8Array): Promise<ExtractedComm
           author,
           date,
           commentText: commentText.trim(),
-          anchorText: '', // We'd need document.xml to get the anchor text
+          anchorText: anchorTextMap[commentId] || '',
         });
       }
-    }
-
-    // Try to get anchor text from document.xml
-    const documentXml = await zip.file('word/document.xml')?.async('string');
-    if (documentXml && comments.length > 0) {
-      // Extract text near comment references
-      const rangeStartRegex = /<w:commentRangeStart[^>]*w:id="(\d+)"[^>]*\/>/g;
-      const rangeEndRegex = /<w:commentRangeEnd[^>]*w:id="(\d+)"[^>]*\/>/g;
-      
-      // Simple approach: extract surrounding text for each comment
-      // This is a simplified extraction
     }
 
   } catch (error) {
@@ -303,15 +334,25 @@ For each comment, determine:
    - "add" - Add new content
    - "conditional" - Requires a decision/approval before action (e.g., "get approval", "if approved", "check with...")
    - "clarify" - Needs more context before applying
-5. A clear, specific instruction for how to fix it
-6. If action_type is "conditional", note what decision is needed and what conservative action to take
+5. Target Content: The EXACT text/section from the original content that this comment applies to. Quote the specific sentences or paragraph.
+6. A clear, specific instruction for how to fix it
+7. If action_type is "conditional", note what decision is needed and what conservative action to take
 
-CRITICAL DETECTION RULES:
-- If reviewer asks "Why should we say that?" or "Why is this here?" → action_type: "remove"
-- If reviewer says something is "obvious", "unnecessary", "redundant" → action_type: "remove"
-- If reviewer says "people already know this" or "readers understand this" → action_type: "remove"  
-- If reviewer asks for "approval" or mentions needing to "check" → action_type: "conditional"
-- If reviewer wants to add a name, customer, or detail pending approval → action_type: "conditional"
+CRITICAL DETECTION RULES FOR "REMOVE" ACTION:
+- "Why should we say that?" → action_type: "remove"
+- "Why is this here?" → action_type: "remove"
+- "This is obvious" → action_type: "remove"
+- "The obvious" → action_type: "remove"
+- "Unnecessary" or "redundant" → action_type: "remove"
+- "People already know this" → action_type: "remove"
+- "Readers understand this" → action_type: "remove"
+- "We are already there" → action_type: "remove" (implies content states the obvious)
+- "Looking ahead" or "Next steps" sections that describe what the product already does → action_type: "remove"
+- If reviewer implies the product ALREADY HAS what the content describes as PLANNED → action_type: "remove"
+
+CRITICAL DETECTION RULES FOR "CONDITIONAL" ACTION:
+- Asks for "approval" or mentions needing to "check" → action_type: "conditional"
+- Wants to add a name, customer, or detail pending approval → action_type: "conditional"
 - For conditional comments, conservative_action should usually be to REMOVE the uncertain content
 
 Return a JSON array of analyzed comments.`
@@ -320,11 +361,12 @@ Return a JSON array of analyzed comments.`
           role: 'user',
           content: `Content being reviewed:
 ---
-${content.slice(0, 4000)}
+${content.slice(0, 6000)}
 ---
 
 Comments from human reviewer:
-${comments.map((c, i) => `${i + 1}. "${c.commentText}" (by ${c.author})`).join('\n')}`
+${comments.map((c, i) => `${i + 1}. Comment: "${c.commentText}" (by ${c.author})
+   Attached to text: "${c.anchorText || 'Not specified - identify from context'}"`).join('\n\n')}`
         }
       ],
       tools: [{
@@ -349,11 +391,15 @@ ${comments.map((c, i) => `${i + 1}. "${c.commentText}" (by ${c.author})`).join('
                       enum: ['modify', 'remove', 'add', 'conditional', 'clarify'],
                       description: 'The type of action needed: modify (change), remove (delete entirely), add (insert new), conditional (needs approval), clarify (needs context)'
                     },
+                    target_content: { 
+                      type: 'string', 
+                      description: 'The EXACT text/section from the content that this comment applies to. Quote the specific sentences or entire paragraph that should be modified/removed.'
+                    },
                     instruction: { type: 'string', description: 'How to fix this issue' },
                     decision_needed: { type: 'string', description: 'For conditional comments: what decision/approval is needed' },
                     conservative_action: { type: 'string', description: 'For conditional comments: what to do if approval cannot be obtained (usually remove)' },
                   },
-                  required: ['index', 'category', 'severity', 'issue', 'action_type', 'instruction'],
+                  required: ['index', 'category', 'severity', 'issue', 'action_type', 'target_content', 'instruction'],
                 },
               },
             },
@@ -382,6 +428,7 @@ ${comments.map((c, i) => `${i + 1}. "${c.commentText}" (by ${c.author})`).join('
     issue: ac.issue,
     instruction: ac.instruction,
     action_type: ac.action_type || 'modify',
+    target_content: ac.target_content || '',
     decision_needed: ac.decision_needed,
     conservative_action: ac.conservative_action,
   }));
@@ -392,14 +439,19 @@ async function reviseContent(
   content: string,
   processedComments: ProcessedComment[]
 ): Promise<string> {
-  // Format comments with action types for more decisive revision
+  // Format comments with action types and target content for precise revision
   const formattedFeedback = processedComments.map((c, i) => {
     let feedbackLine = `${i + 1}. [${c.severity.toUpperCase()}] [ACTION: ${c.action_type.toUpperCase()}] ${c.category}
+   Target content: "${c.target_content}"
    Issue: ${c.issue}
    Instruction: ${c.instruction}`;
     
     if (c.action_type === 'conditional' && c.conservative_action) {
       feedbackLine += `\n   Conservative action (since approval not possible): ${c.conservative_action}`;
+    }
+    
+    if (c.action_type === 'remove') {
+      feedbackLine += `\n   >>> DELETE THE ABOVE TARGET CONTENT ENTIRELY <<<`;
     }
     
     return feedbackLine;
@@ -420,9 +472,14 @@ async function reviseContent(
 
 CRITICAL RULES FOR EACH ACTION TYPE:
 
-1. For "REMOVE" actions: DELETE the content ENTIRELY. Do not rephrase, soften, or keep parts of it. Remove the entire section/sentence that was flagged.
+1. For "REMOVE" actions: 
+   - Find the EXACT "Target content" quoted in the feedback
+   - DELETE that content ENTIRELY from the document
+   - Do NOT rephrase, soften, or keep parts of it
+   - If the target is a paragraph or section, remove the ENTIRE paragraph/section
+   - If removing creates awkward flow, adjust surrounding transitions minimally
 
-2. For "MODIFY" actions: Make targeted changes while preserving structure.
+2. For "MODIFY" actions: Make targeted changes to the specified target content while preserving structure.
 
 3. For "ADD" actions: Insert new content at the appropriate location.
 
@@ -430,22 +487,30 @@ CRITICAL RULES FOR EACH ACTION TYPE:
 
 5. For "CLARIFY" actions: Make your best judgment based on context.
 
-INTERPRETATION GUIDE:
+SECTION REMOVAL RULES:
+- When target content is a "Looking ahead" or "Next Steps" paragraph → DELETE THE ENTIRE SECTION
+- When target content describes future plans that already exist as features → DELETE ENTIRELY  
+- When a heading has no content remaining after removal → DELETE the heading too
+- After removing sections, ensure remaining content flows logically
+
+INTERPRETATION GUIDE - THESE ALL MEAN "REMOVE":
 - "Why should we say that?" = REMOVE that content
 - "This is obvious" = REMOVE that content
+- "The obvious" = REMOVE that content
 - "Readers already know this" = REMOVE that content
 - "Unnecessary" = REMOVE that content
+- "We are already there" = REMOVE that content (product already has this capability)
 - "Get quote approval" without approval = REMOVE the quote
 - "Add customer name if approved" without approval = REMOVE the reference
 
-BE DECISIVE. When feedback says to remove, remove completely. Don't soften or rephrase - delete.
+BE DECISIVE. When feedback says to remove, remove completely. Don't soften or rephrase - DELETE.
 
 Preserve:
 - Overall voice and tone (for content that stays)
 - Embedded links and formatting
 - Logical flow (adjust transitions after removals)
 
-Word count may decrease if sections are removed - this is acceptable and expected.
+Word count WILL decrease when sections are removed - this is expected and correct.
 
 IMPORTANT: Return ONLY the revised markdown content. No delimiters, no code blocks, no explanations. Start directly with the content.`
         },
