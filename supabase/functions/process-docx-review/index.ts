@@ -129,8 +129,12 @@ serve(async (req) => {
     console.log(`Analyzed ${processedComments.length} comments`);
 
     // Revise content based on comments
-    const revisedContent = await reviseContent(openaiApiKey, contentItem.content, processedComments);
+    let revisedContent = await reviseContent(openaiApiKey, contentItem.content, processedComments);
     console.log('Content revised based on feedback');
+
+    // Humanize the revised content to remove AI patterns
+    revisedContent = await humanizeContent(openaiApiKey, revisedContent);
+    console.log('Content humanized');
 
     // Extract patterns for reviewer agent
     const patterns = await extractPatterns(openaiApiKey, processedComments);
@@ -626,6 +630,65 @@ ${significantComments.map((c, i) => `${i + 1}. [${c.category}] Issue: ${c.issue}
 
   const args = JSON.parse(toolCall.function.arguments);
   return args.patterns || [];
+}
+
+async function humanizeContent(apiKey: string, content: string): Promise<string> {
+  const humanizationPrompt = `You are an expert editor. Humanize this blog post by removing AI writing patterns while preserving the exact structure, formatting, and ALL LINKS.
+
+**Patterns to fix:**
+1. Replace em dashes (—) with commas, periods, or parentheses
+2. Remove overused AI phrases: "dive into", "delve", "landscape", "leverage", "robust", "seamless", "cutting-edge", "revolutionize", "game-changer", "navigate", "realm", "paradigm", "holistic", "ever-evolving"
+3. Rewrite formulaic starters: "In today's...", "It's worth noting...", "When it comes to...", "In an era..."
+4. Remove hedging: "It's important to note", "It should be mentioned"
+5. Vary parallel structures in lists
+6. Replace overused transitions: "Furthermore", "Moreover", "Additionally"
+7. Remove filler: "In order to" → "to", "Due to the fact" → "because"
+8. Make language more direct and natural
+
+**CRITICAL:** 
+- Keep ALL blank lines exactly as they are
+- Keep all # and ## heading markers exactly as they are
+- PRESERVE ALL MARKDOWN LINKS [text](url) exactly as they are
+- Output ONLY the revised content, nothing else
+
+**Content to humanize:**
+${content}`;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4.1-2025-04-14',
+        messages: [
+          { role: 'system', content: 'You are an expert editor. You humanize AI content while preserving exact markdown structure and all links. Output only the edited content with no commentary.' },
+          { role: 'user', content: humanizationPrompt }
+        ],
+        max_tokens: 4000,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn('Humanization failed, returning content as-is');
+      return content;
+    }
+
+    const data = await response.json();
+    let humanized = data.choices?.[0]?.message?.content || content;
+    
+    // Strip any leading --- or code block markers
+    humanized = humanized.replace(/^[\s]*---[\s]*\n/, '');
+    humanized = humanized.replace(/^[\s]*```(?:markdown|md)?\s*\n/, '');
+    humanized = humanized.replace(/\n```[\s]*$/, '');
+    
+    return humanized;
+  } catch (error) {
+    console.warn('Humanization error:', error);
+    return content;
+  }
 }
 
 async function checkDuplicatePattern(supabase: any, pattern: FeedbackPattern): Promise<boolean> {
