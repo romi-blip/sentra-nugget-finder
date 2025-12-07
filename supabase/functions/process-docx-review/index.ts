@@ -21,6 +21,9 @@ interface ProcessedComment {
   severity: string;
   issue: string;
   instruction: string;
+  action_type: 'modify' | 'remove' | 'add' | 'conditional' | 'clarify';
+  decision_needed?: string;
+  conservative_action?: string;
 }
 
 interface FeedbackPattern {
@@ -189,6 +192,9 @@ serve(async (req) => {
           severity: c.severity,
           issue: c.issue,
           instruction: c.instruction,
+          action_type: c.action_type,
+          decision_needed: c.decision_needed,
+          conservative_action: c.conservative_action,
         })),
         patternsAdded: patterns.slice(0, patternsCreated).map(p => ({
           type: p.feedback_type,
@@ -285,13 +291,28 @@ async function analyzeComments(
       messages: [
         {
           role: 'system',
-          content: `You are an expert content reviewer. Analyze the following comments from a human reviewer and categorize each one.
+          content: `You are an expert content reviewer. Analyze the following comments from a human reviewer.
 
 For each comment, determine:
 1. Category: One of "style", "accuracy", "tone", "structure", "messaging", or "general"
 2. Severity: One of "critical", "major", "minor", or "suggestion"
 3. The specific issue being pointed out
-4. A clear instruction for how to fix it
+4. Action Type - this is CRITICAL:
+   - "modify" - Change existing content (rephrasing, rewording)
+   - "remove" - Delete content ENTIRELY (when reviewer says it's unnecessary, obvious, redundant, or asks "why include this?")
+   - "add" - Add new content
+   - "conditional" - Requires a decision/approval before action (e.g., "get approval", "if approved", "check with...")
+   - "clarify" - Needs more context before applying
+5. A clear, specific instruction for how to fix it
+6. If action_type is "conditional", note what decision is needed and what conservative action to take
+
+CRITICAL DETECTION RULES:
+- If reviewer asks "Why should we say that?" or "Why is this here?" → action_type: "remove"
+- If reviewer says something is "obvious", "unnecessary", "redundant" → action_type: "remove"
+- If reviewer says "people already know this" or "readers understand this" → action_type: "remove"  
+- If reviewer asks for "approval" or mentions needing to "check" → action_type: "conditional"
+- If reviewer wants to add a name, customer, or detail pending approval → action_type: "conditional"
+- For conditional comments, conservative_action should usually be to REMOVE the uncertain content
 
 Return a JSON array of analyzed comments.`
         },
@@ -310,7 +331,7 @@ ${comments.map((c, i) => `${i + 1}. "${c.commentText}" (by ${c.author})`).join('
         type: 'function',
         function: {
           name: 'categorize_comments',
-          description: 'Categorize and analyze reviewer comments',
+          description: 'Categorize and analyze reviewer comments with action types',
           parameters: {
             type: 'object',
             properties: {
@@ -323,9 +344,16 @@ ${comments.map((c, i) => `${i + 1}. "${c.commentText}" (by ${c.author})`).join('
                     category: { type: 'string', enum: ['style', 'accuracy', 'tone', 'structure', 'messaging', 'general'] },
                     severity: { type: 'string', enum: ['critical', 'major', 'minor', 'suggestion'] },
                     issue: { type: 'string', description: 'The specific issue identified' },
+                    action_type: { 
+                      type: 'string', 
+                      enum: ['modify', 'remove', 'add', 'conditional', 'clarify'],
+                      description: 'The type of action needed: modify (change), remove (delete entirely), add (insert new), conditional (needs approval), clarify (needs context)'
+                    },
                     instruction: { type: 'string', description: 'How to fix this issue' },
+                    decision_needed: { type: 'string', description: 'For conditional comments: what decision/approval is needed' },
+                    conservative_action: { type: 'string', description: 'For conditional comments: what to do if approval cannot be obtained (usually remove)' },
                   },
-                  required: ['index', 'category', 'severity', 'issue', 'instruction'],
+                  required: ['index', 'category', 'severity', 'issue', 'action_type', 'instruction'],
                 },
               },
             },
@@ -353,6 +381,9 @@ ${comments.map((c, i) => `${i + 1}. "${c.commentText}" (by ${c.author})`).join('
     severity: ac.severity,
     issue: ac.issue,
     instruction: ac.instruction,
+    action_type: ac.action_type || 'modify',
+    decision_needed: ac.decision_needed,
+    conservative_action: ac.conservative_action,
   }));
 }
 
@@ -361,6 +392,19 @@ async function reviseContent(
   content: string,
   processedComments: ProcessedComment[]
 ): Promise<string> {
+  // Format comments with action types for more decisive revision
+  const formattedFeedback = processedComments.map((c, i) => {
+    let feedbackLine = `${i + 1}. [${c.severity.toUpperCase()}] [ACTION: ${c.action_type.toUpperCase()}] ${c.category}
+   Issue: ${c.issue}
+   Instruction: ${c.instruction}`;
+    
+    if (c.action_type === 'conditional' && c.conservative_action) {
+      feedbackLine += `\n   Conservative action (since approval not possible): ${c.conservative_action}`;
+    }
+    
+    return feedbackLine;
+  }).join('\n\n');
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -374,13 +418,36 @@ async function reviseContent(
           role: 'system',
           content: `You are an expert content editor. Revise the following content based on human reviewer feedback.
 
-Apply each piece of feedback carefully while:
-- Maintaining the original voice and structure
-- Preserving any embedded links and formatting
-- Making targeted changes rather than rewriting everything
-- Keeping the word count similar (800-1200 words)
+CRITICAL RULES FOR EACH ACTION TYPE:
 
-IMPORTANT: Return ONLY the revised markdown content. Do NOT include any delimiters like --- at the start or end. Do NOT wrap the content in code blocks. Start directly with the content.`
+1. For "REMOVE" actions: DELETE the content ENTIRELY. Do not rephrase, soften, or keep parts of it. Remove the entire section/sentence that was flagged.
+
+2. For "MODIFY" actions: Make targeted changes while preserving structure.
+
+3. For "ADD" actions: Insert new content at the appropriate location.
+
+4. For "CONDITIONAL" actions: Take the CONSERVATIVE action provided. Since we cannot get approval in this automated process, if the conservative action says to remove, then REMOVE the content entirely.
+
+5. For "CLARIFY" actions: Make your best judgment based on context.
+
+INTERPRETATION GUIDE:
+- "Why should we say that?" = REMOVE that content
+- "This is obvious" = REMOVE that content
+- "Readers already know this" = REMOVE that content
+- "Unnecessary" = REMOVE that content
+- "Get quote approval" without approval = REMOVE the quote
+- "Add customer name if approved" without approval = REMOVE the reference
+
+BE DECISIVE. When feedback says to remove, remove completely. Don't soften or rephrase - delete.
+
+Preserve:
+- Overall voice and tone (for content that stays)
+- Embedded links and formatting
+- Logical flow (adjust transitions after removals)
+
+Word count may decrease if sections are removed - this is acceptable and expected.
+
+IMPORTANT: Return ONLY the revised markdown content. No delimiters, no code blocks, no explanations. Start directly with the content.`
         },
         {
           role: 'user',
@@ -389,8 +456,8 @@ IMPORTANT: Return ONLY the revised markdown content. Do NOT include any delimite
 ${content}
 
 Reviewer feedback to apply:
-${processedComments.map((c, i) => `${i + 1}. [${c.severity.toUpperCase()}] ${c.category}: ${c.issue}
-   Fix: ${c.instruction}`).join('\n\n')}`
+
+${formattedFeedback}`
         }
       ],
     }),
