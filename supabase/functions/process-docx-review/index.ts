@@ -232,9 +232,9 @@ async function extractDocxComments(fileBytes: Uint8Array): Promise<ExtractedComm
       return comments;
     }
 
-    // Parse comments using regex (simple XML parsing)
-    // Match comment with id attribute for anchor text lookup
-    const commentRegex = /<w:comment[^>]*w:id="(\d+)"[^>]*w:author="([^"]*)"[^>]*w:date="([^"]*)"[^>]*>([\s\S]*?)<\/w:comment>/g;
+    // Parse comments using regex - handle attribute order variations
+    // Comments may have attributes in any order: w:id, w:author, w:date, w:initials
+    const commentTagRegex = /<w:comment\s+([^>]*)>([\s\S]*?)<\/w:comment>/g;
     const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
     
     // Build a map of comment IDs to anchor text from document.xml
@@ -276,16 +276,24 @@ async function extractDocxComments(fileBytes: Uint8Array): Promise<ExtractedComm
     }
     
     let match;
-    while ((match = commentRegex.exec(commentsXml)) !== null) {
-      const commentId = match[1];
-      const author = match[2];
-      const date = match[3];
-      const content = match[4];
+    while ((match = commentTagRegex.exec(commentsXml)) !== null) {
+      const attributes = match[1];
+      const content = match[2];
+      
+      // Extract attributes individually (handles any order)
+      const idMatch = attributes.match(/w:id="(\d+)"/);
+      const authorMatch = attributes.match(/w:author="([^"]*)"/);
+      const dateMatch = attributes.match(/w:date="([^"]*)"/);
+      
+      const commentId = idMatch ? idMatch[1] : '';
+      const author = authorMatch ? authorMatch[1] : 'Unknown';
+      const date = dateMatch ? dateMatch[1] : '';
       
       // Extract text from comment content
       let commentText = '';
       let textMatch;
-      while ((textMatch = textRegex.exec(content)) !== null) {
+      const localTextRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+      while ((textMatch = localTextRegex.exec(content)) !== null) {
         commentText += textMatch[1];
       }
       
@@ -298,6 +306,8 @@ async function extractDocxComments(fileBytes: Uint8Array): Promise<ExtractedComm
         });
       }
     }
+
+    console.log(`Successfully parsed ${comments.length} comments from comments.xml`);
 
   } catch (error) {
     console.error('Error extracting comments:', error);
