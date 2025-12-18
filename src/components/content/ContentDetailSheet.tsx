@@ -257,6 +257,9 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
           <TabsList>
             <TabsTrigger value="content">Content</TabsTrigger>
+            {item.research_notes && (
+              <TabsTrigger value="research">Research</TabsTrigger>
+            )}
             {canReview && (
               <TabsTrigger value="review">
                 Review
@@ -347,6 +350,18 @@ export const ContentDetailSheet: React.FC<ContentDetailSheetProps> = ({
               )}
             </div>
           </TabsContent>
+
+          {item.research_notes && (
+            <TabsContent value="research" className="mt-4">
+              <ScrollArea className="h-[calc(100vh-280px)]">
+                <div className="pr-4">
+                  <div className={proseClasses}>
+                    <ReactMarkdown>{normalizeAiContent(item.research_notes)}</ReactMarkdown>
+                  </div>
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          )}
 
           {canReview && (
             <TabsContent value="review" className="mt-4">
