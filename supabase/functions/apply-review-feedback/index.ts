@@ -9,6 +9,57 @@ const corsHeaders = {
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
+// Normalize AI content to strip metadata and formatting artifacts
+const normalizeRevisedContent = (content: string): string => {
+  let cleanedContent = content;
+
+  // Strip YAML frontmatter
+  cleanedContent = cleanedContent.replace(
+    /^[\s]*```(?:markdown|md)?\s*\n---\n(?:[a-zA-Z_-]+:\s*[^\n]*\n)+---\s*\n```[\s]*/m,
+    ''
+  );
+  cleanedContent = cleanedContent.replace(
+    /^---\n(?:[a-zA-Z_-]+:\s*[^\n]*\n)+---\n*/,
+    ''
+  );
+  cleanedContent = cleanedContent.replace(/^[\s]*---[\s]*\n/, '');
+  
+  // Strip standalone metadata lines at the beginning (title:, meta_title:, meta_description:, etc.)
+  cleanedContent = cleanedContent.replace(
+    /^[\s]*(title|meta_title|meta_description|meta|keywords|description|slug|date|author|category|tags):\s*[^\n]+\n/gim,
+    ''
+  );
+  
+  // Strip any **Title:** or **Meta Title:** prefixed lines that GPT might add
+  cleanedContent = cleanedContent.replace(
+    /^\*\*(Title|Meta Title|Meta Description|Description|Keywords|Slug):\*\*\s*[^\n]+\n\n?/gim,
+    ''
+  );
+
+  // Strip code fence wrappers ONLY if they wrap the entire content
+  const fenceMatch = cleanedContent.trim().match(/^```(?:markdown|md|text)?\s*\n([\s\S]*?)\n```$/);
+  if (fenceMatch) {
+    cleanedContent = fenceMatch[1];
+  }
+
+  // Decode HTML entities
+  cleanedContent = cleanedContent
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+
+  // Normalize line endings and collapse excessive blank lines
+  cleanedContent = cleanedContent
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim();
+
+  return cleanedContent;
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -127,11 +178,15 @@ Please provide the revised content. Maintain markdown formatting and ensure all 
     }
 
     const data = await response.json();
-    const revisedContent = data.choices[0]?.message?.content;
+    const rawRevisedContent = data.choices[0]?.message?.content;
 
-    if (!revisedContent) {
+    if (!rawRevisedContent) {
       throw new Error('Failed to generate revised content');
     }
+
+    // Normalize revised content to strip metadata and artifacts
+    const revisedContent = normalizeRevisedContent(rawRevisedContent);
+    console.log('Normalized revised content (first 200 chars):', revisedContent.substring(0, 200));
 
     // Update content item with revised content
     await supabase
