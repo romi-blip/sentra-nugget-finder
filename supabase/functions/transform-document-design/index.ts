@@ -207,9 +207,26 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     }
   }
 
-  console.log(`[transform-document-design] Extracted ${sections.length} sections, title: "${title}"`);
+  // FIX: Filter out document title from sections so it doesn't appear as Chapter 1
+  // The title is displayed on the cover page, not in the content
+  let filteredSections = sections;
+  if (title) {
+    const titleLower = title.toLowerCase().trim();
+    filteredSections = sections.filter((s, i) => {
+      // Remove first heading if it matches the document title
+      if (i === 0 && s.type === 'heading' && s.level === 1) {
+        const sectionLower = s.text.toLowerCase().trim();
+        if (sectionLower === titleLower || titleLower.includes(sectionLower) || sectionLower.includes(titleLower)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  console.log(`[transform-document-design] Extracted ${filteredSections.length} sections, title: "${title}"`);
   
-  return { title, subtitle, sections, isConfidential };
+  return { title, subtitle, sections: filteredSections, isConfidential };
 }
 
 // Helper to wrap text into lines (with sanitization)
@@ -523,16 +540,15 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
   drawFooter(page, fonts);
 }
 
-// FIX 5: Simulate content flow to calculate accurate TOC page numbers
+// FIX: Only include H1 chapters in TOC (not H2/H3) and calculate accurate page numbers
 function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[] {
   const entries: TOCEntry[] = [];
   let chapterNum = 0;
-  let subChapterNum = 0;
   
   // Simulate content page layout to get accurate page numbers
   const pageHeight = 792;
   const margin = 50;
-  const minY = 100; // FIX 6: Increased threshold
+  const minY = 100;
   const startY = pageHeight - 100;
   const bodyFontSize = 11;
   const lineHeight = 18;
@@ -544,10 +560,8 @@ function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[
 
   for (const section of sections) {
     if (section.type === 'heading') {
-      // FIX 3: Only H1 (level 1) creates page breaks
       if (section.level === 1) {
         chapterNum++;
-        subChapterNum = 0;
         
         // Page break before new H1 chapter (except first)
         if (!isFirstChapter) {
@@ -556,6 +570,7 @@ function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[
         }
         isFirstChapter = false;
         
+        // Only H1 chapters go in TOC
         entries.push({
           title: section.text,
           page: simulatedPage,
@@ -563,40 +578,19 @@ function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[
           number: `${chapterNum}.`,
         });
         
-        simulatedY -= 45; // Space taken by heading
+        simulatedY -= 45;
       } else if (section.level === 2) {
-        // H2 is treated as sub-section, no page break
-        subChapterNum++;
-        
-        // Check if we need a new page for space
+        // H2 takes space but not in TOC
         if (simulatedY < minY + 100) {
           simulatedPage++;
           simulatedY = startY;
         }
-        
-        entries.push({
-          title: section.text,
-          page: simulatedPage,
-          level: 2,
-          number: `${chapterNum}.${subChapterNum}`,
-        });
-        
         simulatedY -= 45;
       } else if (section.level === 3) {
-        subChapterNum++;
-        
         if (simulatedY < minY + 50) {
           simulatedPage++;
           simulatedY = startY;
         }
-        
-        entries.push({
-          title: section.text,
-          page: simulatedPage,
-          level: 2,
-          number: `${chapterNum}.${subChapterNum}`,
-        });
-        
         simulatedY -= 30;
       }
     } else {
@@ -610,7 +604,7 @@ function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[
         }
         simulatedY -= lineHeight;
       }
-      simulatedY -= 10; // Extra spacing after paragraph
+      simulatedY -= 10;
     }
   }
 
@@ -657,56 +651,67 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
         }
         isFirstChapter = false;
 
-        // Chapter heading in green (sanitized)
-        const headingText = sanitizeForPdf(`${chapterNum}. ${section.text}`);
-        currentPage.drawText(headingText, {
-          x: margin,
-          y: y,
-          size: 20,
-          font: fonts.bold,
-          color: COLORS.primary,
-        });
-
-        // Green underline
-        const headingWidth = Math.min(fonts.bold.widthOfTextAtSize(headingText, 20), 200);
-        currentPage.drawRectangle({
-          x: margin,
-          y: y - 6,
-          width: headingWidth,
-          height: 2,
-          color: COLORS.primary,
-        });
-
-        y -= 45;
+        // FIX: Wrap long H1 headings to prevent overflow
+        const headingPrefix = `${chapterNum}. `;
+        const headingLines = wrapText(headingPrefix + section.text, fonts.bold, 20, contentWidth);
+        
+        for (let i = 0; i < headingLines.length; i++) {
+          currentPage.drawText(headingLines[i], {
+            x: margin,
+            y: y,
+            size: 20,
+            font: fonts.bold,
+            color: COLORS.primary,
+          });
+          
+          // Green underline only on first line
+          if (i === 0) {
+            const headingWidth = Math.min(fonts.bold.widthOfTextAtSize(headingLines[i], 20), 200);
+            currentPage.drawRectangle({
+              x: margin,
+              y: y - 6,
+              width: headingWidth,
+              height: 2,
+              color: COLORS.primary,
+            });
+          }
+          y -= 26;
+        }
+        y -= 19; // Additional spacing after heading
       } else if (section.level === 2) {
-        // H2 as sub-section, NO page break
+        // FIX: Wrap long H2 headings to prevent overflow
         subChapterNum++;
+        const subHeadingPrefix = `${chapterNum}.${subChapterNum} `;
+        const subHeadingLines = wrapText(subHeadingPrefix + section.text, fonts.bold, 15, contentWidth);
         
-        // Subheading (sanitized)
-        const subHeadingText = sanitizeForPdf(`${chapterNum}.${subChapterNum} ${section.text}`);
-        currentPage.drawText(subHeadingText, {
-          x: margin,
-          y: y,
-          size: 15,
-          font: fonts.bold,
-          color: COLORS.darkGray,
-        });
-
-        y -= 35;
+        for (const line of subHeadingLines) {
+          currentPage.drawText(line, {
+            x: margin,
+            y: y,
+            size: 15,
+            font: fonts.bold,
+            color: COLORS.darkGray,
+          });
+          y -= 20;
+        }
+        y -= 15;
       } else if (section.level === 3) {
+        // FIX: Wrap long H3 headings to prevent overflow
         subChapterNum++;
+        const h3Prefix = `${chapterNum}.${subChapterNum} `;
+        const h3Lines = wrapText(h3Prefix + section.text, fonts.bold, 13, contentWidth);
         
-        // Subheading (sanitized)
-        const subHeadingText = sanitizeForPdf(`${chapterNum}.${subChapterNum} ${section.text}`);
-        currentPage.drawText(subHeadingText, {
-          x: margin,
-          y: y,
-          size: 13,
-          font: fonts.bold,
-          color: COLORS.black,
-        });
-
-        y -= 30;
+        for (const line of h3Lines) {
+          currentPage.drawText(line, {
+            x: margin,
+            y: y,
+            size: 13,
+            font: fonts.bold,
+            color: COLORS.black,
+          });
+          y -= 18;
+        }
+        y -= 12;
       }
     } else {
       // Paragraph text
