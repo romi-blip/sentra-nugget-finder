@@ -12,6 +12,7 @@ import DocumentUploader from '@/components/brand/DocumentUploader';
 import TransformedPreview from '@/components/brand/TransformedPreview';
 import DocumentMetadataForm from '@/components/brand/DocumentMetadataForm';
 import ContentSectionEditor from '@/components/brand/ContentSectionEditor';
+import TemplatePreview from '@/components/brand/TemplatePreview';
 import { brandService, BrandSettings } from '@/services/brandService';
 import { documentService } from '@/services/documentService';
 import { 
@@ -376,7 +377,8 @@ const BrandDesigner: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-between items-center">
+                  <TemplatePreview />
                   <Button
                     onClick={handleSaveSettings}
                     disabled={updateMutation.isPending}
