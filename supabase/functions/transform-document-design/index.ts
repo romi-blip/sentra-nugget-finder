@@ -11,8 +11,14 @@ import {
   Footer,
   AlignmentType,
   PageBreak,
-  TabStopType,
-  TabStopPosition,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle,
+  ShadingType,
+  VerticalAlign,
+  convertInchesToTwip,
 } from "npm:docx@8.5.0";
 
 const corsHeaders = {
@@ -20,17 +26,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Sentra brand colors (matching the template)
+// Sentra brand colors (matching the template exactly)
 const COLORS = {
   primary: "39FF14", // Neon Green
   primaryDark: "32CD32",
   orange: "FFA500",
   pink: "FF1493",
   cyan: "00FFFF",
+  yellow: "FFD700",
   black: "050505",
   white: "FFFFFF",
   gray: "6B7280",
   lightGray: "9CA3AF",
+  darkGray: "1F2937",
 };
 
 interface BrandSettings {
@@ -167,7 +175,6 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     
     let match;
     let foundTitle = false;
-    let foundSubtitle = false;
     
     while ((match = paragraphRegex.exec(documentXml)) !== null) {
       const paragraphContent = match[1];
@@ -192,23 +199,15 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       if (styleName.match(/Heading1|Title/i) || paragraphContent.includes('w:outlineLvl w:val="0"')) {
         isHeading = true;
         headingLevel = 1;
-        // Look for actual document title (longer meaningful text, not just "WHITEPAPER")
         if (!foundTitle && paragraphText.length > 10 && 
             !paragraphText.toUpperCase().includes('WHITEPAPER') &&
             !paragraphText.toUpperCase().includes('WHITE PAPER')) {
           title = paragraphText;
           foundTitle = true;
-        } else if (!foundSubtitle && paragraphText.length > 5) {
-          // Keep short heading text as potential subtitle
-          if (!foundTitle) {
-            subtitle = paragraphText;
-            foundSubtitle = true;
-          }
         }
       } else if (styleName.match(/Heading2|Subtitle/i) || paragraphContent.includes('w:outlineLvl w:val="1"')) {
         isHeading = true;
         headingLevel = 2;
-        // If we haven't found a title yet and this looks like one, use it
         if (!foundTitle && paragraphText.length > 15) {
           title = paragraphText;
           foundTitle = true;
@@ -250,28 +249,209 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
   return { title, subtitle, sections, images, isConfidential };
 }
 
-// Generate cover page matching the Sentra template design
-function createCoverPage(documentTitle: string, isConfidential: boolean, logoBase64: string | null): Paragraph[] {
-  const paragraphs: Paragraph[] = [];
+// Create colored footer bar table
+function createColoredFooterBar(): Table {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.NONE },
+      bottom: { style: BorderStyle.NONE },
+      left: { style: BorderStyle.NONE },
+      right: { style: BorderStyle.NONE },
+      insideHorizontal: { style: BorderStyle.NONE },
+      insideVertical: { style: BorderStyle.NONE },
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 25, type: WidthType.PERCENTAGE },
+            shading: { type: ShadingType.SOLID, color: COLORS.primary },
+            children: [new Paragraph({ children: [new TextRun({ text: " ", size: 8 })] })],
+          }),
+          new TableCell({
+            width: { size: 25, type: WidthType.PERCENTAGE },
+            shading: { type: ShadingType.SOLID, color: COLORS.pink },
+            children: [new Paragraph({ children: [new TextRun({ text: " ", size: 8 })] })],
+          }),
+          new TableCell({
+            width: { size: 25, type: WidthType.PERCENTAGE },
+            shading: { type: ShadingType.SOLID, color: COLORS.yellow },
+            children: [new Paragraph({ children: [new TextRun({ text: " ", size: 8 })] })],
+          }),
+          new TableCell({
+            width: { size: 25, type: WidthType.PERCENTAGE },
+            shading: { type: ShadingType.SOLID, color: COLORS.cyan },
+            children: [new Paragraph({ children: [new TextRun({ text: " ", size: 8 })] })],
+          }),
+        ],
+      }),
+    ],
+  });
+}
 
-  // Sentra logo text at top-left
-  paragraphs.push(
+// Create 2-column metadata table for cover page
+function createMetadataTable(): Table {
+  const today = new Date().toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+
+  const noBorders = {
+    top: { style: BorderStyle.NONE },
+    bottom: { style: BorderStyle.NONE },
+    left: { style: BorderStyle.NONE },
+    right: { style: BorderStyle.NONE },
+  };
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.NONE },
+      bottom: { style: BorderStyle.NONE },
+      left: { style: BorderStyle.NONE },
+      right: { style: BorderStyle.NONE },
+      insideHorizontal: { style: BorderStyle.NONE },
+      insideVertical: { style: BorderStyle.NONE },
+    },
+    rows: [
+      // Row 1: PREPARED FOR | VERSION labels
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "PREPARED FOR", size: 18, color: COLORS.gray, allCaps: true }),
+                ],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "VERSION", size: 18, color: COLORS.gray, allCaps: true }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+      // Row 2: PREPARED FOR | VERSION values
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+            children: [
+              new Paragraph({
+                spacing: { after: 300 },
+                children: [
+                  new TextRun({ text: "Enterprise Customers", size: 24, bold: true, color: COLORS.black }),
+                ],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+            children: [
+              new Paragraph({
+                spacing: { after: 300 },
+                children: [
+                  new TextRun({ text: "v1.0", size: 24, bold: true, color: COLORS.black }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+      // Row 3: AUTHOR | DATE labels
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "AUTHOR", size: 18, color: COLORS.gray, allCaps: true }),
+                ],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "DATE", size: 18, color: COLORS.gray, allCaps: true }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+      // Row 4: AUTHOR | DATE values
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "Sentra, Inc.", size: 24, bold: true, color: COLORS.black }),
+                ],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: noBorders,
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: today, size: 24, bold: true, color: COLORS.black }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+// Generate cover page matching the Sentra template design exactly
+function createCoverPage(documentTitle: string, isConfidential: boolean): (Paragraph | Table)[] {
+  const elements: (Paragraph | Table)[] = [];
+
+  // Sentra logo text at top-left with larger size
+  elements.push(
     new Paragraph({
       children: [
         new TextRun({
           text: "sentra",
           bold: true,
-          size: 48,
+          size: 56,
           color: COLORS.black,
         }),
       ],
-      spacing: { after: 200 },
+      spacing: { after: 100 },
     })
   );
 
-  // Confidential badge at top (if confidential)
+  // Confidential badge at top-right (if confidential)
   if (isConfidential) {
-    paragraphs.push(
+    elements.push(
       new Paragraph({
         children: [
           new TextRun({
@@ -287,234 +467,185 @@ function createCoverPage(documentTitle: string, isConfidential: boolean, logoBas
           }),
         ],
         alignment: AlignmentType.RIGHT,
-        spacing: { after: 400 },
+        spacing: { after: 200 },
       })
     );
   }
 
   // Large spacer to push content down
-  paragraphs.push(
+  elements.push(
     new Paragraph({
       children: [],
-      spacing: { before: 3000 },
+      spacing: { before: 2400 },
     })
   );
 
   // Category badge: "● TECHNICAL WHITEPAPER"
-  paragraphs.push(
+  elements.push(
     new Paragraph({
       children: [
         new TextRun({
           text: "●",
           color: COLORS.primary,
-          size: 18,
+          size: 20,
         }),
         new TextRun({
           text: "  TECHNICAL WHITEPAPER",
           color: COLORS.primary,
           bold: true,
-          size: 24,
+          size: 26,
           allCaps: true,
         }),
       ],
-      spacing: { after: 300 },
+      spacing: { after: 400 },
     })
   );
 
-  // MAIN DOCUMENT TITLE - Large and prominent
-  paragraphs.push(
+  // MAIN DOCUMENT TITLE - Large black text
+  elements.push(
     new Paragraph({
       children: [
         new TextRun({
           text: documentTitle || "Untitled Document",
           bold: true,
-          size: 80, // Very large title
+          size: 72,
           color: COLORS.black,
-        }),
-      ],
-      spacing: { after: 600 },
-    })
-  );
-
-  // Spacer before metadata
-  paragraphs.push(
-    new Paragraph({
-      children: [],
-      spacing: { before: 2000 },
-    })
-  );
-
-  // Metadata section - matching template layout
-  const today = new Date().toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-
-  // Author row
-  paragraphs.push(
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "AUTHOR",
-          size: 18,
-          color: COLORS.gray,
-          allCaps: true,
-        }),
-      ],
-      spacing: { after: 60 },
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "Sentra, Inc.",
-          size: 26,
-          bold: true,
-          color: COLORS.black,
-        }),
-      ],
-      spacing: { after: 300 },
-    })
-  );
-
-  // Date row
-  paragraphs.push(
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "DATE",
-          size: 18,
-          color: COLORS.gray,
-          allCaps: true,
-        }),
-      ],
-      spacing: { after: 60 },
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: today,
-          size: 26,
-          bold: true,
-          color: COLORS.black,
-        }),
-      ],
-      spacing: { after: 300 },
-    })
-  );
-
-  // Version row
-  paragraphs.push(
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "VERSION",
-          size: 18,
-          color: COLORS.gray,
-          allCaps: true,
-        }),
-      ],
-      spacing: { after: 60 },
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "v1.0",
-          size: 26,
-          bold: true,
-          color: COLORS.black,
-        }),
-      ],
-      spacing: { after: 200 },
-    })
-  );
-
-  // Page break after cover
-  paragraphs.push(
-    new Paragraph({
-      children: [new PageBreak()],
-    })
-  );
-
-  return paragraphs;
-}
-
-// Generate Table of Contents with section numbers and proper formatting
-function createTableOfContents(sections: ExtractedSection[]): Paragraph[] {
-  const paragraphs: Paragraph[] = [];
-  
-  const headings = sections.filter(s => s.type === 'heading' && (s.level === 1 || s.level === 2));
-  
-  if (headings.length === 0) {
-    return paragraphs;
-  }
-
-  // TOC Title - matching template style
-  paragraphs.push(
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "Table of ",
-          bold: true,
-          size: 64,
-          color: COLORS.black,
-        }),
-        new TextRun({
-          text: "Contents",
-          bold: true,
-          size: 64,
-          color: COLORS.primary,
         }),
       ],
       spacing: { after: 800 },
     })
   );
 
+  // Spacer before metadata
+  elements.push(
+    new Paragraph({
+      children: [],
+      spacing: { before: 1600 },
+    })
+  );
+
+  // 2-column metadata table
+  elements.push(createMetadataTable());
+
+  // Spacer before footer
+  elements.push(
+    new Paragraph({
+      children: [],
+      spacing: { before: 1200 },
+    })
+  );
+
+  // SYSTEM_SECURE badge
+  elements.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: "●",
+          color: COLORS.primary,
+          size: 14,
+        }),
+        new TextRun({
+          text: " SYSTEM_SECURE",
+          color: COLORS.gray,
+          size: 16,
+        }),
+      ],
+      spacing: { after: 200 },
+    })
+  );
+
+  // Colored footer bar
+  elements.push(createColoredFooterBar());
+
+  // Page break after cover
+  elements.push(
+    new Paragraph({
+      children: [new PageBreak()],
+    })
+  );
+
+  return elements;
+}
+
+// Generate Table of Contents with proper formatting
+function createTableOfContents(sections: ExtractedSection[]): (Paragraph | Table)[] {
+  const elements: (Paragraph | Table)[] = [];
+  
+  const headings = sections.filter(s => s.type === 'heading' && (s.level === 1 || s.level === 2));
+  
+  if (headings.length === 0) {
+    return elements;
+  }
+
+  // TOC Title - "Table of" black, "Contents" green
+  elements.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: "Table of ",
+          bold: true,
+          size: 56,
+          color: COLORS.black,
+        }),
+        new TextRun({
+          text: "Contents",
+          bold: true,
+          size: 56,
+          color: COLORS.primary,
+        }),
+      ],
+      spacing: { after: 600 },
+    })
+  );
+
   // Track section numbering
   let chapterNum = 0;
   let subSectionNum = 0;
-  let pageNum = 3; // Content starts on page 3
+  let pageNum = 3;
 
-  headings.forEach((heading, index) => {
+  headings.forEach((heading) => {
     let sectionNumber = '';
     
     if (heading.level === 1) {
       chapterNum++;
       subSectionNum = 0;
       sectionNumber = `${chapterNum}.`;
+      
+      // Add separator line before major chapters (except first)
+      if (chapterNum > 1) {
+        elements.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "─".repeat(60),
+                size: 12,
+                color: COLORS.lightGray,
+              }),
+            ],
+            spacing: { before: 150, after: 150 },
+          })
+        );
+      }
     } else if (heading.level === 2) {
       subSectionNum++;
       sectionNumber = `${chapterNum}.${subSectionNum}`;
     }
 
-    const indent = heading.level === 2 ? 600 : 0;
-    const fontSize = heading.level === 1 ? 28 : 24;
-    const isBold = heading.level === 1;
+    const indent = heading.level === 2 ? 400 : 0;
+    const fontSize = heading.level === 1 ? 26 : 22;
+    const bulletColor = heading.level === 1 ? COLORS.primary : COLORS.gray;
 
-    // Add section separator before major chapters (except first)
-    if (heading.level === 1 && chapterNum > 1) {
-      paragraphs.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: "─".repeat(50),
-              size: 14,
-              color: COLORS.lightGray,
-            }),
-          ],
-          spacing: { before: 200, after: 200 },
-        })
-      );
-    }
-
-    // TOC entry with section number, dot leaders, and page number
-    paragraphs.push(
+    // Create dot leaders
+    const textLength = heading.text.length + sectionNumber.length;
+    const dotsCount = Math.max(40 - Math.floor(textLength / 2), 10);
+    
+    elements.push(
       new Paragraph({
         children: [
           new TextRun({
             text: "● ",
-            color: COLORS.primary,
-            size: 16,
+            color: bulletColor,
+            size: 14,
           }),
           new TextRun({
             text: sectionNumber + " ",
@@ -525,12 +656,12 @@ function createTableOfContents(sections: ExtractedSection[]): Paragraph[] {
           new TextRun({
             text: heading.text,
             size: fontSize,
-            bold: isBold,
+            bold: heading.level === 1,
             color: COLORS.black,
           }),
           new TextRun({
-            text: "  " + ".".repeat(Math.max(30 - Math.floor(heading.text.length / 2), 10)) + "  ",
-            size: 14,
+            text: " " + ".".repeat(dotsCount) + " ",
+            size: 12,
             color: COLORS.lightGray,
           }),
           new TextRun({
@@ -540,7 +671,7 @@ function createTableOfContents(sections: ExtractedSection[]): Paragraph[] {
           }),
         ],
         indent: { left: indent },
-        spacing: { after: heading.level === 1 ? 200 : 120 },
+        spacing: { after: heading.level === 1 ? 180 : 120 },
       })
     );
     
@@ -548,25 +679,24 @@ function createTableOfContents(sections: ExtractedSection[]): Paragraph[] {
   });
 
   // Page break after TOC
-  paragraphs.push(
+  elements.push(
     new Paragraph({
       children: [new PageBreak()],
     })
   );
 
-  return paragraphs;
+  return elements;
 }
 
-// Generate content pages with Sentra styling and section numbering
-function createContentPages(sections: ExtractedSection[], images: ExtractedImage[]): Paragraph[] {
-  const paragraphs: Paragraph[] = [];
+// Generate content pages with proper styling
+function createContentPages(sections: ExtractedSection[], images: ExtractedImage[]): (Paragraph | Table)[] {
+  const elements: (Paragraph | Table)[] = [];
   
-  // Track section numbering
   let chapterNum = 0;
   let subSectionNum = 0;
   let subSubSectionNum = 0;
 
-  sections.forEach((section, index) => {
+  sections.forEach((section) => {
     if (section.type === 'heading') {
       let sectionNumber = '';
       
@@ -575,6 +705,15 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
         subSectionNum = 0;
         subSubSectionNum = 0;
         sectionNumber = `${chapterNum}.`;
+        
+        // Page break before major chapters (except first)
+        if (chapterNum > 1) {
+          elements.push(
+            new Paragraph({
+              children: [new PageBreak()],
+            })
+          );
+        }
       } else if (section.level === 2) {
         subSectionNum++;
         subSubSectionNum = 0;
@@ -584,24 +723,15 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
         sectionNumber = `${chapterNum}.${subSectionNum}.${subSubSectionNum}`;
       }
 
-      const size = section.level === 1 ? 52 : section.level === 2 ? 40 : 32;
-      const color = section.level === 1 ? COLORS.primary : COLORS.black;
+      const size = section.level === 1 ? 48 : section.level === 2 ? 36 : 28;
+      const headingColor = section.level === 1 ? COLORS.primary : COLORS.black;
       const spacing = section.level === 1 
-        ? { before: 600, after: 300 } 
+        ? { before: 400, after: 300 } 
         : section.level === 2 
-          ? { before: 400, after: 200 }
-          : { before: 300, after: 150 };
+          ? { before: 300, after: 200 }
+          : { before: 200, after: 150 };
 
-      // Add section separator before major chapters (except first)
-      if (section.level === 1 && chapterNum > 1) {
-        paragraphs.push(
-          new Paragraph({
-            children: [new PageBreak()],
-          })
-        );
-      }
-
-      paragraphs.push(
+      elements.push(
         new Paragraph({
           children: [
             new TextRun({
@@ -614,21 +744,37 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
               text: section.text,
               bold: true,
               size,
-              color,
+              color: headingColor,
             }),
           ],
           spacing,
         })
       );
+
+      // Add underline for level 1 headings
+      if (section.level === 1) {
+        elements.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "━".repeat(40),
+                size: 16,
+                color: COLORS.primary,
+              }),
+            ],
+            spacing: { after: 300 },
+          })
+        );
+      }
     } else {
       // Regular paragraph
-      paragraphs.push(
+      elements.push(
         new Paragraph({
           children: [
             new TextRun({
               text: section.text,
-              size: 24,
-              color: COLORS.black,
+              size: 22,
+              color: COLORS.darkGray,
             }),
           ],
           spacing: { after: 200 },
@@ -639,7 +785,7 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
 
   // Add images in appendix if present
   if (images.length > 0) {
-    paragraphs.push(
+    elements.push(
       new Paragraph({
         children: [new PageBreak()],
       }),
@@ -648,13 +794,13 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
           new TextRun({
             text: "Appendix: ",
             bold: true,
-            size: 48,
+            size: 44,
             color: COLORS.black,
           }),
           new TextRun({
             text: "Document Images",
             bold: true,
-            size: 48,
+            size: 44,
             color: COLORS.primary,
           }),
         ],
@@ -665,7 +811,7 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
     for (const img of images) {
       try {
         const imageType = img.mimeType.includes('png') ? 'png' : 'jpg';
-        paragraphs.push(
+        elements.push(
           new Paragraph({
             children: [
               new ImageRun({
@@ -684,7 +830,7 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
     }
   }
 
-  return paragraphs;
+  return elements;
 }
 
 // Main function to transform document to Sentra template
@@ -692,7 +838,6 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
   console.log('[transform-document-design] Transforming document to Sentra template');
   
   try {
-    // Step 1: Extract content from the uploaded document
     const extracted = await extractDocxContent(base64Content);
     
     if (extracted.sections.length === 0) {
@@ -705,30 +850,29 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
     console.log(`[transform-document-design] Building new document with ${extracted.sections.length} sections`);
     console.log(`[transform-document-design] Document title: "${extracted.title}"`);
 
-    // Step 2: Build new document with Sentra template
-    const docChildren: Paragraph[] = [];
+    // Build document children
+    const docChildren: (Paragraph | Table)[] = [];
 
-    // Cover page with actual document title
+    // Cover page
     docChildren.push(...createCoverPage(
       extracted.title || 'Untitled Document',
-      extracted.isConfidential,
-      null
+      extracted.isConfidential
     ));
 
-    // Table of Contents with section numbers
+    // Table of Contents
     docChildren.push(...createTableOfContents(extracted.sections));
 
-    // Content pages with section numbering
+    // Content pages
     docChildren.push(...createContentPages(extracted.sections, extracted.images));
 
-    // Create the document with Sentra styling
+    // Create the document
     const doc = new Document({
       styles: {
         default: {
           document: {
             run: {
-              font: settings.headingFont || "Poppins",
-              size: 24,
+              font: "Arial",
+              size: 22,
             },
           },
         },
@@ -738,10 +882,10 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
           properties: {
             page: {
               margin: {
-                top: 1440,
-                right: 1440,
-                bottom: 1440,
-                left: 1440,
+                top: convertInchesToTwip(1),
+                right: convertInchesToTwip(1),
+                bottom: convertInchesToTwip(1),
+                left: convertInchesToTwip(1),
               },
             },
           },
@@ -753,16 +897,24 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
                     new TextRun({
                       text: "sentra",
                       bold: true,
-                      size: 22,
+                      size: 20,
                       color: COLORS.black,
                     }),
                     new TextRun({
                       text: "  |  WHITEPAPER",
-                      size: 20,
+                      size: 18,
                       color: COLORS.gray,
-                      allCaps: true,
                     }),
                   ],
+                  border: {
+                    bottom: {
+                      color: COLORS.primary,
+                      space: 4,
+                      size: 12,
+                      style: BorderStyle.SINGLE,
+                    },
+                  },
+                  spacing: { after: 200 },
                 }),
               ],
             }),
@@ -774,8 +926,16 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
                   children: [
                     new TextRun({
                       text: "© 2025 Sentra Inc. All rights reserved.",
-                      size: 18,
+                      size: 16,
                       color: COLORS.lightGray,
+                    }),
+                    new TextRun({
+                      text: "                    ",
+                    }),
+                    new TextRun({
+                      text: "www.sentra.io",
+                      size: 16,
+                      color: COLORS.primary,
                     }),
                   ],
                   alignment: AlignmentType.CENTER,
@@ -796,7 +956,7 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
 
     return {
       modifiedFile: base64Doc,
-      message: `Document transformed to Sentra template! Title: "${extracted.title}". Extracted ${extracted.sections.length} sections and ${extracted.images.length} images. ${extracted.isConfidential ? 'Marked as confidential.' : ''}`,
+      message: `Document transformed to Sentra template! Title: "${extracted.title}". Extracted ${extracted.sections.length} sections and ${extracted.images.length} images.`,
     };
   } catch (error) {
     console.error('[transform-document-design] Transformation error:', error);
@@ -808,13 +968,11 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify authentication
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
       return new Response(
@@ -837,7 +995,6 @@ serve(async (req) => {
       );
     }
 
-    // Parse request body
     const body: RequestBody = await req.json();
     const { file, fileName, fileType, settings } = body;
 
@@ -846,11 +1003,10 @@ serve(async (req) => {
     let result: { modifiedFile: string; message: string };
     let outputType: 'docx' | 'pdf' = 'docx';
 
-    // Process based on file type
     if (fileType.includes('pdf')) {
       result = {
         modifiedFile: file,
-        message: 'PDF transformation requires converting to DOCX first. Please upload a DOCX file for full template transformation, or use the Create Document feature.',
+        message: 'PDF transformation requires converting to DOCX first. Please upload a DOCX file for full template transformation.',
       };
       outputType = 'pdf';
     } else if (fileType.includes('word') || fileType.includes('docx') || fileName.endsWith('.docx')) {
