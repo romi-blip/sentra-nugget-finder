@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import JSZip from "npm:jszip@3.10.1";
-// Note: pdf-lib removed due to memory limits on edge functions for large PDFs
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,6 +27,23 @@ interface RequestBody {
   settings: BrandSettings;
 }
 
+interface CloudConvertJob {
+  id: string;
+  status: string;
+  tasks: Array<{
+    id: string;
+    name: string;
+    operation: string;
+    status: string;
+    result?: {
+      files?: Array<{
+        url: string;
+        filename: string;
+      }>;
+    };
+  }>;
+}
+
 // Convert hex color to RGB components
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -41,6 +57,165 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
 // Convert hex to Word color format (without #)
 function hexToWordColor(hex: string): string {
   return hex.replace('#', '').toUpperCase();
+}
+
+// Wait for CloudConvert job to complete
+async function waitForJob(jobId: string, apiKey: string, maxWaitMs = 120000): Promise<CloudConvertJob> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    const response = await fetch(`https://api.cloudconvert.com/v2/jobs/${jobId}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to check job status: ${response.statusText}`);
+    }
+    
+    const { data: job } = await response.json();
+    
+    if (job.status === 'finished') {
+      return job;
+    }
+    
+    if (job.status === 'error') {
+      const errorTask = job.tasks?.find((t: any) => t.status === 'error');
+      throw new Error(`CloudConvert job failed: ${errorTask?.message || 'Unknown error'}`);
+    }
+    
+    // Wait 2 seconds before next check
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  
+  throw new Error('CloudConvert job timed out');
+}
+
+// Convert PDF to DOCX using CloudConvert
+async function convertPdfToDocx(pdfBase64: string, apiKey: string): Promise<string> {
+  console.log('[transform-document-design] Converting PDF to DOCX via CloudConvert');
+  
+  // Create conversion job
+  const jobResponse = await fetch('https://api.cloudconvert.com/v2/jobs', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      tasks: {
+        'import-pdf': {
+          operation: 'import/base64',
+          file: pdfBase64,
+          filename: 'input.pdf',
+        },
+        'convert-to-docx': {
+          operation: 'convert',
+          input: 'import-pdf',
+          output_format: 'docx',
+        },
+        'export-docx': {
+          operation: 'export/url',
+          input: 'convert-to-docx',
+        },
+      },
+    }),
+  });
+  
+  if (!jobResponse.ok) {
+    const error = await jobResponse.text();
+    throw new Error(`Failed to create CloudConvert job: ${error}`);
+  }
+  
+  const { data: job } = await jobResponse.json();
+  console.log(`[transform-document-design] CloudConvert job created: ${job.id}`);
+  
+  // Wait for job completion
+  const completedJob = await waitForJob(job.id, apiKey);
+  
+  // Find export task and get download URL
+  const exportTask = completedJob.tasks.find(t => t.name === 'export-docx');
+  const downloadUrl = exportTask?.result?.files?.[0]?.url;
+  
+  if (!downloadUrl) {
+    throw new Error('No download URL in CloudConvert response');
+  }
+  
+  // Download the DOCX file
+  const docxResponse = await fetch(downloadUrl);
+  if (!docxResponse.ok) {
+    throw new Error(`Failed to download converted DOCX: ${docxResponse.statusText}`);
+  }
+  
+  const docxArrayBuffer = await docxResponse.arrayBuffer();
+  const docxBase64 = btoa(String.fromCharCode(...new Uint8Array(docxArrayBuffer)));
+  
+  console.log('[transform-document-design] PDF to DOCX conversion complete');
+  return docxBase64;
+}
+
+// Convert DOCX to PDF using CloudConvert
+async function convertDocxToPdf(docxBase64: string, apiKey: string): Promise<string> {
+  console.log('[transform-document-design] Converting DOCX to PDF via CloudConvert');
+  
+  // Create conversion job
+  const jobResponse = await fetch('https://api.cloudconvert.com/v2/jobs', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      tasks: {
+        'import-docx': {
+          operation: 'import/base64',
+          file: docxBase64,
+          filename: 'styled.docx',
+        },
+        'convert-to-pdf': {
+          operation: 'convert',
+          input: 'import-docx',
+          output_format: 'pdf',
+        },
+        'export-pdf': {
+          operation: 'export/url',
+          input: 'convert-to-pdf',
+        },
+      },
+    }),
+  });
+  
+  if (!jobResponse.ok) {
+    const error = await jobResponse.text();
+    throw new Error(`Failed to create CloudConvert job: ${error}`);
+  }
+  
+  const { data: job } = await jobResponse.json();
+  console.log(`[transform-document-design] CloudConvert job created: ${job.id}`);
+  
+  // Wait for job completion
+  const completedJob = await waitForJob(job.id, apiKey);
+  
+  // Find export task and get download URL
+  const exportTask = completedJob.tasks.find(t => t.name === 'export-pdf');
+  const downloadUrl = exportTask?.result?.files?.[0]?.url;
+  
+  if (!downloadUrl) {
+    throw new Error('No download URL in CloudConvert response');
+  }
+  
+  // Download the PDF file
+  const pdfResponse = await fetch(downloadUrl);
+  if (!pdfResponse.ok) {
+    throw new Error(`Failed to download converted PDF: ${pdfResponse.statusText}`);
+  }
+  
+  const pdfArrayBuffer = await pdfResponse.arrayBuffer();
+  const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfArrayBuffer)));
+  
+  console.log('[transform-document-design] DOCX to PDF conversion complete');
+  return pdfBase64;
 }
 
 // Modify DOCX file by updating fonts and colors while preserving structure
@@ -71,7 +246,6 @@ async function modifyDocxStyles(base64Content: string, settings: BrandSettings):
     let stylesXml = await stylesFile.async('string');
     
     // Update heading styles (Heading1, Heading2, etc.)
-    // Replace font names in heading styles
     stylesXml = stylesXml.replace(
       /(<w:style[^>]*w:styleId="Heading[^"]*"[^>]*>[\s\S]*?<w:rFonts[^>]*)(w:ascii="[^"]*")/g,
       `$1w:ascii="${headingFont}"`
@@ -148,7 +322,7 @@ async function modifyDocxStyles(base64Content: string, settings: BrandSettings):
       `$1w:hAnsi="${bodyFont}"`
     );
     
-    // Update text colors - replace existing color definitions
+    // Update text colors
     documentXml = documentXml.replace(
       /<w:color w:val="[A-Fa-f0-9]{6}"\/>/g,
       `<w:color w:val="${textColor}"/>`
@@ -164,19 +338,15 @@ async function modifyDocxStyles(base64Content: string, settings: BrandSettings):
     console.log('[transform-document-design] Updated document.xml');
   }
 
-  // Modify theme if it exists - this controls default colors
+  // Modify theme if it exists
   const themeFile = zip.file('word/theme/theme1.xml');
   if (themeFile) {
     let themeXml = await themeFile.async('string');
     
-    // Update scheme colors
     const primaryRgb = hexToRgb(settings.primaryColor);
     const secondaryRgb = hexToRgb(settings.secondaryColor);
-    const textRgb = hexToRgb(settings.textColor);
-    const bgRgb = hexToRgb(settings.backgroundColor);
     
     if (primaryRgb) {
-      // Update accent colors
       themeXml = themeXml.replace(
         /<a:accent1>[\s\S]*?<\/a:accent1>/g,
         `<a:accent1><a:srgbClr val="${primaryColor}"/></a:accent1>`
@@ -190,7 +360,7 @@ async function modifyDocxStyles(base64Content: string, settings: BrandSettings):
       );
     }
     
-    // Update major and minor fonts (headings and body)
+    // Update major and minor fonts
     themeXml = themeXml.replace(
       /<a:majorFont>[\s\S]*?<a:latin typeface="[^"]*"/g,
       `<a:majorFont>\n        <a:latin typeface="${headingFont}"`
@@ -211,18 +381,43 @@ async function modifyDocxStyles(base64Content: string, settings: BrandSettings):
   return newDocx;
 }
 
-// Process PDF - return original with explanation (pdf-lib causes memory issues on large PDFs)
+// Process PDF using CloudConvert: PDF → DOCX → Apply Styles → PDF
 async function processPdf(base64Content: string, settings: BrandSettings): Promise<{ modifiedFile: string; message: string }> {
-  console.log('[transform-document-design] PDF processing - returning original with guidance');
+  const apiKey = Deno.env.get('CLOUDCONVERT_API_KEY');
   
-  // PDFs have embedded fonts and rendered text that cannot be modified without
-  // re-rendering the entire document. Additionally, pdf-lib exceeds memory limits
-  // on edge functions for large PDFs.
+  if (!apiKey) {
+    console.log('[transform-document-design] CloudConvert API key not configured');
+    return {
+      modifiedFile: base64Content,
+      message: 'PDF conversion requires CloudConvert API key. Please configure CLOUDCONVERT_API_KEY in Supabase secrets, or upload the original DOCX file for full brand styling.'
+    };
+  }
   
-  return {
-    modifiedFile: base64Content,
-    message: 'PDF files cannot have fonts/colors modified directly (text is pre-rendered with embedded fonts). For full brand styling, please transform the original DOCX file, then export to PDF.'
-  };
+  console.log('[transform-document-design] Processing PDF with CloudConvert pipeline');
+  
+  try {
+    // Step 1: Convert PDF to DOCX
+    const docxBase64 = await convertPdfToDocx(base64Content, apiKey);
+    
+    // Step 2: Apply brand styling to DOCX
+    const styledDocx = await modifyDocxStyles(docxBase64, settings);
+    
+    // Step 3: Convert styled DOCX back to PDF
+    const styledPdf = await convertDocxToPdf(styledDocx, apiKey);
+    
+    console.log('[transform-document-design] PDF transformation complete');
+    
+    return {
+      modifiedFile: styledPdf,
+      message: 'PDF has been converted and styled with your brand fonts and colors. Document structure and images preserved.'
+    };
+  } catch (error) {
+    console.error('[transform-document-design] CloudConvert error:', error);
+    return {
+      modifiedFile: base64Content,
+      message: `PDF conversion failed: ${error.message}. Returning original file.`
+    };
+  }
 }
 
 serve(async (req) => {
@@ -278,7 +473,6 @@ serve(async (req) => {
     };
 
     if (fileType.includes('wordprocessingml') || fileName.endsWith('.docx')) {
-      // Modify DOCX while preserving structure
       console.log(`[transform-document-design] Modifying DOCX: ${fileName}`);
       const modifiedDocx = await modifyDocxStyles(file, settings);
       
@@ -289,7 +483,6 @@ serve(async (req) => {
         message: 'Document fonts and colors have been updated while preserving structure and images.'
       };
     } else if (fileType.includes('pdf')) {
-      // Handle PDF
       console.log(`[transform-document-design] Processing PDF: ${fileName}`);
       const pdfResult = await processPdf(file, settings);
       
