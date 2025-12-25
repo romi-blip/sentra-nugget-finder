@@ -60,11 +60,14 @@ export const brandService = {
       new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
     );
 
+    // Determine file type from extension
+    const fileType = file.name.toLowerCase().endsWith('.docx') ? 'docx' : 'pdf';
+
     const { data, error } = await supabase.functions.invoke('transform-document-design', {
       body: {
         file: base64,
         fileName: file.name,
-        fileType: file.type,
+        fileType,
         settings: {
           primaryColor: settings.primary_color,
           secondaryColor: settings.secondary_color,
