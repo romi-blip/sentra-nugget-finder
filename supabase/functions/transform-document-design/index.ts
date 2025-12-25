@@ -296,16 +296,15 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
     });
   }
 
-  // Category badge
+  // Category badge - draw circle instead of bullet text
   const categoryY = height - 200;
-  page.drawText('●', {
-    x: margin,
-    y: categoryY,
-    size: 12,
-    font: fonts.regular,
+  page.drawCircle({
+    x: margin + 4,
+    y: categoryY + 4,
+    size: 4,
     color: COLORS.primary,
   });
-  page.drawText('  TECHNICAL WHITEPAPER', {
+  page.drawText('TECHNICAL WHITEPAPER', {
     x: margin + 15,
     y: categoryY,
     size: 13,
@@ -351,9 +350,9 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
   page.drawText('DATE', { x: col2X, y: metaY - rowHeight, size: labelSize, font: fonts.regular, color: COLORS.gray });
   page.drawText(today, { x: col2X, y: metaY - rowHeight - 16, size: valueSize, font: fonts.bold, color: COLORS.black });
 
-  // SYSTEM_SECURE badge
-  page.drawText('●', { x: margin, y: 100, size: 8, font: fonts.regular, color: COLORS.primary });
-  page.drawText(' SYSTEM_SECURE', { x: margin + 12, y: 100, size: 8, font: fonts.regular, color: COLORS.gray });
+  // SYSTEM_SECURE badge - draw circle instead of bullet text
+  page.drawCircle({ x: margin + 3, y: 103, size: 3, color: COLORS.primary });
+  page.drawText('SYSTEM_SECURE', { x: margin + 12, y: 100, size: 8, font: fonts.regular, color: COLORS.gray });
 
   // Colored footer bar
   drawFooterBar(page);
@@ -399,12 +398,11 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
     const textFont = isMainHeading ? fonts.bold : fonts.regular;
     const fontSize = 11;
 
-    // Bullet
-    page.drawText('●', {
-      x: margin + xOffset,
-      y: y,
-      size: 8,
-      font: fonts.regular,
+    // Bullet - draw circle instead of text
+    page.drawCircle({
+      x: margin + xOffset + 3,
+      y: y + 3,
+      size: 3,
       color: bulletColor,
     });
 
