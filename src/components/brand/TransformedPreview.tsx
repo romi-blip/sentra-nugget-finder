@@ -74,25 +74,37 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
       
       <div className="p-6">
         {message && (
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{message}</AlertDescription>
+          <Alert className={type === 'pdf' ? 'mb-4 border-amber-500/50 bg-amber-500/10' : 'mb-4'}>
+            <AlertCircle className={`h-4 w-4 ${type === 'pdf' ? 'text-amber-500' : ''}`} />
+            <AlertDescription className={type === 'pdf' ? 'text-amber-700 dark:text-amber-300' : ''}>
+              {message}
+            </AlertDescription>
           </Alert>
         )}
         
         <div className="bg-muted/20 rounded-lg p-8 text-center">
-          <FileText className="h-20 w-20 mx-auto text-primary mb-4" />
+          <FileText className={`h-20 w-20 mx-auto mb-4 ${type === 'docx' ? 'text-primary' : 'text-amber-500'}`} />
           <h4 className="text-lg font-medium mb-2">
             {getBaseFileName()}_styled.{type}
           </h4>
           <p className="text-sm text-muted-foreground mb-4">
-            Your document has been processed with the selected brand fonts and colors.
-            {type === 'docx' && ' All images and layout have been preserved.'}
+            {type === 'docx' ? (
+              <>Your DOCX document fonts and colors have been updated. All images and layout preserved.</>
+            ) : (
+              <>PDF metadata updated. Structure and images preserved. For full brand styling, use the source DOCX.</>
+            )}
           </p>
-          <Button onClick={handleDownload} variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Download Modified Document
-          </Button>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={handleDownload} variant={type === 'docx' ? 'default' : 'outline'}>
+              <Download className="h-4 w-4 mr-2" />
+              Download {type?.toUpperCase()}
+            </Button>
+          </div>
+          {type === 'pdf' && (
+            <p className="text-xs text-muted-foreground mt-4">
+              💡 Tip: For complete font and color changes, transform the original DOCX file instead.
+            </p>
+          )}
         </div>
       </div>
     </div>

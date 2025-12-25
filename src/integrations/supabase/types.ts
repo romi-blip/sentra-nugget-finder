@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      analysis_runs: {
+        Row: {
+          analysis_summary: string | null
+          analysis_timestamp: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          llm_full_name: string | null
+          llm_model: string
+          llm_provider: string
+          llm_version: string | null
+          parsing_success: boolean | null
+          query_category: string | null
+          query_text: string | null
+          sentra_positioning: string | null
+          sentra_rank: number | null
+          sentra_score: number | null
+          top_recommended: string | null
+          top_vendor_name: string | null
+          top_vendor_score: number | null
+          total_vendors_mentioned: number | null
+          tracking_id: string | null
+        }
+        Insert: {
+          analysis_summary?: string | null
+          analysis_timestamp?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          llm_full_name?: string | null
+          llm_model: string
+          llm_provider: string
+          llm_version?: string | null
+          parsing_success?: boolean | null
+          query_category?: string | null
+          query_text?: string | null
+          sentra_positioning?: string | null
+          sentra_rank?: number | null
+          sentra_score?: number | null
+          top_recommended?: string | null
+          top_vendor_name?: string | null
+          top_vendor_score?: number | null
+          total_vendors_mentioned?: number | null
+          tracking_id?: string | null
+        }
+        Update: {
+          analysis_summary?: string | null
+          analysis_timestamp?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          llm_full_name?: string | null
+          llm_model?: string
+          llm_provider?: string
+          llm_version?: string | null
+          parsing_success?: boolean | null
+          query_category?: string | null
+          query_text?: string | null
+          sentra_positioning?: string | null
+          sentra_rank?: number | null
+          sentra_score?: number | null
+          top_recommended?: string | null
+          top_vendor_name?: string | null
+          top_vendor_score?: number | null
+          total_vendors_mentioned?: number | null
+          tracking_id?: string | null
+        }
+        Relationships: []
+      }
       brand_settings: {
         Row: {
           accent_cyan: string
@@ -329,6 +398,45 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitive_insights: {
+        Row: {
+          analysis_run_id: string
+          created_at: string | null
+          emerging_themes: string[] | null
+          id: string
+          notable_omissions: string[] | null
+        }
+        Insert: {
+          analysis_run_id: string
+          created_at?: string | null
+          emerging_themes?: string[] | null
+          id?: string
+          notable_omissions?: string[] | null
+        }
+        Update: {
+          analysis_run_id?: string
+          created_at?: string | null
+          emerging_themes?: string[] | null
+          id?: string
+          notable_omissions?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitive_insights_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitive_insights_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sentra_performance"
+            referencedColumns: ["analysis_run_id"]
           },
         ]
       }
@@ -1975,6 +2083,117 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_master: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_competitor: boolean | null
+          is_sentra: boolean | null
+          notes: string | null
+          parent_company: string | null
+          updated_at: string | null
+          vendor_name: string
+          vendor_name_normalized: string
+          vendor_type: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_competitor?: boolean | null
+          is_sentra?: boolean | null
+          notes?: string | null
+          parent_company?: string | null
+          updated_at?: string | null
+          vendor_name: string
+          vendor_name_normalized: string
+          vendor_type?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_competitor?: boolean | null
+          is_sentra?: boolean | null
+          notes?: string | null
+          parent_company?: string | null
+          updated_at?: string | null
+          vendor_name?: string
+          vendor_name_normalized?: string
+          vendor_type?: string | null
+        }
+        Relationships: []
+      }
+      vendor_scores: {
+        Row: {
+          analysis_run_id: string
+          capability_depth_score: number | null
+          created_at: string | null
+          credibility_signals_score: number | null
+          id: string
+          key_strengths: string[] | null
+          limitations_noted: string[] | null
+          notable_quotes: string[] | null
+          positioning: string | null
+          prominence_score: number | null
+          rank_in_analysis: number | null
+          reasoning: string | null
+          sentiment_score: number | null
+          total_score: number
+          vendor_name: string
+          vendor_name_normalized: string | null
+        }
+        Insert: {
+          analysis_run_id: string
+          capability_depth_score?: number | null
+          created_at?: string | null
+          credibility_signals_score?: number | null
+          id?: string
+          key_strengths?: string[] | null
+          limitations_noted?: string[] | null
+          notable_quotes?: string[] | null
+          positioning?: string | null
+          prominence_score?: number | null
+          rank_in_analysis?: number | null
+          reasoning?: string | null
+          sentiment_score?: number | null
+          total_score: number
+          vendor_name: string
+          vendor_name_normalized?: string | null
+        }
+        Update: {
+          analysis_run_id?: string
+          capability_depth_score?: number | null
+          created_at?: string | null
+          credibility_signals_score?: number | null
+          id?: string
+          key_strengths?: string[] | null
+          limitations_noted?: string[] | null
+          notable_quotes?: string[] | null
+          positioning?: string | null
+          prominence_score?: number | null
+          rank_in_analysis?: number | null
+          reasoning?: string | null
+          sentiment_score?: number | null
+          total_score?: number
+          vendor_name?: string
+          vendor_name_normalized?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_scores_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_scores_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sentra_performance"
+            referencedColumns: ["analysis_run_id"]
+          },
+        ]
+      }
       website_pages: {
         Row: {
           character_count: number | null
@@ -2019,7 +2238,109 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vw_sentra_competitive_gap: {
+        Row: {
+          competitive_status: string | null
+          created_at: string | null
+          llm_model: string | null
+          score_gap: number | null
+          sentra_rank: number | null
+          sentra_score: number | null
+          top_vendor_name: string | null
+          top_vendor_score: number | null
+          total_vendors_mentioned: number | null
+        }
+        Insert: {
+          competitive_status?: never
+          created_at?: string | null
+          llm_model?: string | null
+          score_gap?: never
+          sentra_rank?: number | null
+          sentra_score?: number | null
+          top_vendor_name?: string | null
+          top_vendor_score?: number | null
+          total_vendors_mentioned?: number | null
+        }
+        Update: {
+          competitive_status?: never
+          created_at?: string | null
+          llm_model?: string | null
+          score_gap?: never
+          sentra_rank?: number | null
+          sentra_score?: number | null
+          top_vendor_name?: string | null
+          top_vendor_score?: number | null
+          total_vendors_mentioned?: number | null
+        }
+        Relationships: []
+      }
+      vw_sentra_performance: {
+        Row: {
+          analysis_run_id: string | null
+          created_at: string | null
+          llm_full_name: string | null
+          llm_model: string | null
+          llm_provider: string | null
+          sentra_capability_depth: number | null
+          sentra_credibility: number | null
+          sentra_limitations: string[] | null
+          sentra_positioning: string | null
+          sentra_prominence: number | null
+          sentra_rank: number | null
+          sentra_score: number | null
+          sentra_sentiment: number | null
+          sentra_strengths: string[] | null
+          top_vendor_name: string | null
+          top_vendor_score: number | null
+          total_vendors_mentioned: number | null
+        }
+        Relationships: []
+      }
+      vw_vendor_avg_by_llm: {
+        Row: {
+          analysis_count: number | null
+          avg_capability_depth: number | null
+          avg_credibility: number | null
+          avg_prominence: number | null
+          avg_score: number | null
+          avg_sentiment: number | null
+          llm_model: string | null
+          max_score: number | null
+          min_score: number | null
+          vendor_name_normalized: string | null
+        }
+        Relationships: []
+      }
+      vw_vendor_comparison: {
+        Row: {
+          capability_depth_score: number | null
+          created_at: string | null
+          credibility_signals_score: number | null
+          llm_model: string | null
+          llm_provider: string | null
+          positioning: string | null
+          prominence_score: number | null
+          rank_in_analysis: number | null
+          sentiment_score: number | null
+          total_score: number | null
+          total_vendors_mentioned: number | null
+          vendor_name: string | null
+          vendor_name_normalized: string | null
+        }
+        Relationships: []
+      }
+      vw_weekly_trends: {
+        Row: {
+          analyses_count: number | null
+          avg_sentra_rank: number | null
+          avg_sentra_score: number | null
+          avg_top_score: number | null
+          llm_model: string | null
+          most_common_top_vendor: string | null
+          week_start: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       calculate_icp_score: {
@@ -2140,6 +2461,7 @@ export type Database = {
           similarity: number
         }[]
       }
+      normalize_vendor_name: { Args: { name: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "marketing" | "sales" | "super_admin" | "user"
