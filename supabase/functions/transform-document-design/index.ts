@@ -76,6 +76,38 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&apos;/g, "'");
 }
 
+// Sanitize text for WinAnsi encoding (replace non-ASCII characters with ASCII equivalents)
+function sanitizeForPdf(text: string): string {
+  return text
+    // Non-breaking hyphen and other hyphens
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+    // Various quotes
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    // Ellipsis
+    .replace(/\u2026/g, '...')
+    // Bullets and other symbols
+    .replace(/[\u2022\u2023\u2043\u25CF\u25E6\u25AA\u25AB]/g, '-')
+    // Spaces
+    .replace(/[\u00A0\u2002\u2003\u2009]/g, ' ')
+    // Arrows
+    .replace(/[\u2190-\u21FF]/g, '->')
+    // Copyright, trademark, registered
+    .replace(/\u00A9/g, '(c)')
+    .replace(/\u00AE/g, '(R)')
+    .replace(/\u2122/g, '(TM)')
+    // Degree symbol
+    .replace(/\u00B0/g, ' deg')
+    // Plus/minus
+    .replace(/\u00B1/g, '+/-')
+    // Multiplication
+    .replace(/\u00D7/g, 'x')
+    // Division
+    .replace(/\u00F7/g, '/')
+    // Any remaining non-ASCII characters - replace with space
+    .replace(/[^\x00-\x7F]/g, ' ');
+}
+
 // Extract content from DOCX
 async function extractDocxContent(base64Content: string): Promise<ExtractedDocument> {
   console.log('[transform-document-design] Extracting content from DOCX');
@@ -172,9 +204,10 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
   return { title, subtitle, sections, isConfidential };
 }
 
-// Helper to wrap text into lines
+// Helper to wrap text into lines (with sanitization)
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
-  const words = text.split(' ');
+  const sanitized = sanitizeForPdf(text);
+  const words = sanitized.split(' ');
   const lines: string[] = [];
   let currentLine = '';
 
@@ -195,6 +228,11 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   }
   
   return lines;
+}
+
+// Safe text drawing wrapper
+function drawSafeText(page: any, text: string, options: any) {
+  page.drawText(sanitizeForPdf(text), options);
 }
 
 // Draw the colored footer bar
@@ -287,8 +325,9 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
 
   // Confidential badge (top right)
   if (data.isConfidential) {
-    page.drawText('CONFIDENTIAL — Internal Use Only', {
-      x: width - margin - fonts.regular.widthOfTextAtSize('CONFIDENTIAL — Internal Use Only', 10),
+    const confText = sanitizeForPdf('CONFIDENTIAL - Internal Use Only');
+    page.drawText(confText, {
+      x: width - margin - fonts.regular.widthOfTextAtSize(confText, 10),
       y: height - 60,
       size: 10,
       font: fonts.regular,
@@ -415,9 +454,10 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
       color: COLORS.primary,
     });
 
-    // Title
+    // Title (sanitized)
+    const sanitizedTitle = sanitizeForPdf(entry.title);
     const numberWidth = fonts.bold.widthOfTextAtSize(entry.number + ' ', fontSize);
-    page.drawText(entry.title, {
+    page.drawText(sanitizedTitle, {
       x: margin + xOffset + 15 + numberWidth,
       y: y,
       size: fontSize,
@@ -436,8 +476,8 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
       color: COLORS.gray,
     });
 
-    // Dot leader
-    const titleWidth = textFont.widthOfTextAtSize(entry.title, fontSize);
+    // Dot leader (use sanitized title width)
+    const titleWidth = textFont.widthOfTextAtSize(sanitizedTitle, fontSize);
     const dotsStartX = margin + xOffset + 15 + numberWidth + titleWidth + 10;
     const dotsEndX = pageNumX - 10;
     const dotSpacing = 4;
@@ -510,8 +550,8 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
         }
         isFirstChapter = false;
 
-        // Chapter heading in green
-        const headingText = `${chapterNum}. ${section.text}`;
+        // Chapter heading in green (sanitized)
+        const headingText = sanitizeForPdf(`${chapterNum}. ${section.text}`);
         currentPage.drawText(headingText, {
           x: margin,
           y: y,
@@ -534,8 +574,8 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
       } else if (section.level === 3) {
         subChapterNum++;
         
-        // Subheading
-        const subHeadingText = `${chapterNum}.${subChapterNum} ${section.text}`;
+        // Subheading (sanitized)
+        const subHeadingText = sanitizeForPdf(`${chapterNum}.${subChapterNum} ${section.text}`);
         currentPage.drawText(subHeadingText, {
           x: margin,
           y: y,
