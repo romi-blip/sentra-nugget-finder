@@ -15,7 +15,11 @@ import SEO from '@/components/SEO';
 const BrandDesigner: React.FC = () => {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [transformedHtml, setTransformedHtml] = useState<string | null>(null);
+  const [transformResult, setTransformResult] = useState<{
+    type: 'docx' | 'pdf' | null;
+    modifiedFile: string | null;
+    message?: string;
+  }>({ type: null, modifiedFile: null });
   const [localSettings, setLocalSettings] = useState<Partial<BrandSettings>>({});
 
   const { data: settings, isLoading } = useQuery({
@@ -56,10 +60,14 @@ const BrandDesigner: React.FC = () => {
       return brandService.transformDocument(selectedFile, settings);
     },
     onSuccess: (result) => {
-      setTransformedHtml(result.html);
+      setTransformResult({
+        type: result.type,
+        modifiedFile: result.modifiedFile,
+        message: result.message,
+      });
       toast({
         title: 'Document transformed',
-        description: 'Your document has been styled with the brand settings.',
+        description: result.message || 'Your document has been styled with the brand settings.',
       });
     },
     onError: (error) => {
@@ -217,7 +225,7 @@ const BrandDesigner: React.FC = () => {
               selectedFile={selectedFile}
               onClear={() => {
                 setSelectedFile(null);
-                setTransformedHtml(null);
+                setTransformResult({ type: null, modifiedFile: null });
               }}
               isProcessing={transformMutation.isPending}
             />
@@ -240,8 +248,10 @@ const BrandDesigner: React.FC = () => {
             )}
 
             <TransformedPreview
-              html={transformedHtml}
+              type={transformResult.type}
+              modifiedFile={transformResult.modifiedFile}
               originalFileName={selectedFile?.name || ''}
+              message={transformResult.message}
             />
           </CardContent>
         </Card>

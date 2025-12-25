@@ -19,8 +19,10 @@ export interface BrandSettings {
 }
 
 export interface TransformResult {
-  html: string;
+  type: 'docx' | 'pdf';
+  modifiedFile: string; // base64
   originalFileName: string;
+  message?: string;
 }
 
 export const brandService = {
@@ -82,8 +84,10 @@ export const brandService = {
     if (data?.error) throw new Error(data.error);
 
     return {
-      html: data.html,
-      originalFileName: file.name,
+      type: data.type,
+      modifiedFile: data.modifiedFile,
+      originalFileName: data.originalFileName || file.name,
+      message: data.message,
     };
   },
 };

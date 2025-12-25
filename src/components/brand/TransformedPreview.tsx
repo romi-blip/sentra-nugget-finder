@@ -1,178 +1,57 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, FileText, ChevronDown } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { Download, FileText, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface TransformedPreviewProps {
-  html: string | null;
+  type: 'docx' | 'pdf' | null;
+  modifiedFile: string | null; // base64
   originalFileName: string;
+  message?: string;
 }
 
 const TransformedPreview: React.FC<TransformedPreviewProps> = ({
-  html,
+  type,
+  modifiedFile,
   originalFileName,
+  message,
 }) => {
   const getBaseFileName = () => originalFileName.replace(/\.(docx|pdf)$/i, '');
 
-  const handleDownloadHtml = () => {
-    if (!html) return;
-
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${getBaseFileName()}_styled.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDownloadPdf = () => {
-    if (!html) return;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      // Small delay to ensure content is loaded
-      setTimeout(() => {
-        printWindow.print();
-      }, 250);
-    } else {
-      toast.error('Please allow popups to download as PDF');
-    }
-  };
-
-  const handleDownloadDocx = async () => {
-    if (!html) return;
+  const handleDownload = () => {
+    if (!modifiedFile || !type) return;
 
     try {
-      // Parse HTML to extract content
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const body = doc.body;
-
-      // Extract text content and structure
-      const children: Paragraph[] = [];
-      
-      const processNode = (node: Node) => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.textContent?.trim();
-          if (text) {
-            children.push(
-              new Paragraph({
-                children: [new TextRun({ text })],
-              })
-            );
-          }
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-          const element = node as Element;
-          const tagName = element.tagName.toLowerCase();
-          const text = element.textContent?.trim();
-
-          if (!text) return;
-
-          if (tagName === 'h1') {
-            children.push(
-              new Paragraph({
-                heading: HeadingLevel.HEADING_1,
-                children: [new TextRun({ text, bold: true, size: 48 })],
-              })
-            );
-          } else if (tagName === 'h2') {
-            children.push(
-              new Paragraph({
-                heading: HeadingLevel.HEADING_2,
-                children: [new TextRun({ text, bold: true, size: 36 })],
-              })
-            );
-          } else if (tagName === 'h3') {
-            children.push(
-              new Paragraph({
-                heading: HeadingLevel.HEADING_3,
-                children: [new TextRun({ text, bold: true, size: 28 })],
-              })
-            );
-          } else if (tagName === 'p' || tagName === 'div') {
-            // Check if it has child elements or just text
-            if (element.children.length === 0) {
-              children.push(
-                new Paragraph({
-                  children: [new TextRun({ text, size: 24 })],
-                })
-              );
-            } else {
-              // Process children
-              Array.from(element.childNodes).forEach(processNode);
-            }
-          } else if (tagName === 'br') {
-            children.push(new Paragraph({ children: [] }));
-          } else {
-            // For other elements, recurse into children
-            Array.from(element.childNodes).forEach(processNode);
-          }
-        }
-      };
-
-      // Get the main content container
-      const mainContent = body.querySelector('.document-content') || body;
-      Array.from(mainContent.childNodes).forEach(processNode);
-
-      // If no content was parsed, add a fallback
-      if (children.length === 0) {
-        const allText = body.textContent?.trim();
-        if (allText) {
-          // Split by newlines and create paragraphs
-          allText.split('\n').filter(line => line.trim()).forEach(line => {
-            children.push(
-              new Paragraph({
-                children: [new TextRun({ text: line.trim(), size: 24 })],
-              })
-            );
-          });
-        }
+      // Convert base64 to blob
+      const binaryString = atob(modifiedFile);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
       }
 
-      const docxDocument = new Document({
-        sections: [
-          {
-            properties: {},
-            children: children.length > 0 ? children : [
-              new Paragraph({
-                children: [new TextRun({ text: 'Document content' })],
-              }),
-            ],
-          },
-        ],
-      });
-
-      const blob = await Packer.toBlob(docxDocument);
+      const mimeType = type === 'docx' 
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'application/pdf';
+      
+      const blob = new Blob([bytes], { type: mimeType });
       const url = URL.createObjectURL(blob);
-      const link = window.document.createElement('a');
-      link.href = url;
-      link.download = `${getBaseFileName()}_styled.docx`;
-      window.document.body.appendChild(link);
-      link.click();
-      window.document.body.removeChild(link);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${getBaseFileName()}_styled.${type}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      toast.success('DOCX downloaded successfully');
+      toast.success(`${type.toUpperCase()} downloaded successfully`);
     } catch (error) {
-      console.error('Error generating DOCX:', error);
-      toast.error('Failed to generate DOCX file');
+      console.error('Error downloading file:', error);
+      toast.error('Failed to download file');
     }
   };
 
-  if (!html) {
+  if (!modifiedFile) {
     return (
       <div className="border rounded-lg p-8 bg-muted/30 text-center">
         <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
@@ -186,35 +65,36 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between p-4 border-b bg-muted/30">
-        <h3 className="font-semibold">Preview</h3>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Download
-              <ChevronDown className="h-4 w-4 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-popover">
-            <DropdownMenuItem onClick={handleDownloadHtml}>
-              Download as HTML
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleDownloadPdf}>
-              Download as PDF
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleDownloadDocx}>
-              Download as DOCX
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <h3 className="font-semibold">Transformed Document</h3>
+        <Button size="sm" onClick={handleDownload}>
+          <Download className="h-4 w-4 mr-2" />
+          Download {type?.toUpperCase()}
+        </Button>
       </div>
-      {/* Use iframe to isolate the document styles from the app */}
-      <iframe
-        srcDoc={html}
-        className="w-full h-[500px] border-0 bg-white"
-        title="Document Preview"
-        sandbox="allow-same-origin"
-      />
+      
+      <div className="p-6">
+        {message && (
+          <Alert className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{message}</AlertDescription>
+          </Alert>
+        )}
+        
+        <div className="bg-muted/20 rounded-lg p-8 text-center">
+          <FileText className="h-20 w-20 mx-auto text-primary mb-4" />
+          <h4 className="text-lg font-medium mb-2">
+            {getBaseFileName()}_styled.{type}
+          </h4>
+          <p className="text-sm text-muted-foreground mb-4">
+            Your document has been processed with the selected brand fonts and colors.
+            {type === 'docx' && ' All images and layout have been preserved.'}
+          </p>
+          <Button onClick={handleDownload} variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Download Modified Document
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import pdfParse from "npm:pdf-parse@1.1.1";
+import JSZip from "npm:jszip@3.10.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,228 +27,202 @@ interface RequestBody {
   settings: BrandSettings;
 }
 
-async function extractTextFromPdf(base64Content: string): Promise<string> {
-  // Decode base64 to buffer
+// Convert hex color to RGB components
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+// Convert hex to Word color format (without #)
+function hexToWordColor(hex: string): string {
+  return hex.replace('#', '').toUpperCase();
+}
+
+// Modify DOCX file by updating fonts and colors while preserving structure
+async function modifyDocxStyles(base64Content: string, settings: BrandSettings): Promise<string> {
+  console.log('[transform-document-design] Starting DOCX modification');
+  
+  // Decode base64 to binary
   const binaryString = atob(base64Content);
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
 
-  try {
-    // Parse PDF and extract text from ALL pages
-    const pdfData = await pdfParse(bytes);
+  // Load DOCX as ZIP
+  const zip = await JSZip.loadAsync(bytes);
+  
+  const primaryColor = hexToWordColor(settings.primaryColor);
+  const textColor = hexToWordColor(settings.textColor);
+  const headingFont = settings.headingFont;
+  const bodyFont = settings.bodyFont;
+  
+  console.log(`[transform-document-design] Applying fonts: heading="${headingFont}", body="${bodyFont}"`);
+  console.log(`[transform-document-design] Applying colors: primary="${primaryColor}", text="${textColor}"`);
+
+  // Modify styles.xml - the main style definitions
+  const stylesFile = zip.file('word/styles.xml');
+  if (stylesFile) {
+    let stylesXml = await stylesFile.async('string');
     
-    console.log(`[transform-document-design] Extracted ${pdfData.numpages} pages from PDF`);
-    console.log(`[transform-document-design] Total text length: ${pdfData.text.length} characters`);
+    // Update heading styles (Heading1, Heading2, etc.)
+    // Replace font names in heading styles
+    stylesXml = stylesXml.replace(
+      /(<w:style[^>]*w:styleId="Heading[^"]*"[^>]*>[\s\S]*?<w:rFonts[^>]*)(w:ascii="[^"]*")/g,
+      `$1w:ascii="${headingFont}"`
+    );
+    stylesXml = stylesXml.replace(
+      /(<w:style[^>]*w:styleId="Heading[^"]*"[^>]*>[\s\S]*?<w:rFonts[^>]*)(w:hAnsi="[^"]*")/g,
+      `$1w:hAnsi="${headingFont}"`
+    );
     
-    return pdfData.text;
-  } catch (error) {
-    console.error('[transform-document-design] PDF parsing error:', error);
-    throw new Error(`Failed to parse PDF: ${error.message}`);
+    // Update Normal style (body text) fonts
+    stylesXml = stylesXml.replace(
+      /(<w:style[^>]*w:styleId="Normal"[^>]*>[\s\S]*?<w:rFonts[^>]*)(w:ascii="[^"]*")/g,
+      `$1w:ascii="${bodyFont}"`
+    );
+    stylesXml = stylesXml.replace(
+      /(<w:style[^>]*w:styleId="Normal"[^>]*>[\s\S]*?<w:rFonts[^>]*)(w:hAnsi="[^"]*")/g,
+      `$1w:hAnsi="${bodyFont}"`
+    );
+    
+    // Update default fonts in document defaults
+    stylesXml = stylesXml.replace(
+      /(<w:docDefaults[\s\S]*?<w:rFonts[^>]*)(w:ascii="[^"]*")/g,
+      `$1w:ascii="${bodyFont}"`
+    );
+    stylesXml = stylesXml.replace(
+      /(<w:docDefaults[\s\S]*?<w:rFonts[^>]*)(w:hAnsi="[^"]*")/g,
+      `$1w:hAnsi="${bodyFont}"`
+    );
+    
+    // Update theme fonts
+    stylesXml = stylesXml.replace(
+      /(<w:rFonts[^>]*)(w:asciiTheme="[^"]*")/g,
+      `$1w:ascii="${bodyFont}"`
+    );
+    stylesXml = stylesXml.replace(
+      /(<w:rFonts[^>]*)(w:hAnsiTheme="[^"]*")/g,
+      `$1w:hAnsi="${bodyFont}"`
+    );
+    
+    zip.file('word/styles.xml', stylesXml);
+    console.log('[transform-document-design] Updated styles.xml');
   }
+
+  // Modify document.xml - the main document content
+  const documentFile = zip.file('word/document.xml');
+  if (documentFile) {
+    let documentXml = await documentFile.async('string');
+    
+    // Update inline font references
+    documentXml = documentXml.replace(
+      /(<w:rFonts[^>]*)(w:ascii="[^"]*")/g,
+      `$1w:ascii="${bodyFont}"`
+    );
+    documentXml = documentXml.replace(
+      /(<w:rFonts[^>]*)(w:hAnsi="[^"]*")/g,
+      `$1w:hAnsi="${bodyFont}"`
+    );
+    documentXml = documentXml.replace(
+      /(<w:rFonts[^>]*)(w:cs="[^"]*")/g,
+      `$1w:cs="${bodyFont}"`
+    );
+    documentXml = documentXml.replace(
+      /(<w:rFonts[^>]*)(w:eastAsia="[^"]*")/g,
+      `$1w:eastAsia="${bodyFont}"`
+    );
+    
+    // Replace theme font references with actual fonts
+    documentXml = documentXml.replace(
+      /(<w:rFonts[^>]*)(w:asciiTheme="[^"]*")/g,
+      `$1w:ascii="${bodyFont}"`
+    );
+    documentXml = documentXml.replace(
+      /(<w:rFonts[^>]*)(w:hAnsiTheme="[^"]*")/g,
+      `$1w:hAnsi="${bodyFont}"`
+    );
+    
+    // Update text colors - replace existing color definitions
+    documentXml = documentXml.replace(
+      /<w:color w:val="[A-Fa-f0-9]{6}"\/>/g,
+      `<w:color w:val="${textColor}"/>`
+    );
+    
+    // Also handle theme colors
+    documentXml = documentXml.replace(
+      /<w:color w:themeColor="[^"]*"[^>]*\/>/g,
+      `<w:color w:val="${textColor}"/>`
+    );
+    
+    zip.file('word/document.xml', documentXml);
+    console.log('[transform-document-design] Updated document.xml');
+  }
+
+  // Modify theme if it exists - this controls default colors
+  const themeFile = zip.file('word/theme/theme1.xml');
+  if (themeFile) {
+    let themeXml = await themeFile.async('string');
+    
+    // Update scheme colors
+    const primaryRgb = hexToRgb(settings.primaryColor);
+    const secondaryRgb = hexToRgb(settings.secondaryColor);
+    const textRgb = hexToRgb(settings.textColor);
+    const bgRgb = hexToRgb(settings.backgroundColor);
+    
+    if (primaryRgb) {
+      // Update accent colors
+      themeXml = themeXml.replace(
+        /<a:accent1>[\s\S]*?<\/a:accent1>/g,
+        `<a:accent1><a:srgbClr val="${primaryColor}"/></a:accent1>`
+      );
+    }
+    
+    if (secondaryRgb) {
+      themeXml = themeXml.replace(
+        /<a:accent2>[\s\S]*?<\/a:accent2>/g,
+        `<a:accent2><a:srgbClr val="${hexToWordColor(settings.secondaryColor)}"/></a:accent2>`
+      );
+    }
+    
+    // Update major and minor fonts (headings and body)
+    themeXml = themeXml.replace(
+      /<a:majorFont>[\s\S]*?<a:latin typeface="[^"]*"/g,
+      `<a:majorFont>\n        <a:latin typeface="${headingFont}"`
+    );
+    themeXml = themeXml.replace(
+      /<a:minorFont>[\s\S]*?<a:latin typeface="[^"]*"/g,
+      `<a:minorFont>\n        <a:latin typeface="${bodyFont}"`
+    );
+    
+    zip.file('word/theme/theme1.xml', themeXml);
+    console.log('[transform-document-design] Updated theme1.xml');
+  }
+
+  // Re-package as base64
+  const newDocx = await zip.generateAsync({ type: 'base64' });
+  console.log('[transform-document-design] DOCX modification complete');
+  
+  return newDocx;
 }
 
-function extractTextFromDocx(base64Content: string): string {
-  // Decode base64
-  const binaryString = atob(base64Content);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-
-  // DOCX is a ZIP file containing XML
-  // For simplicity, we'll extract text content from the raw bytes
-  // This is a basic extraction - in production you'd use a proper library
-  const content = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+// For PDF, we'll return a message about limitations since modifying embedded fonts in PDFs
+// is extremely complex. We could use pdf-lib but it can only add content, not easily modify existing text.
+async function processPdf(base64Content: string, settings: BrandSettings): Promise<{ modifiedFile: string | null; message: string }> {
+  console.log('[transform-document-design] PDF processing - preserving original structure');
   
-  // Look for text between XML tags
-  const textMatches: string[] = [];
+  // PDFs have fonts embedded and text already rendered - modifying them properly
+  // requires re-rendering the entire document which is beyond simple processing.
+  // We return the original file with a note about limitations.
   
-  // Extract from document.xml (main content)
-  const textPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-  let match;
-  while ((match = textPattern.exec(content)) !== null) {
-    if (match[1].trim()) {
-      textMatches.push(match[1]);
-    }
-  }
-
-  // Also try to find paragraph breaks
-  const paragraphPattern = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
-  const paragraphs: string[] = [];
-  let currentParagraph: string[] = [];
-  
-  while ((match = paragraphPattern.exec(content)) !== null) {
-    const paragraphContent = match[1];
-    const innerTextPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-    let innerMatch;
-    const texts: string[] = [];
-    while ((innerMatch = innerTextPattern.exec(paragraphContent)) !== null) {
-      texts.push(innerMatch[1]);
-    }
-    if (texts.length > 0) {
-      paragraphs.push(texts.join(''));
-    }
-  }
-
-  if (paragraphs.length > 0) {
-    return paragraphs.join('\n\n');
-  }
-
-  return textMatches.join(' ');
-}
-
-function generateStyledHtml(content: string, settings: BrandSettings): string {
-  // Split content into paragraphs
-  const paragraphs = content.split(/\n\n+/).filter(p => p.trim());
-  
-  // Detect headings (lines that are short and might be titles)
-  const processedParagraphs = paragraphs.map((p, index) => {
-    const trimmed = p.trim();
-    
-    // Simple heuristic: first paragraph or short lines might be headings
-    const isHeading = index === 0 || 
-      (trimmed.length < 100 && !trimmed.endsWith('.') && !trimmed.endsWith(','));
-    
-    if (isHeading && index < 5) {
-      const level = index === 0 ? 'h1' : 'h2';
-      return `<${level}>${trimmed}</${level}>`;
-    }
-    
-    return `<p>${trimmed}</p>`;
-  });
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Styled Document</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${settings.headingFont.replace(' ', '+')}:wght@${settings.headingWeight}&family=${settings.bodyFont.replace(' ', '+')}:wght@${settings.bodyWeight}&display=swap">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: '${settings.bodyFont}', sans-serif;
-      font-weight: ${settings.bodyWeight};
-      background-color: ${settings.backgroundColor};
-      color: ${settings.textColor};
-      line-height: 1.6;
-      padding: 40px;
-      max-width: 900px;
-      margin: 0 auto;
-    }
-    
-    h1, h2, h3, h4, h5, h6 {
-      font-family: '${settings.headingFont}', sans-serif;
-      font-weight: ${settings.headingWeight};
-      margin-bottom: 1rem;
-    }
-    
-    h1 {
-      font-size: 2.5rem;
-      color: ${settings.primaryColor};
-      border-bottom: 3px solid ${settings.secondaryColor};
-      padding-bottom: 0.5rem;
-      margin-bottom: 2rem;
-    }
-    
-    h2 {
-      font-size: 1.75rem;
-      color: ${settings.accentCyan};
-      margin-top: 2rem;
-    }
-    
-    h3 {
-      font-size: 1.25rem;
-      color: ${settings.accentPink};
-    }
-    
-    p {
-      margin-bottom: 1rem;
-    }
-    
-    a {
-      color: ${settings.primaryColor};
-      text-decoration: none;
-    }
-    
-    a:hover {
-      color: ${settings.accentCyan};
-      text-decoration: underline;
-    }
-    
-    strong, b {
-      color: ${settings.secondaryColor};
-    }
-    
-    em, i {
-      color: ${settings.accentPink};
-    }
-    
-    ul, ol {
-      margin-left: 1.5rem;
-      margin-bottom: 1rem;
-    }
-    
-    li {
-      margin-bottom: 0.5rem;
-    }
-    
-    li::marker {
-      color: ${settings.primaryColor};
-    }
-    
-    blockquote {
-      border-left: 4px solid ${settings.secondaryColor};
-      padding-left: 1rem;
-      margin: 1.5rem 0;
-      font-style: italic;
-      color: ${settings.accentCyan};
-    }
-    
-    code {
-      background-color: rgba(255, 255, 255, 0.1);
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
-      font-family: monospace;
-    }
-    
-    pre {
-      background-color: rgba(255, 255, 255, 0.05);
-      padding: 1rem;
-      border-radius: 8px;
-      overflow-x: auto;
-      margin: 1rem 0;
-    }
-    
-    hr {
-      border: none;
-      height: 2px;
-      background: linear-gradient(to right, ${settings.primaryColor}, ${settings.secondaryColor}, ${settings.accentPink});
-      margin: 2rem 0;
-    }
-    
-    .accent-box {
-      background: linear-gradient(135deg, ${settings.primaryColor}20, ${settings.accentCyan}20);
-      border-left: 4px solid ${settings.primaryColor};
-      padding: 1rem;
-      margin: 1rem 0;
-      border-radius: 0 8px 8px 0;
-    }
-  </style>
-</head>
-<body>
-  ${processedParagraphs.join('\n  ')}
-</body>
-</html>`;
-
-  return html;
+  return {
+    modifiedFile: base64Content, // Return original for now
+    message: 'PDF files have embedded fonts and rendered text. For best results with brand fonts and colors, please use the original source document (DOCX) if available. The PDF structure and images are preserved.'
+  };
 }
 
 serve(async (req) => {
@@ -296,23 +270,35 @@ serve(async (req) => {
 
     console.log(`[transform-document-design] Processing file: ${fileName}, type: ${fileType}`);
 
-    let extractedContent = '';
+    let result: {
+      type: 'docx' | 'pdf';
+      modifiedFile: string;
+      originalFileName: string;
+      message?: string;
+    };
 
-    if (fileType.includes('pdf')) {
-      // Extract text from ALL pages of the PDF using pdf-parse
-      console.log(`[transform-document-design] Extracting text from PDF: ${fileName}`);
-      extractedContent = await extractTextFromPdf(file);
+    if (fileType.includes('wordprocessingml') || fileName.endsWith('.docx')) {
+      // Modify DOCX while preserving structure
+      console.log(`[transform-document-design] Modifying DOCX: ${fileName}`);
+      const modifiedDocx = await modifyDocxStyles(file, settings);
       
-      if (!extractedContent.trim()) {
-        extractedContent = `PDF Document: ${fileName}\n\nThe document appears to be image-based or scanned. Text extraction is not available for this type of PDF. Please use a PDF with selectable text.`;
-      }
-    } else if (fileType.includes('wordprocessingml') || fileName.endsWith('.docx')) {
-      // Extract text from DOCX
-      extractedContent = extractTextFromDocx(file);
+      result = {
+        type: 'docx',
+        modifiedFile: modifiedDocx,
+        originalFileName: fileName,
+        message: 'Document fonts and colors have been updated while preserving structure and images.'
+      };
+    } else if (fileType.includes('pdf')) {
+      // Handle PDF
+      console.log(`[transform-document-design] Processing PDF: ${fileName}`);
+      const pdfResult = await processPdf(file, settings);
       
-      if (!extractedContent.trim()) {
-        extractedContent = `Document: ${fileName}\n\nThe document content could not be fully extracted. This may happen with complex formatting or embedded objects.`;
-      }
+      result = {
+        type: 'pdf',
+        modifiedFile: pdfResult.modifiedFile || file,
+        originalFileName: fileName,
+        message: pdfResult.message
+      };
     } else {
       return new Response(
         JSON.stringify({ error: 'Unsupported file type. Please upload a DOCX or PDF file.' }),
@@ -320,16 +306,10 @@ serve(async (req) => {
       );
     }
 
-    // Generate styled HTML
-    const styledHtml = generateStyledHtml(extractedContent, settings);
-
-    console.log(`[transform-document-design] Successfully transformed document`);
+    console.log(`[transform-document-design] Successfully processed document`);
 
     return new Response(
-      JSON.stringify({ 
-        html: styledHtml,
-        message: 'Document transformed successfully'
-      }),
+      JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
