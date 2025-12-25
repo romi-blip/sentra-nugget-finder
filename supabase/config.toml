@@ -136,3 +136,6 @@ verify_jwt = true
 
 [functions.transform-document-design]
 verify_jwt = true
+
+[functions.generate-branded-document]
+verify_jwt = true
