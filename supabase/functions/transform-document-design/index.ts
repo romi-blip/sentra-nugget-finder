@@ -104,11 +104,11 @@ async function waitForJob(jobId: string, apiKey: string, maxWaitMs = 120000): Pr
   throw new Error('CloudConvert job timed out');
 }
 
-// Convert PDF to DOCX using CloudConvert
+// Convert PDF to DOCX using CloudConvert with upload approach (memory efficient)
 async function convertPdfToDocx(pdfBase64: string, apiKey: string): Promise<string> {
   console.log('[transform-document-design] Converting PDF to DOCX via CloudConvert');
   
-  // Create conversion job
+  // Step 1: Create job with upload task
   const jobResponse = await fetch('https://api.cloudconvert.com/v2/jobs', {
     method: 'POST',
     headers: {
@@ -117,14 +117,12 @@ async function convertPdfToDocx(pdfBase64: string, apiKey: string): Promise<stri
     },
     body: JSON.stringify({
       tasks: {
-        'import-pdf': {
-          operation: 'import/base64',
-          file: pdfBase64,
-          filename: 'input.pdf',
+        'upload-pdf': {
+          operation: 'import/upload',
         },
         'convert-to-docx': {
           operation: 'convert',
-          input: 'import-pdf',
+          input: 'upload-pdf',
           output_format: 'docx',
         },
         'export-docx': {
@@ -143,10 +141,44 @@ async function convertPdfToDocx(pdfBase64: string, apiKey: string): Promise<stri
   const { data: job } = await jobResponse.json();
   console.log(`[transform-document-design] CloudConvert job created: ${job.id}`);
   
-  // Wait for job completion
+  // Step 2: Find upload task and get upload URL
+  const uploadTask = job.tasks.find((t: any) => t.name === 'upload-pdf');
+  if (!uploadTask?.result?.form?.url) {
+    throw new Error('No upload URL in CloudConvert response');
+  }
+  
+  const uploadUrl = uploadTask.result.form.url;
+  const uploadParams = uploadTask.result.form.parameters || {};
+  
+  // Step 3: Convert base64 to binary and upload via form-data
+  const binaryString = atob(pdfBase64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(uploadParams)) {
+    formData.append(key, value as string);
+  }
+  formData.append('file', new Blob([bytes], { type: 'application/pdf' }), 'input.pdf');
+  
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    body: formData,
+  });
+  
+  if (!uploadResponse.ok) {
+    const error = await uploadResponse.text();
+    throw new Error(`Failed to upload PDF to CloudConvert: ${error}`);
+  }
+  
+  console.log('[transform-document-design] PDF uploaded to CloudConvert');
+  
+  // Step 4: Wait for job completion
   const completedJob = await waitForJob(job.id, apiKey);
   
-  // Find export task and get download URL
+  // Step 5: Find export task and get download URL
   const exportTask = completedJob.tasks.find(t => t.name === 'export-docx');
   const downloadUrl = exportTask?.result?.files?.[0]?.url;
   
@@ -154,7 +186,7 @@ async function convertPdfToDocx(pdfBase64: string, apiKey: string): Promise<stri
     throw new Error('No download URL in CloudConvert response');
   }
   
-  // Download the DOCX file
+  // Step 6: Download the DOCX file
   const docxResponse = await fetch(downloadUrl);
   if (!docxResponse.ok) {
     throw new Error(`Failed to download converted DOCX: ${docxResponse.statusText}`);
@@ -167,11 +199,11 @@ async function convertPdfToDocx(pdfBase64: string, apiKey: string): Promise<stri
   return docxBase64;
 }
 
-// Convert DOCX to PDF using CloudConvert
+// Convert DOCX to PDF using CloudConvert with upload approach (memory efficient)
 async function convertDocxToPdf(docxBase64: string, apiKey: string): Promise<string> {
   console.log('[transform-document-design] Converting DOCX to PDF via CloudConvert');
   
-  // Create conversion job
+  // Step 1: Create job with upload task
   const jobResponse = await fetch('https://api.cloudconvert.com/v2/jobs', {
     method: 'POST',
     headers: {
@@ -180,14 +212,12 @@ async function convertDocxToPdf(docxBase64: string, apiKey: string): Promise<str
     },
     body: JSON.stringify({
       tasks: {
-        'import-docx': {
-          operation: 'import/base64',
-          file: docxBase64,
-          filename: 'styled.docx',
+        'upload-docx': {
+          operation: 'import/upload',
         },
         'convert-to-pdf': {
           operation: 'convert',
-          input: 'import-docx',
+          input: 'upload-docx',
           output_format: 'pdf',
         },
         'export-pdf': {
@@ -206,10 +236,44 @@ async function convertDocxToPdf(docxBase64: string, apiKey: string): Promise<str
   const { data: job } = await jobResponse.json();
   console.log(`[transform-document-design] CloudConvert job created: ${job.id}`);
   
-  // Wait for job completion
+  // Step 2: Find upload task and get upload URL
+  const uploadTask = job.tasks.find((t: any) => t.name === 'upload-docx');
+  if (!uploadTask?.result?.form?.url) {
+    throw new Error('No upload URL in CloudConvert response');
+  }
+  
+  const uploadUrl = uploadTask.result.form.url;
+  const uploadParams = uploadTask.result.form.parameters || {};
+  
+  // Step 3: Convert base64 to binary and upload via form-data
+  const binaryString = atob(docxBase64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(uploadParams)) {
+    formData.append(key, value as string);
+  }
+  formData.append('file', new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), 'styled.docx');
+  
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    body: formData,
+  });
+  
+  if (!uploadResponse.ok) {
+    const error = await uploadResponse.text();
+    throw new Error(`Failed to upload DOCX to CloudConvert: ${error}`);
+  }
+  
+  console.log('[transform-document-design] DOCX uploaded to CloudConvert');
+  
+  // Step 4: Wait for job completion
   const completedJob = await waitForJob(job.id, apiKey);
   
-  // Find export task and get download URL
+  // Step 5: Find export task and get download URL
   const exportTask = completedJob.tasks.find(t => t.name === 'export-pdf');
   const downloadUrl = exportTask?.result?.files?.[0]?.url;
   
@@ -217,7 +281,7 @@ async function convertDocxToPdf(docxBase64: string, apiKey: string): Promise<str
     throw new Error('No download URL in CloudConvert response');
   }
   
-  // Download the PDF file
+  // Step 6: Download the PDF file
   const pdfResponse = await fetch(downloadUrl);
   if (!pdfResponse.ok) {
     throw new Error(`Failed to download converted PDF: ${pdfResponse.statusText}`);
