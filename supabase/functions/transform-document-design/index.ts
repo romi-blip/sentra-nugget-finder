@@ -44,6 +44,18 @@ interface CloudConvertJob {
   }>;
 }
 
+// Convert ArrayBuffer to base64 without stack overflow (handles large files)
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
 // Convert hex color to RGB components
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -149,7 +161,7 @@ async function convertPdfToDocx(pdfBase64: string, apiKey: string): Promise<stri
   }
   
   const docxArrayBuffer = await docxResponse.arrayBuffer();
-  const docxBase64 = btoa(String.fromCharCode(...new Uint8Array(docxArrayBuffer)));
+  const docxBase64 = arrayBufferToBase64(docxArrayBuffer);
   
   console.log('[transform-document-design] PDF to DOCX conversion complete');
   return docxBase64;
@@ -212,7 +224,7 @@ async function convertDocxToPdf(docxBase64: string, apiKey: string): Promise<str
   }
   
   const pdfArrayBuffer = await pdfResponse.arrayBuffer();
-  const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfArrayBuffer)));
+  const pdfBase64 = arrayBufferToBase64(pdfArrayBuffer);
   
   console.log('[transform-document-design] DOCX to PDF conversion complete');
   return pdfBase64;
