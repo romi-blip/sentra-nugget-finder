@@ -151,6 +151,14 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       paragraphText = decodeHtmlEntities(paragraphText.trim());
       if (!paragraphText) continue;
       
+      // FIX 4: Filter out original "Contents" section from source DOCX
+      const lowerText = paragraphText.toLowerCase();
+      if (lowerText === 'contents' || 
+          lowerText === 'table of contents' ||
+          (lowerText.includes('contents') && paragraphText.length < 25)) {
+        continue;
+      }
+      
       const styleMatch = styleRegex.exec(paragraphContent);
       const styleName = styleMatch ? styleMatch[1] : '';
       
@@ -230,9 +238,18 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   return lines;
 }
 
-// Safe text drawing wrapper
-function drawSafeText(page: any, text: string, options: any) {
-  page.drawText(sanitizeForPdf(text), options);
+// FIX 2: Truncate title with ellipsis if too long
+function truncateTitle(text: string, font: any, fontSize: number, maxWidth: number): string {
+  const sanitized = sanitizeForPdf(text);
+  if (font.widthOfTextAtSize(sanitized, fontSize) <= maxWidth) {
+    return sanitized;
+  }
+  
+  let truncated = sanitized;
+  while (truncated.length > 0 && font.widthOfTextAtSize(truncated + '...', fontSize) > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + '...';
 }
 
 // Draw the colored footer bar
@@ -427,38 +444,33 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
   // TOC entries
   let y = titleY - 60;
   const lineHeight = 28;
-  const indent = 25;
+  const indent = 20;
 
   for (let i = 0; i < tocEntries.length; i++) {
     const entry = tocEntries[i];
     const isMainHeading = entry.level === 1;
     const xOffset = isMainHeading ? 0 : indent;
-    const bulletColor = isMainHeading ? COLORS.primary : COLORS.lightGray;
     const textFont = isMainHeading ? fonts.bold : fonts.regular;
     const fontSize = 11;
 
-    // Bullet - draw circle instead of text
-    page.drawCircle({
-      x: margin + xOffset + 3,
-      y: y + 3,
-      size: 3,
-      color: bulletColor,
-    });
-
+    // FIX 1: Remove bullets - only use numbers
     // Number in green
     page.drawText(entry.number, {
-      x: margin + xOffset + 15,
+      x: margin + xOffset,
       y: y,
       size: fontSize,
       font: fonts.bold,
       color: COLORS.primary,
     });
 
-    // Title (sanitized)
-    const sanitizedTitle = sanitizeForPdf(entry.title);
+    // FIX 2: Truncate long titles with ellipsis
     const numberWidth = fonts.bold.widthOfTextAtSize(entry.number + ' ', fontSize);
-    page.drawText(sanitizedTitle, {
-      x: margin + xOffset + 15 + numberWidth,
+    const pageNumReserve = 60; // Space for page number + dots
+    const maxTitleWidth = width - margin - xOffset - numberWidth - pageNumReserve;
+    const displayTitle = truncateTitle(entry.title, textFont, fontSize, maxTitleWidth);
+    
+    page.drawText(displayTitle, {
+      x: margin + xOffset + numberWidth,
       y: y,
       size: fontSize,
       font: textFont,
@@ -476,9 +488,9 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
       color: COLORS.gray,
     });
 
-    // Dot leader (use sanitized title width)
-    const titleWidth = textFont.widthOfTextAtSize(sanitizedTitle, fontSize);
-    const dotsStartX = margin + xOffset + 15 + numberWidth + titleWidth + 10;
+    // Dot leader
+    const titleWidth = textFont.widthOfTextAtSize(displayTitle, fontSize);
+    const dotsStartX = margin + xOffset + numberWidth + titleWidth + 10;
     const dotsEndX = pageNumX - 10;
     const dotSpacing = 4;
     for (let dotX = dotsStartX; dotX < dotsEndX; dotX += dotSpacing) {
@@ -511,7 +523,101 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
   drawFooter(page, fonts);
 }
 
-// Create content pages
+// FIX 5: Simulate content flow to calculate accurate TOC page numbers
+function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[] {
+  const entries: TOCEntry[] = [];
+  let chapterNum = 0;
+  let subChapterNum = 0;
+  
+  // Simulate content page layout to get accurate page numbers
+  const pageHeight = 792;
+  const margin = 50;
+  const minY = 100; // FIX 6: Increased threshold
+  const startY = pageHeight - 100;
+  const bodyFontSize = 11;
+  const lineHeight = 18;
+  const contentWidth = 612 - margin * 2;
+  
+  let simulatedY = startY;
+  let simulatedPage = 3; // Start after cover + TOC
+  let isFirstChapter = true;
+
+  for (const section of sections) {
+    if (section.type === 'heading') {
+      // FIX 3: Only H1 (level 1) creates page breaks
+      if (section.level === 1) {
+        chapterNum++;
+        subChapterNum = 0;
+        
+        // Page break before new H1 chapter (except first)
+        if (!isFirstChapter) {
+          simulatedPage++;
+          simulatedY = startY;
+        }
+        isFirstChapter = false;
+        
+        entries.push({
+          title: section.text,
+          page: simulatedPage,
+          level: 1,
+          number: `${chapterNum}.`,
+        });
+        
+        simulatedY -= 45; // Space taken by heading
+      } else if (section.level === 2) {
+        // H2 is treated as sub-section, no page break
+        subChapterNum++;
+        
+        // Check if we need a new page for space
+        if (simulatedY < minY + 100) {
+          simulatedPage++;
+          simulatedY = startY;
+        }
+        
+        entries.push({
+          title: section.text,
+          page: simulatedPage,
+          level: 2,
+          number: `${chapterNum}.${subChapterNum}`,
+        });
+        
+        simulatedY -= 45;
+      } else if (section.level === 3) {
+        subChapterNum++;
+        
+        if (simulatedY < minY + 50) {
+          simulatedPage++;
+          simulatedY = startY;
+        }
+        
+        entries.push({
+          title: section.text,
+          page: simulatedPage,
+          level: 2,
+          number: `${chapterNum}.${subChapterNum}`,
+        });
+        
+        simulatedY -= 30;
+      }
+    } else {
+      // Simulate paragraph text wrapping
+      const lines = wrapText(section.text, fonts.regular, bodyFontSize, contentWidth);
+      
+      for (const _line of lines) {
+        if (simulatedY < minY) {
+          simulatedPage++;
+          simulatedY = startY;
+        }
+        simulatedY -= lineHeight;
+      }
+      simulatedY -= 10; // Extra spacing after paragraph
+    }
+  }
+
+  return entries;
+}
+
+// Create content pages - FIX 3: Smart page breaks (only on H1)
 function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[]) {
   let currentPage = pdfDoc.addPage([612, 792]);
   let y = currentPage.getHeight() - 100;
@@ -519,7 +625,7 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
   const contentWidth = currentPage.getWidth() - margin * 2;
   const bodyFontSize = 11;
   const lineHeight = 18;
-  const minY = 80;
+  const minY = 100; // FIX 6: Increased from 80 to 100
 
   drawHeader(currentPage, fonts);
 
@@ -528,7 +634,7 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
   let isFirstChapter = true;
 
   for (const section of sections) {
-    // Check if we need a new page
+    // Check if we need a new page for minimum content space
     if (y < minY + 100) {
       drawFooter(currentPage, fonts);
       currentPage = pdfDoc.addPage([612, 792]);
@@ -537,11 +643,12 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
     }
 
     if (section.type === 'heading') {
-      if (section.level === 1 || section.level === 2) {
+      // FIX 3: Only H1 triggers page break
+      if (section.level === 1) {
         chapterNum++;
         subChapterNum = 0;
         
-        // Add page break before new chapter (except first)
+        // Add page break before new H1 chapter (except first)
         if (!isFirstChapter) {
           drawFooter(currentPage, fonts);
           currentPage = pdfDoc.addPage([612, 792]);
@@ -571,6 +678,21 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
         });
 
         y -= 45;
+      } else if (section.level === 2) {
+        // H2 as sub-section, NO page break
+        subChapterNum++;
+        
+        // Subheading (sanitized)
+        const subHeadingText = sanitizeForPdf(`${chapterNum}.${subChapterNum} ${section.text}`);
+        currentPage.drawText(subHeadingText, {
+          x: margin,
+          y: y,
+          size: 15,
+          font: fonts.bold,
+          color: COLORS.darkGray,
+        });
+
+        y -= 35;
       } else if (section.level === 3) {
         subChapterNum++;
         
@@ -615,40 +737,6 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
   drawFooter(currentPage, fonts);
 }
 
-// Generate TOC entries from sections
-function generateTOCEntries(sections: ExtractedSection[]): TOCEntry[] {
-  const entries: TOCEntry[] = [];
-  let chapterNum = 0;
-  let subChapterNum = 0;
-  let pageNum = 3; // Start after cover + TOC
-
-  for (const section of sections) {
-    if (section.type === 'heading') {
-      if (section.level === 1 || section.level === 2) {
-        chapterNum++;
-        subChapterNum = 0;
-        entries.push({
-          title: section.text,
-          page: pageNum,
-          level: 1,
-          number: `${chapterNum}.`,
-        });
-        pageNum++; // Each main chapter starts new page
-      } else if (section.level === 3) {
-        subChapterNum++;
-        entries.push({
-          title: section.text,
-          page: pageNum,
-          level: 2,
-          number: `${chapterNum}.${subChapterNum}`,
-        });
-      }
-    }
-  }
-
-  return entries;
-}
-
 // Main PDF generation function
 async function generatePDF(extractedDoc: ExtractedDocument): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
@@ -662,8 +750,8 @@ async function generatePDF(extractedDoc: ExtractedDocument): Promise<Uint8Array>
     bold: boldFont,
   };
 
-  // Generate TOC entries
-  const tocEntries = generateTOCEntries(extractedDoc.sections);
+  // FIX 5: Generate TOC entries with accurate page numbers (needs fonts for text measurement)
+  const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
   // Create pages
   createCoverPage(pdfDoc, fonts, extractedDoc);
