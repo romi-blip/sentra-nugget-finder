@@ -6,19 +6,20 @@ import {
   Packer,
   Paragraph,
   TextRun,
-  ImageRun,
   Header,
   Footer,
   AlignmentType,
-  PageBreak,
   Table,
   TableRow,
   TableCell,
   WidthType,
   BorderStyle,
   ShadingType,
-  VerticalAlign,
   convertInchesToTwip,
+  TabStopType,
+  TabStopPosition,
+  SectionType,
+  PageBreak,
 } from "npm:docx@8.5.0";
 
 const corsHeaders = {
@@ -26,11 +27,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Sentra brand colors (matching the template exactly)
+// Sentra brand colors
 const COLORS = {
   primary: "39FF14", // Neon Green
-  primaryDark: "32CD32",
-  orange: "FFA500",
   pink: "FF1493",
   cyan: "00FFFF",
   yellow: "FFD700",
@@ -55,7 +54,7 @@ interface BrandSettings {
 }
 
 interface RequestBody {
-  file: string; // base64
+  file: string;
   fileName: string;
   fileType: string;
   settings: BrandSettings;
@@ -64,24 +63,17 @@ interface RequestBody {
 interface ExtractedSection {
   type: 'heading' | 'paragraph';
   text: string;
-  level?: number; // 1, 2, 3 for headings
-}
-
-interface ExtractedImage {
-  id: string;
-  base64: string;
-  mimeType: string;
+  level?: number;
 }
 
 interface ExtractedDocument {
   title: string;
   subtitle: string;
   sections: ExtractedSection[];
-  images: ExtractedImage[];
   isConfidential: boolean;
 }
 
-// Decode HTML entities that may appear in extracted text
+// Decode HTML entities
 function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&amp;/g, '&')
@@ -95,7 +87,7 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&apos;/g, "'");
 }
 
-// Convert ArrayBuffer to base64 without stack overflow
+// Convert ArrayBuffer to base64
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -105,16 +97,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
-}
-
-// Helper to convert base64 to Uint8Array
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
 }
 
 // Extract content from DOCX
@@ -130,46 +112,18 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
   const zip = await JSZip.loadAsync(bytes);
   
   const sections: ExtractedSection[] = [];
-  const images: ExtractedImage[] = [];
   let title = '';
   let subtitle = '';
   let isConfidential = false;
 
-  // Extract images from word/media folder
-  const mediaFolder = zip.folder('word/media');
-  if (mediaFolder) {
-    const mediaFiles = Object.keys(zip.files).filter(f => f.startsWith('word/media/'));
-    for (const path of mediaFiles) {
-      const file = zip.file(path);
-      if (file && !file.dir) {
-        try {
-          const imageData = await file.async('base64');
-          const ext = path.split('.').pop()?.toLowerCase() || 'png';
-          const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
-          images.push({
-            id: path.replace('word/media/', ''),
-            base64: imageData,
-            mimeType,
-          });
-        } catch (e) {
-          console.log(`[transform-document-design] Could not extract image: ${path}`);
-        }
-      }
-    }
-  }
-  console.log(`[transform-document-design] Extracted ${images.length} images`);
-
-  // Extract text content from document.xml
   const documentFile = zip.file('word/document.xml');
   if (documentFile) {
     const documentXml = await documentFile.async('string');
     
-    // Check for confidential markers
     if (documentXml.toLowerCase().includes('confidential')) {
       isConfidential = true;
     }
 
-    // Extract paragraphs with their styles
     const paragraphRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
     const styleRegex = /<w:pStyle w:val="([^"]*)"/;
     
@@ -179,7 +133,6 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     while ((match = paragraphRegex.exec(documentXml)) !== null) {
       const paragraphContent = match[1];
       
-      // Extract all text from this paragraph
       let paragraphText = '';
       const textMatches = paragraphContent.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g);
       for (const tm of textMatches) {
@@ -189,7 +142,6 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       paragraphText = decodeHtmlEntities(paragraphText.trim());
       if (!paragraphText) continue;
       
-      // Check if it's a heading
       const styleMatch = styleRegex.exec(paragraphContent);
       const styleName = styleMatch ? styleMatch[1] : '';
       
@@ -217,13 +169,8 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
         headingLevel = 3;
       }
       
-      // Skip very short text that's likely formatting artifacts
       if (paragraphText.length < 2) continue;
-      
-      // Skip page numbers and common artifacts
       if (/^\d+$/.test(paragraphText) || paragraphText.toLowerCase() === 'sentra') continue;
-      
-      // Skip common document artifacts
       if (paragraphText.toUpperCase() === 'WHITEPAPER' || 
           paragraphText.toUpperCase() === 'WHITE PAPER' ||
           paragraphText.toUpperCase() === 'TECHNICAL WHITEPAPER') continue;
@@ -236,7 +183,6 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     }
   }
 
-  // If no title found, try to extract from first meaningful heading
   if (!title && sections.length > 0) {
     const firstHeading = sections.find(s => s.type === 'heading' && s.text.length > 10);
     if (firstHeading) {
@@ -246,7 +192,7 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
 
   console.log(`[transform-document-design] Extracted ${sections.length} sections, title: "${title}"`);
   
-  return { title, subtitle, sections, images, isConfidential };
+  return { title, subtitle, sections, isConfidential };
 }
 
 // Create colored footer bar table
@@ -290,7 +236,7 @@ function createColoredFooterBar(): Table {
   });
 }
 
-// Create 2-column metadata table for cover page
+// Create 2-column metadata table with fixed widths (in twips to prevent vertical text)
 function createMetadataTable(): Table {
   const today = new Date().toLocaleDateString('en-US', { 
     year: 'numeric', 
@@ -305,8 +251,11 @@ function createMetadataTable(): Table {
     right: { style: BorderStyle.NONE },
   };
 
+  // Use DXA (twips) for explicit widths - 4320 twips = 3 inches
+  const cellWidth = convertInchesToTwip(3);
+
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: convertInchesToTwip(6.5), type: WidthType.DXA },
     borders: {
       top: { style: BorderStyle.NONE },
       bottom: { style: BorderStyle.NONE },
@@ -316,38 +265,38 @@ function createMetadataTable(): Table {
       insideVertical: { style: BorderStyle.NONE },
     },
     rows: [
-      // Row 1: PREPARED FOR | VERSION labels
+      // Row 1: Labels
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: cellWidth, type: WidthType.DXA },
             borders: noBorders,
             children: [
               new Paragraph({
                 children: [
-                  new TextRun({ text: "PREPARED FOR", size: 18, color: COLORS.gray, allCaps: true }),
+                  new TextRun({ text: "PREPARED FOR", size: 18, color: COLORS.gray }),
                 ],
               }),
             ],
           }),
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: cellWidth, type: WidthType.DXA },
             borders: noBorders,
             children: [
               new Paragraph({
                 children: [
-                  new TextRun({ text: "VERSION", size: 18, color: COLORS.gray, allCaps: true }),
+                  new TextRun({ text: "VERSION", size: 18, color: COLORS.gray }),
                 ],
               }),
             ],
           }),
         ],
       }),
-      // Row 2: PREPARED FOR | VERSION values
+      // Row 2: Values
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: cellWidth, type: WidthType.DXA },
             borders: noBorders,
             children: [
               new Paragraph({
@@ -359,7 +308,7 @@ function createMetadataTable(): Table {
             ],
           }),
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: cellWidth, type: WidthType.DXA },
             borders: noBorders,
             children: [
               new Paragraph({
@@ -372,38 +321,38 @@ function createMetadataTable(): Table {
           }),
         ],
       }),
-      // Row 3: AUTHOR | DATE labels
+      // Row 3: Labels
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: cellWidth, type: WidthType.DXA },
             borders: noBorders,
             children: [
               new Paragraph({
                 children: [
-                  new TextRun({ text: "AUTHOR", size: 18, color: COLORS.gray, allCaps: true }),
+                  new TextRun({ text: "AUTHOR", size: 18, color: COLORS.gray }),
                 ],
               }),
             ],
           }),
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: cellWidth, type: WidthType.DXA },
             borders: noBorders,
             children: [
               new Paragraph({
                 children: [
-                  new TextRun({ text: "DATE", size: 18, color: COLORS.gray, allCaps: true }),
+                  new TextRun({ text: "DATE", size: 18, color: COLORS.gray }),
                 ],
               }),
             ],
           }),
         ],
       }),
-      // Row 4: AUTHOR | DATE values
+      // Row 4: Values
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: cellWidth, type: WidthType.DXA },
             borders: noBorders,
             children: [
               new Paragraph({
@@ -414,7 +363,7 @@ function createMetadataTable(): Table {
             ],
           }),
           new TableCell({
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: cellWidth, type: WidthType.DXA },
             borders: noBorders,
             children: [
               new Paragraph({
@@ -430,11 +379,11 @@ function createMetadataTable(): Table {
   });
 }
 
-// Generate cover page matching the Sentra template design exactly
-function createCoverPage(documentTitle: string, isConfidential: boolean): (Paragraph | Table)[] {
+// Generate cover page elements (NO header/footer in this section)
+function createCoverPageElements(documentTitle: string, isConfidential: boolean): (Paragraph | Table)[] {
   const elements: (Paragraph | Table)[] = [];
 
-  // Sentra logo text at top-left with larger size
+  // Sentra logo text
   elements.push(
     new Paragraph({
       children: [
@@ -449,7 +398,7 @@ function createCoverPage(documentTitle: string, isConfidential: boolean): (Parag
     })
   );
 
-  // Confidential badge at top-right (if confidential)
+  // Confidential badge
   if (isConfidential) {
     elements.push(
       new Paragraph({
@@ -472,7 +421,7 @@ function createCoverPage(documentTitle: string, isConfidential: boolean): (Parag
     );
   }
 
-  // Large spacer to push content down
+  // Large spacer
   elements.push(
     new Paragraph({
       children: [],
@@ -480,7 +429,7 @@ function createCoverPage(documentTitle: string, isConfidential: boolean): (Parag
     })
   );
 
-  // Category badge: "● TECHNICAL WHITEPAPER"
+  // Category badge
   elements.push(
     new Paragraph({
       children: [
@@ -494,14 +443,13 @@ function createCoverPage(documentTitle: string, isConfidential: boolean): (Parag
           color: COLORS.primary,
           bold: true,
           size: 26,
-          allCaps: true,
         }),
       ],
       spacing: { after: 400 },
     })
   );
 
-  // MAIN DOCUMENT TITLE - Large black text
+  // Main title
   elements.push(
     new Paragraph({
       children: [
@@ -524,7 +472,7 @@ function createCoverPage(documentTitle: string, isConfidential: boolean): (Parag
     })
   );
 
-  // 2-column metadata table
+  // Metadata table
   elements.push(createMetadataTable());
 
   // Spacer before footer
@@ -557,18 +505,11 @@ function createCoverPage(documentTitle: string, isConfidential: boolean): (Parag
   // Colored footer bar
   elements.push(createColoredFooterBar());
 
-  // Page break after cover
-  elements.push(
-    new Paragraph({
-      children: [new PageBreak()],
-    })
-  );
-
   return elements;
 }
 
-// Generate Table of Contents with proper formatting
-function createTableOfContents(sections: ExtractedSection[]): (Paragraph | Table)[] {
+// Generate Table of Contents with proper tab stops for page numbers
+function createTocElements(sections: ExtractedSection[]): (Paragraph | Table)[] {
   const elements: (Paragraph | Table)[] = [];
   
   const headings = sections.filter(s => s.type === 'heading' && (s.level === 1 || s.level === 2));
@@ -577,7 +518,7 @@ function createTableOfContents(sections: ExtractedSection[]): (Paragraph | Table
     return elements;
   }
 
-  // TOC Title - "Table of" black, "Contents" green
+  // TOC Title
   elements.push(
     new Paragraph({
       children: [
@@ -598,7 +539,6 @@ function createTableOfContents(sections: ExtractedSection[]): (Paragraph | Table
     })
   );
 
-  // Track section numbering
   let chapterNum = 0;
   let subSectionNum = 0;
   let pageNum = 3;
@@ -611,7 +551,7 @@ function createTableOfContents(sections: ExtractedSection[]): (Paragraph | Table
       subSectionNum = 0;
       sectionNumber = `${chapterNum}.`;
       
-      // Add separator line before major chapters (except first)
+      // Separator line before major chapters (except first)
       if (chapterNum > 1) {
         elements.push(
           new Paragraph({
@@ -635,12 +575,16 @@ function createTableOfContents(sections: ExtractedSection[]): (Paragraph | Table
     const fontSize = heading.level === 1 ? 26 : 22;
     const bulletColor = heading.level === 1 ? COLORS.primary : COLORS.gray;
 
-    // Create dot leaders
-    const textLength = heading.text.length + sectionNumber.length;
-    const dotsCount = Math.max(40 - Math.floor(textLength / 2), 10);
-    
+    // Use proper tab stops for right-aligned page numbers
     elements.push(
       new Paragraph({
+        tabStops: [
+          {
+            type: TabStopType.RIGHT,
+            position: TabStopPosition.MAX,
+            leader: "dot",
+          },
+        ],
         children: [
           new TextRun({
             text: "● ",
@@ -660,9 +604,7 @@ function createTableOfContents(sections: ExtractedSection[]): (Paragraph | Table
             color: COLORS.black,
           }),
           new TextRun({
-            text: " " + ".".repeat(dotsCount) + " ",
-            size: 12,
-            color: COLORS.lightGray,
+            text: "\t",
           }),
           new TextRun({
             text: `${pageNum}`,
@@ -678,23 +620,17 @@ function createTableOfContents(sections: ExtractedSection[]): (Paragraph | Table
     if (heading.level === 1) pageNum++;
   });
 
-  // Page break after TOC
-  elements.push(
-    new Paragraph({
-      children: [new PageBreak()],
-    })
-  );
-
   return elements;
 }
 
-// Generate content pages with proper styling
-function createContentPages(sections: ExtractedSection[], images: ExtractedImage[]): (Paragraph | Table)[] {
+// Generate content pages (no images appended)
+function createContentElements(sections: ExtractedSection[]): (Paragraph | Table)[] {
   const elements: (Paragraph | Table)[] = [];
   
   let chapterNum = 0;
   let subSectionNum = 0;
   let subSubSectionNum = 0;
+  let isFirstChapter = true;
 
   sections.forEach((section) => {
     if (section.type === 'heading') {
@@ -707,13 +643,14 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
         sectionNumber = `${chapterNum}.`;
         
         // Page break before major chapters (except first)
-        if (chapterNum > 1) {
+        if (!isFirstChapter) {
           elements.push(
             new Paragraph({
               children: [new PageBreak()],
             })
           );
         }
+        isFirstChapter = false;
       } else if (section.level === 2) {
         subSectionNum++;
         subSubSectionNum = 0;
@@ -751,7 +688,7 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
         })
       );
 
-      // Add underline for level 1 headings
+      // Underline for level 1 headings
       if (section.level === 1) {
         elements.push(
           new Paragraph({
@@ -783,57 +720,78 @@ function createContentPages(sections: ExtractedSection[], images: ExtractedImage
     }
   });
 
-  // Add images in appendix if present
-  if (images.length > 0) {
-    elements.push(
-      new Paragraph({
-        children: [new PageBreak()],
-      }),
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: "Appendix: ",
-            bold: true,
-            size: 44,
-            color: COLORS.black,
-          }),
-          new TextRun({
-            text: "Document Images",
-            bold: true,
-            size: 44,
-            color: COLORS.primary,
-          }),
-        ],
-        spacing: { after: 400 },
-      })
-    );
-
-    for (const img of images) {
-      try {
-        const imageType = img.mimeType.includes('png') ? 'png' : 'jpg';
-        elements.push(
-          new Paragraph({
-            children: [
-              new ImageRun({
-                data: base64ToUint8Array(img.base64),
-                transformation: { width: 500, height: 375 },
-                type: imageType as 'png' | 'jpg',
-              }),
-            ],
-            spacing: { before: 300, after: 300 },
-            alignment: AlignmentType.CENTER,
-          })
-        );
-      } catch (e) {
-        console.log(`[transform-document-design] Could not add image: ${img.id}`);
-      }
-    }
-  }
-
   return elements;
 }
 
-// Main function to transform document to Sentra template
+// Create header with underline
+function createHeader(title: string): Header {
+  return new Header({
+    children: [
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: "sentra",
+            bold: true,
+            size: 20,
+            color: COLORS.black,
+          }),
+          new TextRun({
+            text: "  |  ",
+            size: 18,
+            color: COLORS.gray,
+          }),
+          new TextRun({
+            text: title.substring(0, 40) + (title.length > 40 ? "..." : ""),
+            size: 18,
+            color: COLORS.gray,
+          }),
+        ],
+        border: {
+          bottom: {
+            color: COLORS.primary,
+            space: 4,
+            size: 12,
+            style: BorderStyle.SINGLE,
+          },
+        },
+        spacing: { after: 200 },
+      }),
+    ],
+  });
+}
+
+// Create footer with copyright
+function createFooter(): Footer {
+  return new Footer({
+    children: [
+      new Paragraph({
+        tabStops: [
+          {
+            type: TabStopType.RIGHT,
+            position: TabStopPosition.MAX,
+          },
+        ],
+        children: [
+          new TextRun({
+            text: "© 2025 Sentra Inc. All rights reserved.",
+            size: 16,
+            color: COLORS.lightGray,
+          }),
+          new TextRun({
+            text: "\t",
+          }),
+          new TextRun({
+            text: "www.sentra.io",
+            size: 16,
+            color: COLORS.primary,
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
+// Main transformation function using multiple sections
 async function transformToTemplate(base64Content: string, settings: BrandSettings): Promise<{ modifiedFile: string; message: string }> {
   console.log('[transform-document-design] Transforming document to Sentra template');
   
@@ -843,29 +801,17 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
     if (extracted.sections.length === 0) {
       return {
         modifiedFile: base64Content,
-        message: 'Could not extract content from document. Please try a different file or use the Create Document feature.',
+        message: 'Could not extract content from document. Please try a different file.',
       };
     }
 
-    console.log(`[transform-document-design] Building new document with ${extracted.sections.length} sections`);
-    console.log(`[transform-document-design] Document title: "${extracted.title}"`);
+    console.log(`[transform-document-design] Building document with ${extracted.sections.length} sections`);
 
-    // Build document children
-    const docChildren: (Paragraph | Table)[] = [];
+    const docTitle = extracted.title || 'Untitled Document';
+    const header = createHeader(docTitle);
+    const footer = createFooter();
 
-    // Cover page
-    docChildren.push(...createCoverPage(
-      extracted.title || 'Untitled Document',
-      extracted.isConfidential
-    ));
-
-    // Table of Contents
-    docChildren.push(...createTableOfContents(extracted.sections));
-
-    // Content pages
-    docChildren.push(...createContentPages(extracted.sections, extracted.images));
-
-    // Create the document
+    // Create document with THREE separate sections for proper page breaks
     const doc = new Document({
       styles: {
         default: {
@@ -878,6 +824,7 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
         },
       },
       sections: [
+        // SECTION 1: Cover Page (no header/footer)
         {
           properties: {
             page: {
@@ -889,66 +836,53 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
               },
             },
           },
+          children: createCoverPageElements(docTitle, extracted.isConfidential),
+        },
+        // SECTION 2: Table of Contents (with header/footer)
+        {
+          properties: {
+            type: SectionType.NEXT_PAGE,
+            page: {
+              margin: {
+                top: convertInchesToTwip(1),
+                right: convertInchesToTwip(1),
+                bottom: convertInchesToTwip(1),
+                left: convertInchesToTwip(1),
+              },
+            },
+          },
           headers: {
-            default: new Header({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "sentra",
-                      bold: true,
-                      size: 20,
-                      color: COLORS.black,
-                    }),
-                    new TextRun({
-                      text: "  |  WHITEPAPER",
-                      size: 18,
-                      color: COLORS.gray,
-                    }),
-                  ],
-                  border: {
-                    bottom: {
-                      color: COLORS.primary,
-                      space: 4,
-                      size: 12,
-                      style: BorderStyle.SINGLE,
-                    },
-                  },
-                  spacing: { after: 200 },
-                }),
-              ],
-            }),
+            default: header,
           },
           footers: {
-            default: new Footer({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "© 2025 Sentra Inc. All rights reserved.",
-                      size: 16,
-                      color: COLORS.lightGray,
-                    }),
-                    new TextRun({
-                      text: "                    ",
-                    }),
-                    new TextRun({
-                      text: "www.sentra.io",
-                      size: 16,
-                      color: COLORS.primary,
-                    }),
-                  ],
-                  alignment: AlignmentType.CENTER,
-                }),
-              ],
-            }),
+            default: footer,
           },
-          children: docChildren,
+          children: createTocElements(extracted.sections),
+        },
+        // SECTION 3: Content (with header/footer)
+        {
+          properties: {
+            type: SectionType.NEXT_PAGE,
+            page: {
+              margin: {
+                top: convertInchesToTwip(1),
+                right: convertInchesToTwip(1),
+                bottom: convertInchesToTwip(1),
+                left: convertInchesToTwip(1),
+              },
+            },
+          },
+          headers: {
+            default: header,
+          },
+          footers: {
+            default: footer,
+          },
+          children: createContentElements(extracted.sections),
         },
       ],
     });
 
-    // Generate the DOCX buffer
     const buffer = await Packer.toBuffer(doc);
     const base64Doc = arrayBufferToBase64(buffer);
 
@@ -956,7 +890,7 @@ async function transformToTemplate(base64Content: string, settings: BrandSetting
 
     return {
       modifiedFile: base64Doc,
-      message: `Document transformed to Sentra template! Title: "${extracted.title}". Extracted ${extracted.sections.length} sections and ${extracted.images.length} images.`,
+      message: `Document transformed! Title: "${docTitle}". Extracted ${extracted.sections.length} sections.`,
     };
   } catch (error) {
     console.error('[transform-document-design] Transformation error:', error);
@@ -1006,7 +940,7 @@ serve(async (req) => {
     if (fileType.includes('pdf')) {
       result = {
         modifiedFile: file,
-        message: 'PDF transformation requires converting to DOCX first. Please upload a DOCX file for full template transformation.',
+        message: 'PDF transformation requires DOCX. Please upload a DOCX file.',
       };
       outputType = 'pdf';
     } else if (fileType.includes('word') || fileType.includes('docx') || fileName.endsWith('.docx')) {
