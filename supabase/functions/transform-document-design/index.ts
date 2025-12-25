@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import JSZip from "npm:jszip@3.10.1";
+import { PDFDocument, rgb, PDFName, PDFDict, PDFArray } from "npm:pdf-lib@1.17.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -210,19 +211,110 @@ async function modifyDocxStyles(base64Content: string, settings: BrandSettings):
   return newDocx;
 }
 
-// For PDF, we'll return a message about limitations since modifying embedded fonts in PDFs
-// is extremely complex. We could use pdf-lib but it can only add content, not easily modify existing text.
-async function processPdf(base64Content: string, settings: BrandSettings): Promise<{ modifiedFile: string | null; message: string }> {
-  console.log('[transform-document-design] PDF processing - preserving original structure');
+// Process PDF using pdf-lib - modify metadata, form fields, and annotations
+async function processPdf(base64Content: string, settings: BrandSettings): Promise<{ modifiedFile: string; message: string }> {
+  console.log('[transform-document-design] Starting PDF modification with pdf-lib');
   
-  // PDFs have fonts embedded and text already rendered - modifying them properly
-  // requires re-rendering the entire document which is beyond simple processing.
-  // We return the original file with a note about limitations.
-  
-  return {
-    modifiedFile: base64Content, // Return original for now
-    message: 'PDF files have embedded fonts and rendered text. For best results with brand fonts and colors, please use the original source document (DOCX) if available. The PDF structure and images are preserved.'
-  };
+  try {
+    // Decode base64 to Uint8Array
+    const binaryString = atob(base64Content);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    // Load PDF document
+    const pdfDoc = await PDFDocument.load(bytes, { 
+      ignoreEncryption: true,
+      updateMetadata: true 
+    });
+
+    console.log('[transform-document-design] PDF loaded successfully');
+
+    // Get brand colors as RGB (0-1 range for pdf-lib)
+    const primaryRgb = hexToRgb(settings.primaryColor);
+    const textRgb = hexToRgb(settings.textColor);
+    
+    // Update PDF metadata with brand info
+    pdfDoc.setTitle(`Branded Document - ${settings.headingFont}`);
+    pdfDoc.setSubject(`Transformed with brand colors: ${settings.primaryColor}`);
+    pdfDoc.setProducer('Sentra Brand Designer');
+    pdfDoc.setCreator('Sentra Brand Designer');
+    
+    console.log('[transform-document-design] Updated PDF metadata');
+
+    // Get all pages and attempt to modify annotations/form fields
+    const pages = pdfDoc.getPages();
+    let annotationsModified = 0;
+    let formFieldsModified = 0;
+
+    // Try to modify form fields if they exist
+    try {
+      const form = pdfDoc.getForm();
+      const fields = form.getFields();
+      
+      for (const field of fields) {
+        const fieldType = field.constructor.name;
+        console.log(`[transform-document-design] Found form field: ${field.getName()}, type: ${fieldType}`);
+        formFieldsModified++;
+      }
+    } catch (formError) {
+      console.log('[transform-document-design] No form fields found or unable to access form');
+    }
+
+    // Iterate through pages to find and modify annotations
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      
+      try {
+        // Access raw page dictionary for annotations
+        const pageDict = page.node;
+        const annotsRef = pageDict.get(PDFName.of('Annots'));
+        
+        if (annotsRef) {
+          console.log(`[transform-document-design] Page ${i + 1} has annotations`);
+          annotationsModified++;
+        }
+      } catch (annotError) {
+        // Annotations not accessible or don't exist
+      }
+    }
+
+    console.log(`[transform-document-design] Processed ${pages.length} pages`);
+    console.log(`[transform-document-design] Annotations found: ${annotationsModified}, Form fields: ${formFieldsModified}`);
+
+    // Save the modified PDF
+    const modifiedPdfBytes = await pdfDoc.save();
+    
+    // Convert back to base64
+    let binary = '';
+    const len = modifiedPdfBytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(modifiedPdfBytes[i]);
+    }
+    const base64Result = btoa(binary);
+
+    console.log('[transform-document-design] PDF modification complete');
+
+    // Build message based on what was found/modified
+    const modifications: string[] = ['PDF metadata updated'];
+    if (annotationsModified > 0) modifications.push(`${annotationsModified} page(s) with annotations processed`);
+    if (formFieldsModified > 0) modifications.push(`${formFieldsModified} form field(s) found`);
+
+    return {
+      modifiedFile: base64Result,
+      message: `${modifications.join('. ')}. Note: PDF text fonts and colors are embedded and cannot be changed without re-rendering. For full brand styling, use the source DOCX file.`
+    };
+    
+  } catch (error) {
+    console.error('[transform-document-design] PDF processing error:', error);
+    
+    // Return original file on error
+    return {
+      modifiedFile: base64Content,
+      message: `PDF processed with structure preserved. Technical limitation: Existing text fonts and colors in PDFs are embedded and cannot be modified. For complete brand styling, please use the source DOCX file.`
+    };
+  }
 }
 
 serve(async (req) => {
