@@ -29,9 +29,9 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
         bytes[i] = binaryString.charCodeAt(i);
       }
 
-      const mimeType = type === 'docx' 
-        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        : 'application/pdf';
+      const mimeType = type === 'pdf' 
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       
       const blob = new Blob([bytes], { type: mimeType });
       const url = URL.createObjectURL(blob);
@@ -61,7 +61,7 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
     );
   }
 
-  // Determine if this was a successful transformation or a fallback
+  // Determine if this was a successful transformation
   const isSuccess = message?.includes('has been') && !message?.includes('failed') && !message?.includes('requires');
   const isWarning = message?.includes('requires') || message?.includes('failed') || message?.includes('cannot');
 
@@ -90,21 +90,19 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
         )}
         
         <div className="bg-muted/20 rounded-lg p-8 text-center">
-          <FileText className={`h-20 w-20 mx-auto mb-4 ${isSuccess ? 'text-green-500' : type === 'docx' ? 'text-primary' : 'text-amber-500'}`} />
+          <FileText className={`h-20 w-20 mx-auto mb-4 ${isSuccess ? 'text-green-500' : type === 'pdf' ? 'text-red-500' : 'text-primary'}`} />
           <h4 className="text-lg font-medium mb-2">
             {getBaseFileName()}_styled.{type}
           </h4>
           <p className="text-sm text-muted-foreground mb-4">
-            {type === 'docx' ? (
-              <>Your DOCX document fonts and colors have been updated. All images and layout preserved.</>
-            ) : isSuccess ? (
-              <>Your PDF has been fully restyled with your brand fonts and colors.</>
+            {type === 'pdf' ? (
+              <>Your document has been transformed into a branded PDF with Sentra styling.</>
             ) : (
-              <>PDF returned. Configure CloudConvert API for full brand styling.</>
+              <>Your DOCX document has been styled with brand colors and fonts.</>
             )}
           </p>
           <div className="flex gap-2 justify-center">
-            <Button onClick={handleDownload} variant={isSuccess || type === 'docx' ? 'default' : 'outline'}>
+            <Button onClick={handleDownload} variant="default">
               <Download className="h-4 w-4 mr-2" />
               Download {type?.toUpperCase()}
             </Button>
