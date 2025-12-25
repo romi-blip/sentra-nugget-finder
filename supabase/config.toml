@@ -133,3 +133,6 @@ verify_jwt = true
 
 [functions.process-docx-review]
 verify_jwt = true
+
+[functions.transform-document-design]
+verify_jwt = true

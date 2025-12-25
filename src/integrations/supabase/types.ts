@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      brand_settings: {
+        Row: {
+          accent_cyan: string
+          accent_pink: string
+          background_color: string
+          body_font: string
+          body_weight: string
+          created_at: string | null
+          created_by: string | null
+          heading_font: string
+          heading_weight: string
+          id: string
+          is_active: boolean
+          name: string
+          primary_color: string
+          secondary_color: string
+          text_color: string
+          updated_at: string | null
+        }
+        Insert: {
+          accent_cyan?: string
+          accent_pink?: string
+          background_color?: string
+          body_font?: string
+          body_weight?: string
+          created_at?: string | null
+          created_by?: string | null
+          heading_font?: string
+          heading_weight?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          primary_color?: string
+          secondary_color?: string
+          text_color?: string
+          updated_at?: string | null
+        }
+        Update: {
+          accent_cyan?: string
+          accent_pink?: string
+          background_color?: string
+          body_font?: string
+          body_weight?: string
+          created_at?: string | null
+          created_by?: string | null
+          heading_font?: string
+          heading_weight?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          primary_color?: string
+          secondary_color?: string
+          text_color?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       breach_articles: {
         Row: {
           breach_date: string | null
