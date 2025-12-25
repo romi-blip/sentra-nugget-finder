@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, FileText, AlertCircle } from 'lucide-react';
+import { Download, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -23,7 +23,6 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
     if (!modifiedFile || !type) return;
 
     try {
-      // Convert base64 to blob
       const binaryString = atob(modifiedFile);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
@@ -62,6 +61,10 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
     );
   }
 
+  // Determine if this was a successful transformation or a fallback
+  const isSuccess = message?.includes('has been') && !message?.includes('failed') && !message?.includes('requires');
+  const isWarning = message?.includes('requires') || message?.includes('failed') || message?.includes('cannot');
+
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between p-4 border-b bg-muted/30">
@@ -74,37 +77,38 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
       
       <div className="p-6">
         {message && (
-          <Alert className={type === 'pdf' ? 'mb-4 border-amber-500/50 bg-amber-500/10' : 'mb-4'}>
-            <AlertCircle className={`h-4 w-4 ${type === 'pdf' ? 'text-amber-500' : ''}`} />
-            <AlertDescription className={type === 'pdf' ? 'text-amber-700 dark:text-amber-300' : ''}>
+          <Alert className={`mb-4 ${isWarning ? 'border-amber-500/50 bg-amber-500/10' : isSuccess ? 'border-green-500/50 bg-green-500/10' : ''}`}>
+            {isSuccess ? (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            ) : (
+              <AlertCircle className={`h-4 w-4 ${isWarning ? 'text-amber-500' : ''}`} />
+            )}
+            <AlertDescription className={isWarning ? 'text-amber-700 dark:text-amber-300' : isSuccess ? 'text-green-700 dark:text-green-300' : ''}>
               {message}
             </AlertDescription>
           </Alert>
         )}
         
         <div className="bg-muted/20 rounded-lg p-8 text-center">
-          <FileText className={`h-20 w-20 mx-auto mb-4 ${type === 'docx' ? 'text-primary' : 'text-amber-500'}`} />
+          <FileText className={`h-20 w-20 mx-auto mb-4 ${isSuccess ? 'text-green-500' : type === 'docx' ? 'text-primary' : 'text-amber-500'}`} />
           <h4 className="text-lg font-medium mb-2">
             {getBaseFileName()}_styled.{type}
           </h4>
           <p className="text-sm text-muted-foreground mb-4">
             {type === 'docx' ? (
               <>Your DOCX document fonts and colors have been updated. All images and layout preserved.</>
+            ) : isSuccess ? (
+              <>Your PDF has been fully restyled with your brand fonts and colors.</>
             ) : (
-              <>PDF metadata updated. Structure and images preserved. For full brand styling, use the source DOCX.</>
+              <>PDF returned. Configure CloudConvert API for full brand styling.</>
             )}
           </p>
           <div className="flex gap-2 justify-center">
-            <Button onClick={handleDownload} variant={type === 'docx' ? 'default' : 'outline'}>
+            <Button onClick={handleDownload} variant={isSuccess || type === 'docx' ? 'default' : 'outline'}>
               <Download className="h-4 w-4 mr-2" />
               Download {type?.toUpperCase()}
             </Button>
           </div>
-          {type === 'pdf' && (
-            <p className="text-xs text-muted-foreground mt-4">
-              💡 Tip: For complete font and color changes, transform the original DOCX file instead.
-            </p>
-          )}
         </div>
       </div>
     </div>
