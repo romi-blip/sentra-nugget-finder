@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import pdfParse from "npm:pdf-parse@1.1.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,6 +25,28 @@ interface RequestBody {
   fileName: string;
   fileType: string;
   settings: BrandSettings;
+}
+
+async function extractTextFromPdf(base64Content: string): Promise<string> {
+  // Decode base64 to buffer
+  const binaryString = atob(base64Content);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  try {
+    // Parse PDF and extract text from ALL pages
+    const pdfData = await pdfParse(bytes);
+    
+    console.log(`[transform-document-design] Extracted ${pdfData.numpages} pages from PDF`);
+    console.log(`[transform-document-design] Total text length: ${pdfData.text.length} characters`);
+    
+    return pdfData.text;
+  } catch (error) {
+    console.error('[transform-document-design] PDF parsing error:', error);
+    throw new Error(`Failed to parse PDF: ${error.message}`);
+  }
 }
 
 function extractTextFromDocx(base64Content: string): string {
@@ -276,8 +299,13 @@ serve(async (req) => {
     let extractedContent = '';
 
     if (fileType.includes('pdf')) {
-      // For PDF, we'll return a message that PDF parsing requires more complex handling
-      extractedContent = `PDF Document: ${fileName}\n\nNote: Full PDF text extraction requires additional processing. The document has been prepared with your brand styling. For complete PDF parsing, consider using a dedicated PDF library.`;
+      // Extract text from ALL pages of the PDF using pdf-parse
+      console.log(`[transform-document-design] Extracting text from PDF: ${fileName}`);
+      extractedContent = await extractTextFromPdf(file);
+      
+      if (!extractedContent.trim()) {
+        extractedContent = `PDF Document: ${fileName}\n\nThe document appears to be image-based or scanned. Text extraction is not available for this type of PDF. Please use a PDF with selectable text.`;
+      }
     } else if (fileType.includes('wordprocessingml') || fileName.endsWith('.docx')) {
       // Extract text from DOCX
       extractedContent = extractTextFromDocx(file);
