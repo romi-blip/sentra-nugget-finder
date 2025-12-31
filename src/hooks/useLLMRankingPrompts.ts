@@ -125,7 +125,7 @@ export function useLLMRankingPrompts() {
       
       if (data?.success) {
         toast.success('LLM ranking analysis triggered successfully');
-        await fetchPrompts(); // Refresh to get updated last_run_at
+        await fetchPrompts();
         return true;
       } else {
         throw new Error(data?.message || 'Failed to trigger analysis');
@@ -133,6 +133,31 @@ export function useLLMRankingPrompts() {
     } catch (error: any) {
       console.error('Error triggering prompt run:', error);
       toast.error(error.message || 'Failed to trigger analysis');
+      return false;
+    } finally {
+      setIsTriggering(null);
+    }
+  };
+
+  const triggerBulkRun = async (promptIds: string[]): Promise<boolean> => {
+    setIsTriggering('bulk');
+    try {
+      const { data, error } = await supabase.functions.invoke('trigger-llm-ranking', {
+        body: { prompt_ids: promptIds },
+      });
+
+      if (error) throw error;
+      
+      if (data?.success) {
+        toast.success(`Triggered ${data.prompts_count} prompts successfully`);
+        await fetchPrompts();
+        return true;
+      } else {
+        throw new Error(data?.message || 'Failed to trigger analysis');
+      }
+    } catch (error: any) {
+      console.error('Error triggering bulk run:', error);
+      toast.error(error.message || 'Failed to trigger bulk analysis');
       return false;
     } finally {
       setIsTriggering(null);
@@ -152,6 +177,7 @@ export function useLLMRankingPrompts() {
     updatePrompt,
     deletePrompt,
     triggerPromptRun,
+    triggerBulkRun,
     togglePromptActive,
   };
 }

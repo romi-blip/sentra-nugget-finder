@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +25,8 @@ interface PromptManagementTableProps {
   prompts: LLMRankingPrompt[];
   isLoading: boolean;
   isTriggering: string | null;
+  selectedIds: string[];
+  onSelectionChange: (ids: string[]) => void;
   onEdit: (prompt: LLMRankingPrompt) => void;
   onDelete: (id: string) => void;
   onTriggerRun: (id: string) => void;
@@ -48,11 +51,28 @@ export function PromptManagementTable({
   prompts,
   isLoading,
   isTriggering,
+  selectedIds,
+  onSelectionChange,
   onEdit,
   onDelete,
   onTriggerRun,
   onToggleActive,
 }: PromptManagementTableProps) {
+  const allSelected = prompts.length > 0 && selectedIds.length === prompts.length;
+  const someSelected = selectedIds.length > 0 && selectedIds.length < prompts.length;
+
+  const handleSelectAll = (checked: boolean) => {
+    onSelectionChange(checked ? prompts.map(p => p.id) : []);
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      onSelectionChange([...selectedIds, id]);
+    } else {
+      onSelectionChange(selectedIds.filter(i => i !== id));
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -74,6 +94,14 @@ export function PromptManagementTable({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-[50px]">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={handleSelectAll}
+                aria-label="Select all"
+                className={someSelected ? "opacity-50" : ""}
+              />
+            </TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Category</TableHead>
             <TableHead>Frequency</TableHead>
@@ -84,7 +112,14 @@ export function PromptManagementTable({
         </TableHeader>
         <TableBody>
           {prompts.map((prompt) => (
-            <TableRow key={prompt.id}>
+            <TableRow key={prompt.id} data-state={selectedIds.includes(prompt.id) ? "selected" : undefined}>
+              <TableCell>
+                <Checkbox
+                  checked={selectedIds.includes(prompt.id)}
+                  onCheckedChange={(checked) => handleSelectOne(prompt.id, !!checked)}
+                  aria-label={`Select ${prompt.name}`}
+                />
+              </TableCell>
               <TableCell className="font-medium">
                 <div>
                   <div>{prompt.name}</div>
@@ -125,7 +160,7 @@ export function PromptManagementTable({
                     variant="ghost"
                     size="icon"
                     onClick={() => onTriggerRun(prompt.id)}
-                    disabled={isTriggering === prompt.id}
+                    disabled={isTriggering === prompt.id || isTriggering === 'bulk'}
                     title="Run now"
                   >
                     {isTriggering === prompt.id ? (
@@ -140,7 +175,7 @@ export function PromptManagementTable({
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="bg-popover">
                       <DropdownMenuItem onClick={() => onEdit(prompt)}>
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
