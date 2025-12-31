@@ -40,10 +40,10 @@ export function ScoreByLLMChart({ data }: ScoreByLLMChartProps) {
   if (chartData.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Score by LLM Model</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold">Score by LLM Model</CardTitle>
         </CardHeader>
-        <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground">
+        <CardContent className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
           No LLM comparison data available yet.
         </CardContent>
       </Card>
@@ -52,47 +52,66 @@ export function ScoreByLLMChart({ data }: ScoreByLLMChartProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Score by LLM Model</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold">Score by LLM Model</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="h-[300px]">
+      <CardContent className="pt-4">
+        <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <CartesianGrid 
+                strokeDasharray="3 3" 
+                stroke="hsl(var(--border))" 
+                opacity={0.5}
+                vertical={false}
+              />
               <XAxis 
                 dataKey="llm" 
-                className="text-xs"
-                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                angle={-15}
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
+                tickLine={false}
+                angle={-20}
                 textAnchor="end"
-                height={60}
+                height={50}
+                dy={8}
               />
               <YAxis 
                 domain={[0, 100]}
-                className="text-xs"
-                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={35}
               />
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: 'hsl(var(--background))',
+                  backgroundColor: 'hsl(var(--card))',
                   border: '1px solid hsl(var(--border))',
                   borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  padding: '8px 12px',
                 }}
-                labelStyle={{ color: 'hsl(var(--foreground))' }}
+                labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 500, marginBottom: 4 }}
+                itemStyle={{ fontSize: 12 }}
+                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
               />
-              <Legend />
+              <Legend 
+                wrapperStyle={{ paddingTop: 16, fontSize: 12 }}
+                iconType="circle"
+                iconSize={8}
+              />
               <Bar 
                 dataKey="sentra" 
                 name="Sentra" 
-                fill="hsl(var(--primary))" 
+                fill="hsl(var(--chart-magenta))" 
                 radius={[4, 4, 0, 0]}
+                maxBarSize={40}
               />
               <Bar 
                 dataKey="topVendor" 
                 name="Top Vendor" 
-                fill="hsl(var(--muted-foreground))" 
+                fill="hsl(var(--chart-orange))" 
                 radius={[4, 4, 0, 0]}
+                maxBarSize={40}
               />
             </BarChart>
           </ResponsiveContainer>
