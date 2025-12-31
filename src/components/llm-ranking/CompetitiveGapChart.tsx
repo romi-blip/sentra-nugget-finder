@@ -24,15 +24,38 @@ const getGapColor = (gap: number) => {
 };
 
 export function CompetitiveGapChart({ data }: CompetitiveGapChartProps) {
-  const chartData = data
-    .slice(0, 8)
-    .map((item) => ({
-      name: item.top_vendor_name,
-      gap: Math.round(item.score_gap || 0),
-      vendorScore: Math.round(item.top_vendor_score || 0),
-      sentraScore: Math.round(item.sentra_score || 0),
-      status: item.competitive_status,
-    }));
+  // Aggregate by vendor name to avoid duplicates
+  const vendorAggregates = data.reduce((acc, item) => {
+    const vendorName = item.top_vendor_name;
+    if (!vendorName) return acc;
+    
+    if (!acc[vendorName]) {
+      acc[vendorName] = {
+        totalGap: 0,
+        totalVendorScore: 0,
+        totalSentraScore: 0,
+        count: 0,
+      };
+    }
+    
+    acc[vendorName].totalGap += item.score_gap || 0;
+    acc[vendorName].totalVendorScore += item.top_vendor_score || 0;
+    acc[vendorName].totalSentraScore += item.sentra_score || 0;
+    acc[vendorName].count += 1;
+    
+    return acc;
+  }, {} as Record<string, { totalGap: number; totalVendorScore: number; totalSentraScore: number; count: number }>);
+
+  const chartData = Object.entries(vendorAggregates)
+    .map(([name, agg]) => ({
+      name,
+      gap: Math.round(agg.totalGap / agg.count),
+      vendorScore: Math.round(agg.totalVendorScore / agg.count),
+      sentraScore: Math.round(agg.totalSentraScore / agg.count),
+      analyses: agg.count,
+    }))
+    .sort((a, b) => b.gap - a.gap)
+    .slice(0, 8);
 
   if (chartData.length === 0) {
     return (
