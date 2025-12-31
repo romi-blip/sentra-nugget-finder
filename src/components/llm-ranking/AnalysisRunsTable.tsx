@@ -45,7 +45,7 @@ function AnalysisRunRow({ run }: { run: AnalysisRun }) {
         className="cursor-pointer transition-colors hover:bg-muted/40 border-b border-border/50" 
         onClick={() => setIsOpen(!isOpen)}
       >
-        <TableCell className="w-10 py-3">
+        <TableCell className="w-10 min-w-10 py-3">
           <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
             <button className="p-1 rounded hover:bg-muted transition-colors">
               {isOpen ? (
@@ -56,31 +56,31 @@ function AnalysisRunRow({ run }: { run: AnalysisRun }) {
             </button>
           </CollapsibleTrigger>
         </TableCell>
-        <TableCell className="max-w-[280px] py-3">
+        <TableCell className="w-[200px] min-w-[200px] py-3">
           <div className="truncate text-sm font-medium" title={run.query_text || ''}>
             {run.query_text || 'N/A'}
           </div>
         </TableCell>
-        <TableCell className="py-3">
+        <TableCell className="w-[100px] min-w-[100px] py-3">
           <span className="text-xs text-muted-foreground font-mono">
             {run.llm_model || 'Unknown'}
           </span>
         </TableCell>
-        <TableCell className="text-center py-3">
+        <TableCell className="w-[70px] min-w-[70px] text-center py-3">
           <span className={`font-bold text-lg ${getScoreColor(run.sentra_score)}`}>
             {run.sentra_score ?? '—'}
           </span>
         </TableCell>
-        <TableCell className="text-center py-3">
+        <TableCell className="w-[70px] min-w-[70px] text-center py-3">
           <Badge variant={getRankBadgeVariant(run.sentra_rank)} className="font-mono">
             {run.sentra_rank ? `#${run.sentra_rank}` : '—'}
           </Badge>
         </TableCell>
-        <TableCell className="py-3">
+        <TableCell className="w-[150px] min-w-[150px] py-3">
           {run.top_vendor_name && (
             <div className="flex items-center gap-1.5">
               <Trophy className="h-3.5 w-3.5 text-[hsl(var(--chart-orange))]" />
-              <span className="text-sm">{run.top_vendor_name}</span>
+              <span className="text-sm truncate">{run.top_vendor_name}</span>
               {run.top_vendor_score && (
                 <span className="text-xs text-muted-foreground">
                   ({run.top_vendor_score})
@@ -90,7 +90,7 @@ function AnalysisRunRow({ run }: { run: AnalysisRun }) {
           )}
           {!run.top_vendor_name && <span className="text-muted-foreground">—</span>}
         </TableCell>
-        <TableCell className="text-muted-foreground text-xs py-3">
+        <TableCell className="w-[100px] min-w-[100px] text-muted-foreground text-xs py-3">
           {run.analysis_timestamp 
             ? format(new Date(run.analysis_timestamp), 'MMM d, HH:mm')
             : '—'}
@@ -154,13 +154,13 @@ export function AnalysisRunsTable({ data }: AnalysisRunsTableProps) {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30 hover:bg-muted/30">
-                <TableHead className="w-10" />
-                <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Query</TableHead>
-                <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">LLM</TableHead>
-                <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">Score</TableHead>
-                <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">Rank</TableHead>
-                <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Top Vendor</TableHead>
-                <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Time</TableHead>
+                <TableHead className="w-10 min-w-10" />
+                <TableHead className="w-[200px] min-w-[200px] text-xs font-medium uppercase tracking-wide text-muted-foreground">Query</TableHead>
+                <TableHead className="w-[100px] min-w-[100px] text-xs font-medium uppercase tracking-wide text-muted-foreground">LLM</TableHead>
+                <TableHead className="w-[70px] min-w-[70px] text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">Score</TableHead>
+                <TableHead className="w-[70px] min-w-[70px] text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">Rank</TableHead>
+                <TableHead className="w-[150px] min-w-[150px] text-xs font-medium uppercase tracking-wide text-muted-foreground">Top Vendor</TableHead>
+                <TableHead className="w-[100px] min-w-[100px] text-xs font-medium uppercase tracking-wide text-muted-foreground">Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
