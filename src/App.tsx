@@ -21,6 +21,8 @@ import Engagement from "./pages/Engagement";
 import ContentPlan from "./pages/ContentPlan";
 import LeadResearch from "./pages/LeadResearch";
 import BrandDesigner from "./pages/BrandDesigner";
+import LLMRanking from "./pages/LLMRanking";
+import LLMRankingSettings from "./pages/LLMRankingSettings";
 
 const queryClient = new QueryClient();
 
@@ -121,6 +123,22 @@ const App = () => {
               element={
                 <ProtectedRoute requiredRoles={['admin', 'super_admin', 'marketing']}>
                   <BrandDesigner />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/llm-ranking" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'super_admin', 'marketing']}>
+                  <LLMRanking />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/llm-ranking/settings" 
+              element={
+                <ProtectedRoute requiredRoles={['admin', 'super_admin']}>
+                  <LLMRankingSettings />
                 </ProtectedRoute>
               } 
             />

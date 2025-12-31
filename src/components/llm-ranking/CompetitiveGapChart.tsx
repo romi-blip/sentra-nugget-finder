@@ -27,11 +27,11 @@ export function CompetitiveGapChart({ data }: CompetitiveGapChartProps) {
   const chartData = data
     .slice(0, 8)
     .map((item) => ({
-      name: item.vendor_name,
+      name: item.top_vendor_name,
       gap: Math.round(item.score_gap || 0),
-      vendorScore: Math.round(item.vendor_avg_score || 0),
-      sentraScore: Math.round(item.sentra_avg_score || 0),
-      status: item.gap_status,
+      vendorScore: Math.round(item.top_vendor_score || 0),
+      sentraScore: Math.round(item.sentra_score || 0),
+      status: item.competitive_status,
     }));
 
   if (chartData.length === 0) {

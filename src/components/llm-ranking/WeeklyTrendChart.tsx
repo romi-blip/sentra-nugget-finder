@@ -24,7 +24,7 @@ export function WeeklyTrendChart({ data }: WeeklyTrendChartProps) {
       ...item,
       week: format(new Date(item.week_start), 'MMM d'),
       sentraScore: Math.round(item.avg_sentra_score || 0),
-      topVendorScore: Math.round(item.avg_top_vendor_score || 0),
+      topVendorScore: Math.round(item.avg_top_score || 0),
     }));
 
   if (chartData.length === 0) {
