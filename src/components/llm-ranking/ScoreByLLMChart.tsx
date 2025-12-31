@@ -19,12 +19,12 @@ interface ScoreByLLMChartProps {
 export function ScoreByLLMChart({ data }: ScoreByLLMChartProps) {
   // Transform data: group by LLM and show Sentra vs top vendors
   const llmGroups = data.reduce((acc, item) => {
-    const llmKey = `${item.llm_provider} ${item.llm_model}`;
+    const llmKey = item.llm_model;
     if (!acc[llmKey]) {
       acc[llmKey] = { llm: llmKey, sentra: 0, topVendor: 0 };
     }
     
-    if (item.vendor_name?.toLowerCase().includes('sentra')) {
+    if (item.vendor_name_normalized?.toLowerCase().includes('sentra')) {
       acc[llmKey].sentra = Math.round(item.avg_score || 0);
     } else if (item.avg_score > acc[llmKey].topVendor) {
       acc[llmKey].topVendor = Math.round(item.avg_score || 0);

@@ -89,17 +89,17 @@ export function VendorComparisonTable({ data }: VendorComparisonTableProps) {
                 <TableHead><SortButton columnKey="total_score" label="Score" /></TableHead>
                 <TableHead><SortButton columnKey="prominence_score" label="Prominence" /></TableHead>
                 <TableHead><SortButton columnKey="sentiment_score" label="Sentiment" /></TableHead>
-                <TableHead><SortButton columnKey="capability_score" label="Capability" /></TableHead>
-                <TableHead><SortButton columnKey="credibility_score" label="Credibility" /></TableHead>
+                <TableHead><SortButton columnKey="capability_depth_score" label="Capability" /></TableHead>
+                <TableHead><SortButton columnKey="credibility_signals_score" label="Credibility" /></TableHead>
                 <TableHead>Position</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sortedData.slice(0, 15).map((vendor, index) => {
-                const isSentra = vendor.vendor_name?.toLowerCase().includes('sentra');
+                const isSentra = vendor.vendor_name_normalized?.toLowerCase().includes('sentra');
                 return (
                   <TableRow 
-                    key={vendor.vendor_name} 
+                    key={vendor.vendor_name_normalized} 
                     className={isSentra ? 'bg-primary/5' : ''}
                   >
                     <TableCell className="font-medium">
@@ -108,11 +108,11 @@ export function VendorComparisonTable({ data }: VendorComparisonTableProps) {
                     <TableCell className="font-medium">
                       {isSentra ? (
                         <span className="flex items-center gap-2">
-                          {vendor.vendor_name}
+                          {vendor.vendor_name_normalized}
                           <Badge variant="outline" className="text-xs">You</Badge>
                         </span>
                       ) : (
-                        vendor.vendor_name
+                        vendor.vendor_name_normalized
                       )}
                     </TableCell>
                     <TableCell className="font-bold">
@@ -120,8 +120,8 @@ export function VendorComparisonTable({ data }: VendorComparisonTableProps) {
                     </TableCell>
                     <TableCell>{Math.round(vendor.prominence_score || 0)}</TableCell>
                     <TableCell>{Math.round(vendor.sentiment_score || 0)}</TableCell>
-                    <TableCell>{Math.round(vendor.capability_score || 0)}</TableCell>
-                    <TableCell>{Math.round(vendor.credibility_score || 0)}</TableCell>
+                    <TableCell>{Math.round(vendor.capability_depth_score || 0)}</TableCell>
+                    <TableCell>{Math.round(vendor.credibility_signals_score || 0)}</TableCell>
                     <TableCell>
                       <Badge 
                         variant="outline"
