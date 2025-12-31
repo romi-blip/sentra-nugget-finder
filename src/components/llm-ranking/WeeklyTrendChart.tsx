@@ -30,10 +30,10 @@ export function WeeklyTrendChart({ data }: WeeklyTrendChartProps) {
   if (chartData.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Sentra Score Over Time</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold">Sentra Score Over Time</CardTitle>
         </CardHeader>
-        <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground">
+        <CardContent className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
           No trend data available yet.
         </CardContent>
       </Card>
@@ -42,49 +42,66 @@ export function WeeklyTrendChart({ data }: WeeklyTrendChartProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Sentra Score Over Time</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold">Sentra Score Over Time</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="h-[300px]">
+      <CardContent className="pt-4">
+        <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <CartesianGrid 
+                strokeDasharray="3 3" 
+                stroke="hsl(var(--border))" 
+                opacity={0.5}
+                vertical={false}
+              />
               <XAxis 
                 dataKey="week" 
-                className="text-xs"
-                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
+                tickLine={false}
+                dy={8}
               />
               <YAxis 
                 domain={[0, 100]}
-                className="text-xs"
-                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={35}
               />
               <Tooltip 
                 contentStyle={{ 
-                  backgroundColor: 'hsl(var(--background))',
+                  backgroundColor: 'hsl(var(--card))',
                   border: '1px solid hsl(var(--border))',
                   borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  padding: '8px 12px',
                 }}
-                labelStyle={{ color: 'hsl(var(--foreground))' }}
+                labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 500, marginBottom: 4 }}
+                itemStyle={{ fontSize: 12 }}
               />
-              <Legend />
+              <Legend 
+                wrapperStyle={{ paddingTop: 16, fontSize: 12 }}
+                iconType="circle"
+                iconSize={8}
+              />
               <Line
                 type="monotone"
                 dataKey="sentraScore"
                 name="Sentra Score"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                dot={{ fill: 'hsl(var(--primary))' }}
+                stroke="hsl(var(--chart-green))"
+                strokeWidth={2.5}
+                dot={{ fill: 'hsl(var(--chart-green))', strokeWidth: 0, r: 4 }}
+                activeDot={{ r: 6, strokeWidth: 0 }}
               />
               <Line
                 type="monotone"
                 dataKey="topVendorScore"
                 name="Top Vendor Score"
-                stroke="hsl(var(--muted-foreground))"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={{ fill: 'hsl(var(--muted-foreground))' }}
+                stroke="hsl(var(--chart-cyan))"
+                strokeWidth={2.5}
+                dot={{ fill: 'hsl(var(--chart-cyan))', strokeWidth: 0, r: 4 }}
+                activeDot={{ r: 6, strokeWidth: 0 }}
               />
             </LineChart>
           </ResponsiveContainer>
