@@ -1481,6 +1481,45 @@ export type Database = {
         }
         Relationships: []
       }
+      llm_ranking_prompts: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          last_run_at: string | null
+          name: string
+          prompt_text: string
+          run_frequency: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_run_at?: string | null
+          name: string
+          prompt_text: string
+          run_frequency?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_run_at?: string | null
+          name?: string
+          prompt_text?: string
+          run_frequency?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       outreach_sequences: {
         Row: {
           campaign_id: string
