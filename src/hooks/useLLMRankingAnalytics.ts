@@ -102,7 +102,7 @@ export function useLLMRankingAnalytics() {
         supabase.from('vw_sentra_competitive_gap').select('*').order('score_gap', { ascending: false }),
         supabase.from('vw_weekly_trends').select('*').order('week_start', { ascending: false }).limit(12),
         supabase.from('vw_vendor_avg_by_llm').select('*'),
-        supabase.from('analysis_runs').select('*').order('analysis_timestamp', { ascending: false }).limit(50),
+        supabase.from('analysis_runs').select('*').order('created_at', { ascending: false }).limit(100),
         supabase.from('vendor_scores').select('analysis_run_id, vendor_name_normalized, total_score, rank_in_analysis'),
       ]);
 
@@ -179,13 +179,17 @@ function processScoreTrends(
   runs: AnalysisRun[],
   vendorScores: VendorScoreRow[]
 ): { trends: ScoreTrendDataPoint[]; competitors: string[] } {
-  // Group runs by date
+  // Group runs by date using created_at (actual scan date)
   const runsByDate: Record<string, AnalysisRun[]> = {};
   const competitorSet = new Set<string>();
   
-  runs.forEach(run => {
-    if (!run.analysis_timestamp) return;
-    const date = run.analysis_timestamp.split('T')[0];
+  // Filter to only include valid runs with created_at and Sentra data
+  const validRuns = runs.filter(run => 
+    run.created_at && (run.sentra_score != null || run.sentra_rank != null)
+  );
+  
+  validRuns.forEach(run => {
+    const date = run.created_at.split('T')[0];
     if (!runsByDate[date]) runsByDate[date] = [];
     runsByDate[date].push(run);
   });
