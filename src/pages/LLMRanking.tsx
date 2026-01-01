@@ -65,7 +65,7 @@ export default function LLMRanking() {
           <SentraScoreTrendChart data={scoreTrends} availableCompetitors={availableCompetitors} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <CompetitiveGapChart data={competitiveGap} />
-            <ScoreByLLMChart data={vendorByLLM} />
+            <ScoreByLLMChart data={vendorByLLM} availableCompetitors={availableCompetitors} />
           </div>
           <VendorComparisonTable data={vendorComparison} />
           <AnalysisRunsTable data={analysisRuns} />
