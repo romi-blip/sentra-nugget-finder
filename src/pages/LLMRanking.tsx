@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Settings, RefreshCw, Loader2 } from 'lucide-react';
 import { SentraKPICards } from '@/components/llm-ranking/SentraKPICards';
-import { WeeklyTrendChart } from '@/components/llm-ranking/WeeklyTrendChart';
+import { SentraScoreTrendChart } from '@/components/llm-ranking/SentraScoreTrendChart';
 import { CompetitiveGapChart } from '@/components/llm-ranking/CompetitiveGapChart';
 import { VendorComparisonTable } from '@/components/llm-ranking/VendorComparisonTable';
 import { ScoreByLLMChart } from '@/components/llm-ranking/ScoreByLLMChart';
@@ -12,11 +12,12 @@ import { useLLMRankingAnalytics } from '@/hooks/useLLMRankingAnalytics';
 
 export default function LLMRanking() {
   const {
-    weeklyTrends,
     competitiveGap,
     vendorComparison,
     vendorByLLM,
     analysisRuns,
+    scoreTrends,
+    availableCompetitors,
     kpis,
     isLoading,
     refetch,
@@ -61,7 +62,7 @@ export default function LLMRanking() {
             mostCommonPosition={kpis.mostCommonPosition}
             totalAnalyses={kpis.totalAnalyses}
           />
-          <WeeklyTrendChart data={weeklyTrends} />
+          <SentraScoreTrendChart data={scoreTrends} availableCompetitors={availableCompetitors} />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <CompetitiveGapChart data={competitiveGap} />
             <ScoreByLLMChart data={vendorByLLM} />
