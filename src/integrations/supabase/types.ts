@@ -1490,8 +1490,12 @@ export type Database = {
           is_active: boolean | null
           last_run_at: string | null
           name: string
+          next_scheduled_run: string | null
           prompt_text: string
           run_frequency: string | null
+          schedule_days: string[] | null
+          schedule_enabled: boolean | null
+          scheduled_time: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1502,8 +1506,12 @@ export type Database = {
           is_active?: boolean | null
           last_run_at?: string | null
           name: string
+          next_scheduled_run?: string | null
           prompt_text: string
           run_frequency?: string | null
+          schedule_days?: string[] | null
+          schedule_enabled?: boolean | null
+          scheduled_time?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1514,8 +1522,39 @@ export type Database = {
           is_active?: boolean | null
           last_run_at?: string | null
           name?: string
+          next_scheduled_run?: string | null
           prompt_text?: string
           run_frequency?: string | null
+          schedule_days?: string[] | null
+          schedule_enabled?: boolean | null
+          scheduled_time?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      llm_ranking_scheduler_settings: {
+        Row: {
+          created_at: string | null
+          default_run_time: string
+          id: string
+          last_run_at: string | null
+          scheduler_enabled: boolean
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_run_time?: string
+          id?: string
+          last_run_at?: string | null
+          scheduler_enabled?: boolean
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_run_time?: string
+          id?: string
+          last_run_at?: string | null
+          scheduler_enabled?: boolean
           updated_at?: string | null
         }
         Relationships: []
