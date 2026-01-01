@@ -159,7 +159,7 @@ export function SentraScoreTrendChart({
               </TabsList>
             </Tabs>
             
-            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal={false}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8">
                   <Plus className="h-3.5 w-3.5 mr-1" />
@@ -193,7 +193,7 @@ export function SentraScoreTrendChart({
                         >
                           <Checkbox
                             checked={selectedCompetitors.includes(competitor)}
-                            onCheckedChange={() => toggleCompetitor(competitor)}
+                            className="pointer-events-none"
                           />
                           <span className="text-sm truncate flex-1">
                             {formatCompetitorName(competitor)}
