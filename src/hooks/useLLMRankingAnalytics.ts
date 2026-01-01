@@ -39,6 +39,13 @@ export interface WeeklyTrend {
   avg_top_score: number;
 }
 
+export interface ScoreTrendDataPoint {
+  date: string;
+  sentra_score: number | null;
+  sentra_rank: number | null;
+  competitors: Record<string, { score: number | null; rank: number | null }>;
+}
+
 export interface VendorByLLM {
   llm_model: string;
   vendor_name_normalized: string;
@@ -71,6 +78,8 @@ export function useLLMRankingAnalytics() {
   const [weeklyTrends, setWeeklyTrends] = useState<WeeklyTrend[]>([]);
   const [vendorByLLM, setVendorByLLM] = useState<VendorByLLM[]>([]);
   const [analysisRuns, setAnalysisRuns] = useState<AnalysisRun[]>([]);
+  const [scoreTrends, setScoreTrends] = useState<ScoreTrendDataPoint[]>([]);
+  const [availableCompetitors, setAvailableCompetitors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,6 +95,7 @@ export function useLLMRankingAnalytics() {
         weeklyTrendsRes,
         vendorByLLMRes,
         analysisRunsRes,
+        vendorScoresRes,
       ] = await Promise.all([
         supabase.from('vw_sentra_performance').select('*').order('created_at', { ascending: false }).limit(100),
         supabase.from('vw_vendor_comparison').select('*').order('total_score', { ascending: false }),
@@ -93,6 +103,7 @@ export function useLLMRankingAnalytics() {
         supabase.from('vw_weekly_trends').select('*').order('week_start', { ascending: false }).limit(12),
         supabase.from('vw_vendor_avg_by_llm').select('*'),
         supabase.from('analysis_runs').select('*').order('analysis_timestamp', { ascending: false }).limit(50),
+        supabase.from('vendor_scores').select('analysis_run_id, vendor_name_normalized, total_score, rank_in_analysis'),
       ]);
 
       setSentraPerformance((sentraPerformanceRes.data || []) as unknown as SentraPerformance[]);
@@ -100,7 +111,15 @@ export function useLLMRankingAnalytics() {
       setCompetitiveGap((competitiveGapRes.data || []) as unknown as CompetitiveGap[]);
       setWeeklyTrends((weeklyTrendsRes.data || []) as unknown as WeeklyTrend[]);
       setVendorByLLM((vendorByLLMRes.data || []) as unknown as VendorByLLM[]);
-      setAnalysisRuns((analysisRunsRes.data || []) as unknown as AnalysisRun[]);
+      
+      const runs = (analysisRunsRes.data || []) as unknown as AnalysisRun[];
+      setAnalysisRuns(runs);
+      
+      // Process score trends with competitor data
+      const vendorScores = vendorScoresRes.data || [];
+      const { trends, competitors } = processScoreTrends(runs, vendorScores);
+      setScoreTrends(trends);
+      setAvailableCompetitors(competitors);
     } catch (err: any) {
       console.error('Error fetching analytics:', err);
       setError(err.message || 'Failed to load analytics data');
@@ -124,7 +143,20 @@ export function useLLMRankingAnalytics() {
     totalAnalyses: analysisRuns.length,
   };
 
-  return { sentraPerformance, vendorComparison, competitiveGap, weeklyTrends, vendorByLLM, analysisRuns, kpis, isLoading, error, refetch: fetchAnalytics };
+  return { 
+    sentraPerformance, 
+    vendorComparison, 
+    competitiveGap, 
+    weeklyTrends, 
+    vendorByLLM, 
+    analysisRuns, 
+    scoreTrends,
+    availableCompetitors,
+    kpis, 
+    isLoading, 
+    error, 
+    refetch: fetchAnalytics 
+  };
 }
 
 function getMostCommonPosition(data: SentraPerformance[]): string {
@@ -134,4 +166,99 @@ function getMostCommonPosition(data: SentraPerformance[]): string {
   let max = 0, result = 'N/A';
   Object.entries(counts).forEach(([pos, count]) => { if (count > max) { max = count; result = pos; } });
   return result;
+}
+
+interface VendorScoreRow {
+  analysis_run_id: string;
+  vendor_name_normalized: string | null;
+  total_score: number;
+  rank_in_analysis: number | null;
+}
+
+function processScoreTrends(
+  runs: AnalysisRun[],
+  vendorScores: VendorScoreRow[]
+): { trends: ScoreTrendDataPoint[]; competitors: string[] } {
+  // Group runs by date
+  const runsByDate: Record<string, AnalysisRun[]> = {};
+  const competitorSet = new Set<string>();
+  
+  runs.forEach(run => {
+    if (!run.analysis_timestamp) return;
+    const date = run.analysis_timestamp.split('T')[0];
+    if (!runsByDate[date]) runsByDate[date] = [];
+    runsByDate[date].push(run);
+  });
+
+  // Create a map of vendor scores by run ID
+  const scoresByRun: Record<string, VendorScoreRow[]> = {};
+  vendorScores.forEach(score => {
+    if (!scoresByRun[score.analysis_run_id]) scoresByRun[score.analysis_run_id] = [];
+    scoresByRun[score.analysis_run_id].push(score);
+    if (score.vendor_name_normalized && score.vendor_name_normalized.toLowerCase() !== 'sentra') {
+      competitorSet.add(score.vendor_name_normalized);
+    }
+  });
+
+  // Build trend data points
+  const trends: ScoreTrendDataPoint[] = Object.entries(runsByDate)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, dateRuns]) => {
+      // Average Sentra metrics for the date
+      const sentraScores = dateRuns.filter(r => r.sentra_score != null).map(r => r.sentra_score!);
+      const sentraRanks = dateRuns.filter(r => r.sentra_rank != null).map(r => r.sentra_rank!);
+      
+      const avgSentraScore = sentraScores.length > 0 
+        ? Math.round(sentraScores.reduce((a, b) => a + b, 0) / sentraScores.length)
+        : null;
+      const avgSentraRank = sentraRanks.length > 0
+        ? Math.round(sentraRanks.reduce((a, b) => a + b, 0) / sentraRanks.length * 10) / 10
+        : null;
+
+      // Aggregate competitor scores for this date
+      const competitorData: Record<string, { scores: number[]; ranks: number[] }> = {};
+      
+      dateRuns.forEach(run => {
+        const runScores = scoresByRun[run.id] || [];
+        runScores.forEach(score => {
+          if (!score.vendor_name_normalized || score.vendor_name_normalized.toLowerCase() === 'sentra') return;
+          const name = score.vendor_name_normalized;
+          if (!competitorData[name]) competitorData[name] = { scores: [], ranks: [] };
+          if (score.total_score != null) competitorData[name].scores.push(score.total_score);
+          if (score.rank_in_analysis != null) competitorData[name].ranks.push(score.rank_in_analysis);
+        });
+      });
+
+      const competitors: Record<string, { score: number | null; rank: number | null }> = {};
+      Object.entries(competitorData).forEach(([name, data]) => {
+        competitors[name] = {
+          score: data.scores.length > 0 
+            ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length)
+            : null,
+          rank: data.ranks.length > 0
+            ? Math.round(data.ranks.reduce((a, b) => a + b, 0) / data.ranks.length * 10) / 10
+            : null,
+        };
+      });
+
+      return {
+        date,
+        sentra_score: avgSentraScore,
+        sentra_rank: avgSentraRank,
+        competitors,
+      };
+    });
+
+  // Sort competitors by frequency of appearance
+  const competitorFrequency: Record<string, number> = {};
+  trends.forEach(t => {
+    Object.keys(t.competitors).forEach(c => {
+      competitorFrequency[c] = (competitorFrequency[c] || 0) + 1;
+    });
+  });
+
+  const sortedCompetitors = Array.from(competitorSet)
+    .sort((a, b) => (competitorFrequency[b] || 0) - (competitorFrequency[a] || 0));
+
+  return { trends, competitors: sortedCompetitors };
 }
