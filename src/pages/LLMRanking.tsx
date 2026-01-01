@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Settings, RefreshCw, Loader2 } from 'lucide-react';
 import { SentraKPICards } from '@/components/llm-ranking/SentraKPICards';
 import { SentraScoreTrendChart } from '@/components/llm-ranking/SentraScoreTrendChart';
-import { CompetitiveGapChart } from '@/components/llm-ranking/CompetitiveGapChart';
+
 import { VendorComparisonTable } from '@/components/llm-ranking/VendorComparisonTable';
 import { ScoreByLLMChart } from '@/components/llm-ranking/ScoreByLLMChart';
 import { AnalysisRunsTable } from '@/components/llm-ranking/AnalysisRunsTable';
@@ -63,10 +63,7 @@ export default function LLMRanking() {
             totalAnalyses={kpis.totalAnalyses}
           />
           <SentraScoreTrendChart data={scoreTrends} availableCompetitors={availableCompetitors} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <CompetitiveGapChart data={competitiveGap} />
-            <ScoreByLLMChart data={vendorByLLM} availableCompetitors={availableCompetitors} />
-          </div>
+          <ScoreByLLMChart data={vendorByLLM} availableCompetitors={availableCompetitors} />
           <VendorComparisonTable data={vendorComparison} />
           <AnalysisRunsTable data={analysisRuns} />
         </div>
