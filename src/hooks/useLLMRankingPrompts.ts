@@ -13,6 +13,10 @@ export interface LLMRankingPrompt {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  schedule_enabled: boolean | null;
+  scheduled_time: string | null;
+  schedule_days: string[] | null;
+  next_scheduled_run: string | null;
 }
 
 export interface CreatePromptInput {
@@ -168,6 +172,56 @@ export function useLLMRankingPrompts() {
     return updatePrompt({ id, is_active: isActive });
   };
 
+  const updatePromptSchedule = async (
+    id: string,
+    scheduleEnabled: boolean,
+    scheduledTime: string,
+    scheduleDays: string[]
+  ): Promise<boolean> => {
+    try {
+      // Calculate next scheduled run
+      let nextScheduledRun: string | null = null;
+      if (scheduleEnabled && scheduledTime) {
+        const now = new Date();
+        const [hours, minutes] = scheduledTime.split(':').map(Number);
+        const next = new Date(now);
+        next.setDate(next.getDate() + 1);
+        next.setHours(hours, minutes, 0, 0);
+        
+        // Find next matching day if schedule_days is specified
+        if (scheduleDays.length > 0) {
+          for (let i = 0; i < 7; i++) {
+            const dayName = next.toLocaleDateString('en-US', { weekday: 'long' });
+            if (scheduleDays.includes(dayName)) {
+              break;
+            }
+            next.setDate(next.getDate() + 1);
+          }
+        }
+        nextScheduledRun = next.toISOString();
+      }
+
+      const { error } = await supabase
+        .from('llm_ranking_prompts')
+        .update({
+          schedule_enabled: scheduleEnabled,
+          scheduled_time: scheduledTime,
+          schedule_days: scheduleDays,
+          next_scheduled_run: nextScheduledRun,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success('Schedule updated successfully');
+      await fetchPrompts();
+      return true;
+    } catch (error: any) {
+      console.error('Error updating prompt schedule:', error);
+      toast.error(error.message || 'Failed to update schedule');
+      return false;
+    }
+  };
+
   return {
     prompts,
     isLoading,
@@ -179,5 +233,6 @@ export function useLLMRankingPrompts() {
     triggerPromptRun,
     triggerBulkRun,
     togglePromptActive,
+    updatePromptSchedule,
   };
 }

@@ -18,8 +18,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Play, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Play, Pencil, Trash2, Loader2, Calendar, Clock } from 'lucide-react';
 import { format } from 'date-fns';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PromptManagementTableProps {
   prompts: LLMRankingPrompt[];
@@ -31,6 +32,7 @@ interface PromptManagementTableProps {
   onDelete: (id: string) => void;
   onTriggerRun: (id: string) => void;
   onToggleActive: (id: string, isActive: boolean) => void;
+  onSchedule: (prompt: LLMRankingPrompt) => void;
 }
 
 const categoryColors: Record<string, string> = {
@@ -57,6 +59,7 @@ export function PromptManagementTable({
   onDelete,
   onTriggerRun,
   onToggleActive,
+  onSchedule,
 }: PromptManagementTableProps) {
   const allSelected = prompts.length > 0 && selectedIds.length === prompts.length;
   const someSelected = selectedIds.length > 0 && selectedIds.length < prompts.length;
@@ -104,10 +107,10 @@ export function PromptManagementTable({
             </TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Category</TableHead>
-            <TableHead>Frequency</TableHead>
+            <TableHead>Schedule</TableHead>
             <TableHead>Active</TableHead>
             <TableHead>Last Run</TableHead>
-            <TableHead className="w-[100px]">Actions</TableHead>
+            <TableHead className="w-[120px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -139,9 +142,45 @@ export function PromptManagementTable({
                 )}
               </TableCell>
               <TableCell>
-                <span className="text-sm">
-                  {frequencyLabels[prompt.run_frequency] || prompt.run_frequency}
-                </span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1.5">
+                        {prompt.schedule_enabled ? (
+                          <>
+                            <Clock className="h-3.5 w-3.5 text-green-500" />
+                            <span className="text-sm text-green-600 dark:text-green-400">
+                              {prompt.scheduled_time?.slice(0, 5) || '09:00'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            {frequencyLabels[prompt.run_frequency] || 'Manual'}
+                          </span>
+                        )}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {prompt.schedule_enabled ? (
+                        <div className="text-xs">
+                          <p>Runs at {prompt.scheduled_time?.slice(0, 5)}</p>
+                          {prompt.schedule_days && prompt.schedule_days.length > 0 && (
+                            <p className="text-muted-foreground">
+                              {prompt.schedule_days.join(', ')}
+                            </p>
+                          )}
+                          {prompt.next_scheduled_run && (
+                            <p className="mt-1">
+                              Next: {format(new Date(prompt.next_scheduled_run), 'MMM d, HH:mm')}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p>No schedule configured</p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </TableCell>
               <TableCell>
                 <Switch
@@ -155,7 +194,7 @@ export function PromptManagementTable({
                   : 'Never'}
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -169,6 +208,14 @@ export function PromptManagementTable({
                       <Play className="h-4 w-4" />
                     )}
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onSchedule(prompt)}
+                    title="Configure schedule"
+                  >
+                    <Calendar className="h-4 w-4" />
+                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon">
@@ -179,6 +226,10 @@ export function PromptManagementTable({
                       <DropdownMenuItem onClick={() => onEdit(prompt)}>
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onSchedule(prompt)}>
+                        <Calendar className="mr-2 h-4 w-4" />
+                        Schedule
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         onClick={() => onDelete(prompt.id)}
