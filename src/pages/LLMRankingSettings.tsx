@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Plus, ArrowLeft, Play, Loader2 } from 'lucide-react';
 import { PromptManagementTable } from '@/components/llm-ranking/PromptManagementTable';
 import { AddEditPromptDialog } from '@/components/llm-ranking/AddEditPromptDialog';
+import { PromptScheduleDialog } from '@/components/llm-ranking/PromptScheduleDialog';
+import { SchedulerSettingsCard } from '@/components/llm-ranking/SchedulerSettingsCard';
 import { useLLMRankingPrompts, LLMRankingPrompt } from '@/hooks/useLLMRankingPrompts';
 import {
   AlertDialog,
@@ -21,6 +23,7 @@ export default function LLMRankingSettings() {
   const [editingPrompt, setEditingPrompt] = useState<LLMRankingPrompt | null>(null);
   const [deletePromptId, setDeletePromptId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [schedulingPrompt, setSchedulingPrompt] = useState<LLMRankingPrompt | null>(null);
 
   const {
     prompts,
@@ -32,6 +35,7 @@ export default function LLMRankingSettings() {
     triggerPromptRun,
     triggerBulkRun,
     togglePromptActive,
+    updatePromptSchedule,
   } = useLLMRankingPrompts();
 
   const handleEdit = (prompt: LLMRankingPrompt) => {
@@ -93,6 +97,11 @@ export default function LLMRankingSettings() {
         </div>
       </div>
 
+      {/* Scheduler Settings */}
+      <div className="mb-6">
+        <SchedulerSettingsCard />
+      </div>
+
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (
         <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between">
@@ -133,6 +142,7 @@ export default function LLMRankingSettings() {
         onDelete={(id) => setDeletePromptId(id)}
         onTriggerRun={triggerPromptRun}
         onToggleActive={togglePromptActive}
+        onSchedule={setSchedulingPrompt}
       />
 
       <AddEditPromptDialog
@@ -140,6 +150,13 @@ export default function LLMRankingSettings() {
         onOpenChange={handleDialogClose}
         prompt={editingPrompt}
         onSubmit={handleSubmit}
+      />
+
+      <PromptScheduleDialog
+        open={!!schedulingPrompt}
+        onOpenChange={(open) => !open && setSchedulingPrompt(null)}
+        prompt={schedulingPrompt}
+        onSave={updatePromptSchedule}
       />
 
       <AlertDialog open={!!deletePromptId} onOpenChange={(open) => !open && setDeletePromptId(null)}>
