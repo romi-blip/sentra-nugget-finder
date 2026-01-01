@@ -95,7 +95,6 @@ export function useLLMRankingAnalytics() {
         weeklyTrendsRes,
         vendorByLLMRes,
         analysisRunsRes,
-        vendorScoresRes,
       ] = await Promise.all([
         supabase.from('vw_sentra_performance').select('*').order('created_at', { ascending: false }).limit(100),
         supabase.from('vw_vendor_comparison').select('*').order('total_score', { ascending: false }),
@@ -103,20 +102,28 @@ export function useLLMRankingAnalytics() {
         supabase.from('vw_weekly_trends').select('*').order('week_start', { ascending: false }).limit(12),
         supabase.from('vw_vendor_avg_by_llm').select('*'),
         supabase.from('analysis_runs').select('*').order('created_at', { ascending: false }).limit(100),
-        supabase.from('vendor_scores').select('analysis_run_id, vendor_name_normalized, total_score, rank_in_analysis'),
       ]);
+      
+      const runs = (analysisRunsRes.data || []) as unknown as AnalysisRun[];
+      const runIds = runs.map(r => r.id);
+      
+      // Fetch vendor scores only for the runs we have
+      const vendorScoresRes = runIds.length > 0 
+        ? await supabase
+            .from('vendor_scores')
+            .select('analysis_run_id, vendor_name_normalized, total_score, rank_in_analysis')
+            .in('analysis_run_id', runIds)
+        : { data: [] as VendorScoreRow[] };
 
       setSentraPerformance((sentraPerformanceRes.data || []) as unknown as SentraPerformance[]);
       setVendorComparison((vendorComparisonRes.data || []) as unknown as VendorComparison[]);
       setCompetitiveGap((competitiveGapRes.data || []) as unknown as CompetitiveGap[]);
       setWeeklyTrends((weeklyTrendsRes.data || []) as unknown as WeeklyTrend[]);
       setVendorByLLM((vendorByLLMRes.data || []) as unknown as VendorByLLM[]);
-      
-      const runs = (analysisRunsRes.data || []) as unknown as AnalysisRun[];
       setAnalysisRuns(runs);
       
       // Process score trends with competitor data
-      const vendorScores = vendorScoresRes.data || [];
+      const vendorScores = (vendorScoresRes.data || []) as unknown as VendorScoreRow[];
       const { trends, competitors } = processScoreTrends(runs, vendorScores);
       setScoreTrends(trends);
       setAvailableCompetitors(competitors);
