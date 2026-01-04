@@ -262,7 +262,6 @@ export function ScoreByLLMChart({ data, availableCompetitors }: ScoreByLLMChartP
 }
 
 function formatLLMLabel(llmModel: string): string {
-  // Map model names to friendly labels
   const labelMap: Record<string, string> = {
     'gpt-4': 'GPT-4',
     'gpt-4o': 'GPT-4o',
@@ -270,9 +269,12 @@ function formatLLMLabel(llmModel: string): string {
     'claude-3': 'Claude 3',
     'claude-3.5': 'Claude 3.5',
     'claude-4': 'Claude 4',
+    'claude-opus-4.5': 'Claude Opus 4.5',
     'gemini-pro': 'Gemini Pro',
     'gemini-1.5': 'Gemini 1.5',
     'gemini-2': 'Gemini 2',
+    'gemini-3-pro-preview': 'Gemini 3 Pro',
+    'perplexity-sonar': 'Perplexity Sonar',
   };
   
   return labelMap[llmModel.toLowerCase()] || llmModel;
