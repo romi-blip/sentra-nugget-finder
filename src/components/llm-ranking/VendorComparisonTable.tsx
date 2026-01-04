@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { ArrowUpDown } from 'lucide-react';
 import { VendorComparison } from '@/hooks/useLLMRankingAnalytics';
+import { normalizeVendorName } from '@/lib/vendorNormalization';
 
 interface VendorComparisonTableProps {
   data: VendorComparison[];
@@ -99,8 +100,8 @@ export function VendorComparisonTable({ data }: VendorComparisonTableProps) {
     }>();
 
     filteredByTime.forEach(item => {
-      const name = item.vendor_name_normalized;
-      if (!name) return;
+      const name = normalizeVendorName(item.vendor_name_normalized);
+      if (!name || name === 'Unknown') return;
       
       if (!vendorMap.has(name)) {
         vendorMap.set(name, {
