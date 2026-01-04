@@ -12,6 +12,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { CompetitiveGap } from '@/hooks/useLLMRankingAnalytics';
+import { normalizeVendorName } from '@/lib/vendorNormalization';
 
 interface CompetitiveGapChartProps {
   data: CompetitiveGap[];
@@ -24,10 +25,10 @@ const getGapColor = (gap: number) => {
 };
 
 export function CompetitiveGapChart({ data }: CompetitiveGapChartProps) {
-  // Aggregate by vendor name to avoid duplicates
+  // Aggregate by normalized vendor name to avoid duplicates
   const vendorAggregates = data.reduce((acc, item) => {
-    const vendorName = item.top_vendor_name;
-    if (!vendorName) return acc;
+    if (!item.top_vendor_name) return acc;
+    const vendorName = normalizeVendorName(item.top_vendor_name);
     
     if (!acc[vendorName]) {
       acc[vendorName] = {
