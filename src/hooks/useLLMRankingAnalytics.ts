@@ -142,12 +142,18 @@ export function useLLMRankingAnalytics() {
   }, [fetchAnalytics]);
 
   const kpis = {
-    avgSentraScore: sentraPerformance.length > 0 
-      ? Math.round(sentraPerformance.reduce((sum, p) => sum + (p.sentra_score || 0), 0) / sentraPerformance.length)
-      : 0,
-    avgRank: sentraPerformance.length > 0
-      ? Math.round(sentraPerformance.reduce((sum, p) => sum + (p.sentra_rank || 0), 0) / sentraPerformance.length * 10) / 10
-      : 0,
+    avgSentraScore: (() => {
+      const validScores = sentraPerformance.filter(p => p.sentra_score != null);
+      return validScores.length > 0 
+        ? Math.round(validScores.reduce((sum, p) => sum + p.sentra_score, 0) / validScores.length)
+        : 0;
+    })(),
+    avgRank: (() => {
+      const validRanks = sentraPerformance.filter(p => p.sentra_rank != null);
+      return validRanks.length > 0
+        ? Math.round(validRanks.reduce((sum, p) => sum + p.sentra_rank, 0) / validRanks.length * 10) / 10
+        : 0;
+    })(),
     mostCommonPosition: getMostCommonPosition(sentraPerformance),
     totalAnalyses: analysisRuns.length,
   };
