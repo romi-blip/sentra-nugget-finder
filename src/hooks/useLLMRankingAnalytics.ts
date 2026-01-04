@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizeVendorName } from '@/lib/vendorNormalization';
 
 export interface SentraPerformance {
   analysis_run_id: string;
@@ -207,8 +208,11 @@ function processScoreTrends(
   vendorScores.forEach(score => {
     if (!scoresByRun[score.analysis_run_id]) scoresByRun[score.analysis_run_id] = [];
     scoresByRun[score.analysis_run_id].push(score);
-    if (score.vendor_name_normalized && score.vendor_name_normalized.toLowerCase() !== 'sentra') {
-      competitorSet.add(score.vendor_name_normalized);
+    if (score.vendor_name_normalized) {
+      const normalized = normalizeVendorName(score.vendor_name_normalized);
+      if (normalized.toLowerCase() !== 'sentra') {
+        competitorSet.add(normalized);
+      }
     }
   });
 
@@ -233,8 +237,9 @@ function processScoreTrends(
       dateRuns.forEach(run => {
         const runScores = scoresByRun[run.id] || [];
         runScores.forEach(score => {
-          if (!score.vendor_name_normalized || score.vendor_name_normalized.toLowerCase() === 'sentra') return;
-          const name = score.vendor_name_normalized;
+          if (!score.vendor_name_normalized) return;
+          const name = normalizeVendorName(score.vendor_name_normalized);
+          if (name.toLowerCase() === 'sentra') return;
           if (!competitorData[name]) competitorData[name] = { scores: [], ranks: [] };
           if (score.total_score != null) competitorData[name].scores.push(score.total_score);
           if (score.rank_in_analysis != null) competitorData[name].ranks.push(score.rank_in_analysis);

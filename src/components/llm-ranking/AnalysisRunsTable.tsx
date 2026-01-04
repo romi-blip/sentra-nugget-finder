@@ -17,6 +17,7 @@ import {
 import { ChevronDown, ChevronRight, Trophy } from 'lucide-react';
 import { AnalysisRun } from '@/hooks/useLLMRankingAnalytics';
 import { format } from 'date-fns';
+import { normalizeVendorName } from '@/lib/vendorNormalization';
 
 interface AnalysisRunsTableProps {
   data: AnalysisRun[];
@@ -80,7 +81,7 @@ function AnalysisRunRow({ run }: { run: AnalysisRun }) {
           {run.top_vendor_name && (
             <div className="flex items-center gap-1.5">
               <Trophy className="h-3.5 w-3.5 text-[hsl(var(--chart-orange))]" />
-              <span className="text-sm truncate">{run.top_vendor_name}</span>
+              <span className="text-sm truncate">{normalizeVendorName(run.top_vendor_name)}</span>
               {run.top_vendor_score && (
                 <span className="text-xs text-muted-foreground">
                   ({run.top_vendor_score})
