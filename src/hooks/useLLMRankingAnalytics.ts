@@ -21,6 +21,7 @@ export interface VendorComparison {
   credibility_signals_score: number;
   positioning: string;
   rank_in_analysis: number;
+  created_at: string;
 }
 
 export interface CompetitiveGap {
