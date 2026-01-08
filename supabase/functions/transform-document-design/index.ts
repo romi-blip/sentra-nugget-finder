@@ -1,12 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import JSZip from "npm:jszip@3.10.1";
-import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, rgb, StandardFonts, PDFName, PDFRawStream } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Memory limits for images
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB per image
+const MAX_TOTAL_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB total
 
 // Brand colors matching the reference template exactly
 const COLORS = {
@@ -42,12 +46,16 @@ interface RequestBody {
 }
 
 interface StructuredSection {
-  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'feature-grid' | 'page-break' | 'heading';
+  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'feature-grid' | 'page-break' | 'heading' | 'image';
   content?: string;
   text?: string;
   level?: number;
   items?: string[];
   features?: Array<{ title: string; description: string }>;
+  // Image fields
+  imageBase64?: string;
+  imageMimeType?: string;
+  imageCaption?: string;
 }
 
 interface ExtractedDocument {
@@ -128,7 +136,102 @@ function sanitizeForPdf(text: string): string {
     .replace(/[^\x00-\x7F]/g, ' ');
 }
 
-// Extract content from DOCX
+// Parse DOCX relationships file to map rId to image paths
+async function parseDocxRelationships(zip: JSZip): Promise<Map<string, string>> {
+  const relMap = new Map<string, string>();
+  
+  const relsFile = zip.file('word/_rels/document.xml.rels');
+  if (!relsFile) {
+    console.log('[transform-document-design] No relationships file found');
+    return relMap;
+  }
+  
+  const relsXml = await relsFile.async('string');
+  
+  // Match relationship entries for images
+  const relRegex = /<Relationship[^>]*Id="(rId\d+)"[^>]*Target="([^"]+)"[^>]*Type="[^"]*\/image"[^>]*\/?>/gi;
+  const relRegex2 = /<Relationship[^>]*Type="[^"]*\/image"[^>]*Target="([^"]+)"[^>]*Id="(rId\d+)"[^>]*\/?>/gi;
+  
+  let match;
+  while ((match = relRegex.exec(relsXml)) !== null) {
+    relMap.set(match[1], match[2]);
+  }
+  while ((match = relRegex2.exec(relsXml)) !== null) {
+    relMap.set(match[2], match[1]);
+  }
+  
+  console.log(`[transform-document-design] Found ${relMap.size} image relationships`);
+  return relMap;
+}
+
+// Extract images from DOCX media folder
+async function extractDocxImages(zip: JSZip, relMap: Map<string, string>): Promise<Map<string, { base64: string; mimeType: string }>> {
+  const images = new Map<string, { base64: string; mimeType: string }>();
+  let totalSize = 0;
+  
+  for (const [rId, path] of relMap) {
+    // Normalize path - it might be relative (media/image1.png) or absolute
+    const normalizedPath = path.startsWith('media/') ? `word/${path}` : 
+                           path.startsWith('word/') ? path : 
+                           `word/media/${path.split('/').pop()}`;
+    
+    const imageFile = zip.file(normalizedPath);
+    if (imageFile) {
+      try {
+        const imageData = await imageFile.async('base64');
+        const imageSize = imageData.length * 0.75; // Approximate decoded size
+        
+        // Check size limits
+        if (imageSize > MAX_IMAGE_SIZE) {
+          console.log(`[transform-document-design] Skipping oversized image ${rId}: ${Math.round(imageSize / 1024)}KB`);
+          continue;
+        }
+        if (totalSize + imageSize > MAX_TOTAL_IMAGE_SIZE) {
+          console.log(`[transform-document-design] Reached total image size limit, skipping remaining images`);
+          break;
+        }
+        
+        const ext = path.split('.').pop()?.toLowerCase();
+        const mimeType = ext === 'png' ? 'image/png' : 
+                         ext === 'gif' ? 'image/gif' : 
+                         ext === 'bmp' ? 'image/bmp' : 'image/jpeg';
+        
+        images.set(rId, { base64: imageData, mimeType });
+        totalSize += imageSize;
+        console.log(`[transform-document-design] Extracted image ${rId}: ${ext}, ${Math.round(imageSize / 1024)}KB`);
+      } catch (e) {
+        console.log(`[transform-document-design] Error extracting image ${rId}:`, e);
+      }
+    } else {
+      // Try alternative paths
+      const altPaths = [
+        `word/media/${path.split('/').pop()}`,
+        path,
+        `word/${path}`
+      ];
+      for (const altPath of altPaths) {
+        const altFile = zip.file(altPath);
+        if (altFile) {
+          try {
+            const imageData = await altFile.async('base64');
+            const ext = path.split('.').pop()?.toLowerCase();
+            const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+            images.set(rId, { base64: imageData, mimeType });
+            console.log(`[transform-document-design] Extracted image ${rId} from alt path: ${altPath}`);
+            break;
+          } catch (e) {
+            console.log(`[transform-document-design] Error with alt path ${altPath}:`, e);
+          }
+        }
+      }
+    }
+  }
+  
+  console.log(`[transform-document-design] Extracted ${images.size} images, total size: ${Math.round(totalSize / 1024)}KB`);
+  return images;
+}
+
+// Extract content from DOCX including images
 async function extractDocxContent(base64Content: string): Promise<ExtractedDocument> {
   console.log('[transform-document-design] Extracting content from DOCX');
   
@@ -139,6 +242,10 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
   }
 
   const zip = await JSZip.loadAsync(bytes);
+  
+  // Extract image relationships and images
+  const relMap = await parseDocxRelationships(zip);
+  const docxImages = await extractDocxImages(zip, relMap);
   
   const sections: StructuredSection[] = [];
   let title = '';
@@ -161,6 +268,32 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     
     while ((match = paragraphRegex.exec(documentXml)) !== null) {
       const paragraphContent = match[1];
+      
+      // Check for images in this paragraph
+      const blipMatch = paragraphContent.match(/<a:blip[^>]*r:embed="(rId\d+)"/);
+      if (blipMatch && docxImages.has(blipMatch[1])) {
+        const img = docxImages.get(blipMatch[1])!;
+        sections.push({
+          type: 'image',
+          imageBase64: img.base64,
+          imageMimeType: img.mimeType,
+        });
+        console.log(`[transform-document-design] Added image section for ${blipMatch[1]}`);
+        continue; // Skip text extraction for image paragraphs
+      }
+      
+      // Also check for w:drawing elements
+      const drawingMatch = paragraphContent.match(/<w:drawing[\s\S]*?<a:blip[^>]*r:embed="(rId\d+)"[\s\S]*?<\/w:drawing>/);
+      if (drawingMatch && docxImages.has(drawingMatch[1])) {
+        const img = docxImages.get(drawingMatch[1])!;
+        sections.push({
+          type: 'image',
+          imageBase64: img.base64,
+          imageMimeType: img.mimeType,
+        });
+        console.log(`[transform-document-design] Added image section from drawing for ${drawingMatch[1]}`);
+        // Don't continue - there might be text with the image
+      }
       
       let paragraphText = '';
       const textMatches = paragraphContent.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g);
@@ -235,9 +368,128 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     }
   }
 
-  console.log(`[transform-document-design] Extracted ${sections.length} sections, title: "${title}"`);
+  const imageCount = sections.filter(s => s.type === 'image').length;
+  console.log(`[transform-document-design] Extracted ${sections.length} sections (${imageCount} images), title: "${title}"`);
   
   return { title, subtitle, sections, isConfidential };
+}
+
+// Extract content from PDF including images
+async function extractPdfContent(base64Content: string): Promise<ExtractedDocument> {
+  console.log('[transform-document-design] Extracting content from PDF');
+  
+  const binaryString = atob(base64Content);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  
+  const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const pages = pdfDoc.getPages();
+  
+  const sections: StructuredSection[] = [];
+  let totalImageSize = 0;
+  let extractedImageCount = 0;
+  
+  console.log(`[transform-document-design] PDF has ${pages.length} pages`);
+  
+  // Extract images from each page
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+    const page = pages[pageIndex];
+    
+    try {
+      // Get page resources
+      const resources = page.node.Resources();
+      if (!resources) continue;
+      
+      const xObjectDict = resources.get(PDFName.of('XObject'));
+      if (!xObjectDict) continue;
+      
+      // Iterate through XObjects looking for images
+      const dict = xObjectDict.dict || (xObjectDict as any).entries?.() || [];
+      const entries = dict instanceof Map ? Array.from(dict.entries()) : 
+                      Array.isArray(dict) ? dict : 
+                      typeof dict === 'object' ? Object.entries(dict) : [];
+      
+      for (const [key, ref] of entries) {
+        try {
+          const xObject = pdfDoc.context.lookup(ref);
+          if (!xObject) continue;
+          
+          // Check if it's an image
+          const subtype = xObject.get?.(PDFName.of('Subtype'));
+          if (subtype?.encodedName !== '/Image') continue;
+          
+          // Get image stream
+          if (xObject instanceof PDFRawStream) {
+            const imageBytes = xObject.contents;
+            const imageSize = imageBytes.length;
+            
+            // Check size limits
+            if (imageSize > MAX_IMAGE_SIZE) {
+              console.log(`[transform-document-design] Skipping oversized PDF image on page ${pageIndex + 1}`);
+              continue;
+            }
+            if (totalImageSize + imageSize > MAX_TOTAL_IMAGE_SIZE) {
+              console.log(`[transform-document-design] Reached total image size limit for PDF`);
+              break;
+            }
+            
+            // Determine image type from filter
+            const filter = xObject.get(PDFName.of('Filter'));
+            let mimeType = 'image/jpeg';
+            if (filter?.encodedName === '/FlateDecode') {
+              mimeType = 'image/png';
+            } else if (filter?.encodedName === '/DCTDecode') {
+              mimeType = 'image/jpeg';
+            }
+            
+            // Convert to base64 in chunks
+            let base64 = '';
+            const chunkSize = 8192;
+            for (let i = 0; i < imageBytes.length; i += chunkSize) {
+              const chunk = imageBytes.slice(i, Math.min(i + chunkSize, imageBytes.length));
+              base64 += String.fromCharCode.apply(null, Array.from(chunk));
+            }
+            base64 = btoa(base64);
+            
+            sections.push({
+              type: 'image',
+              imageBase64: base64,
+              imageMimeType: mimeType,
+            });
+            
+            totalImageSize += imageSize;
+            extractedImageCount++;
+            console.log(`[transform-document-design] Extracted image from PDF page ${pageIndex + 1}, size: ${Math.round(imageSize / 1024)}KB`);
+          }
+        } catch (e) {
+          // Skip individual image errors
+          console.log(`[transform-document-design] Error extracting image from page ${pageIndex + 1}:`, e);
+        }
+      }
+    } catch (e) {
+      console.log(`[transform-document-design] Error processing page ${pageIndex + 1}:`, e);
+    }
+  }
+  
+  console.log(`[transform-document-design] Extracted ${extractedImageCount} images from PDF, total size: ${Math.round(totalImageSize / 1024)}KB`);
+  
+  // Note: Full text extraction from PDF is complex and would require additional libraries
+  // For now, we focus on preserving images. Add a placeholder section if no images found.
+  if (sections.length === 0) {
+    sections.push({
+      type: 'paragraph',
+      content: 'PDF document imported. Text extraction from PDF requires additional processing.',
+    });
+  }
+  
+  return {
+    title: 'Imported PDF Document',
+    subtitle: '',
+    sections,
+    isConfidential: false,
+  };
 }
 
 // Helper to wrap text into lines
@@ -586,8 +838,8 @@ function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry
   return entries;
 }
 
-// Create content pages with element templates
-function createContentPages(
+// Create content pages with element templates - now with image support
+async function createContentPages(
   pdfDoc: any, 
   fonts: any, 
   sections: StructuredSection[], 
@@ -615,6 +867,9 @@ function createContentPages(
   const minY = footerHeight + 20;
   let pageNumber = 2;
   let hasContent = false;
+
+  // Cache for embedded images to avoid re-embedding duplicates
+  const embeddedImageCache = new Map<string, any>();
 
   // Draw header on first page
   drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage);
@@ -655,6 +910,74 @@ function createContentPages(
 
     if (y < minY + 80) {
       addNewPage();
+    }
+
+    // Handle image sections
+    if (section.type === 'image' && section.imageBase64 && section.imageMimeType) {
+      try {
+        // Check cache first
+        const cacheKey = section.imageBase64.substring(0, 100);
+        let embeddedImg = embeddedImageCache.get(cacheKey);
+        
+        if (!embeddedImg) {
+          const binaryString = atob(section.imageBase64);
+          const imgBytes = new Uint8Array(binaryString.length);
+          for (let j = 0; j < binaryString.length; j++) {
+            imgBytes[j] = binaryString.charCodeAt(j);
+          }
+          
+          // Embed based on type
+          if (section.imageMimeType.includes('png')) {
+            embeddedImg = await pdfDoc.embedPng(imgBytes);
+          } else {
+            embeddedImg = await pdfDoc.embedJpg(imgBytes);
+          }
+          
+          embeddedImageCache.set(cacheKey, embeddedImg);
+        }
+        
+        // Calculate scaling to fit page width
+        const maxWidth = contentWidth * 0.9; // 90% of content width
+        const maxHeight = 400; // Maximum height
+        
+        let imgWidth = embeddedImg.width;
+        let imgHeight = embeddedImg.height;
+        
+        // Scale down if needed
+        if (imgWidth > maxWidth) {
+          const scale = maxWidth / imgWidth;
+          imgWidth *= scale;
+          imgHeight *= scale;
+        }
+        if (imgHeight > maxHeight) {
+          const scale = maxHeight / imgHeight;
+          imgWidth *= scale;
+          imgHeight *= scale;
+        }
+        
+        // Check page break
+        if (y - imgHeight < minY + 50) {
+          addNewPage();
+        }
+        
+        // Center image horizontally
+        const imgX = margin + (contentWidth - imgWidth) / 2;
+        
+        currentPage.drawImage(embeddedImg, {
+          x: imgX,
+          y: y - imgHeight,
+          width: imgWidth,
+          height: imgHeight,
+        });
+        
+        y -= imgHeight + 20; // Add spacing after image
+        hasContent = true;
+        
+        console.log(`[transform-document-design] Drew image: ${Math.round(imgWidth)}x${Math.round(imgHeight)}`);
+      } catch (e) {
+        console.log('[transform-document-design] Error embedding content image:', e);
+      }
+      continue;
     }
 
     if (section.type === 'h1') {
@@ -905,21 +1228,27 @@ serve(async (req) => {
 
     console.log(`[transform-document-design] Processing ${fileName} (${fileType})`);
 
-    if (fileType !== 'docx') {
+    // Now support both DOCX and PDF
+    if (fileType !== 'docx' && fileType !== 'pdf') {
       return new Response(
         JSON.stringify({ 
-          error: 'Only DOCX files are supported for PDF transformation',
+          error: 'Only DOCX and PDF files are supported for transformation',
           type: null,
           modifiedFile: null,
           originalFileName: fileName,
-          message: 'Please upload a DOCX file.'
+          message: 'Please upload a DOCX or PDF file.'
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Extract document content
-    const extractedDoc = await extractDocxContent(file);
+    // Extract document content based on file type
+    let extractedDoc: ExtractedDocument;
+    if (fileType === 'docx') {
+      extractedDoc = await extractDocxContent(file);
+    } else {
+      extractedDoc = await extractPdfContent(file);
+    }
 
     // Fetch Sentra logo
     let logoBytes: Uint8Array | null = null;
@@ -1186,12 +1515,14 @@ serve(async (req) => {
     }
     pdfBase64 = btoa(pdfBase64);
 
+    const outputFileName = fileName.replace(/\.(docx|pdf)$/i, '_branded.pdf');
+
     return new Response(
       JSON.stringify({
         type: 'pdf',
         modifiedFile: pdfBase64,
-        originalFileName: fileName.replace(/\.docx$/i, '_branded.pdf'),
-        message: 'Document transformed successfully with Sentra branding.',
+        originalFileName: outputFileName,
+        message: `Document transformed successfully with Sentra branding. Extracted ${extractedDoc.sections.filter(s => s.type === 'image').length} images.`,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -1200,7 +1531,7 @@ serve(async (req) => {
     console.error('[transform-document-design] Error:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
         type: null,
         modifiedFile: null,
       }),
