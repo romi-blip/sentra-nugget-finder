@@ -379,16 +379,24 @@ export function DocumentComposer() {
                             <Label>Logo X Position (pt)</Label>
                             <Input
                               type="number"
-                              value={currentLayout?.logo_position_x || 50}
-                              onChange={(e) => handleLayoutChange('logo_position_x', parseInt(e.target.value) || 50)}
+                              defaultValue={currentLayout?.logo_position_x ?? 50}
+                              key={`logo-x-${currentLayout?.id}`}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val)) handleLayoutChange('logo_position_x', val);
+                              }}
                             />
                           </div>
                           <div>
                             <Label>Logo Y Position (pt)</Label>
                             <Input
                               type="number"
-                              value={currentLayout?.logo_position_y || 50}
-                              onChange={(e) => handleLayoutChange('logo_position_y', parseInt(e.target.value) || 50)}
+                              defaultValue={currentLayout?.logo_position_y ?? 50}
+                              key={`logo-y-${currentLayout?.id}`}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val)) handleLayoutChange('logo_position_y', val);
+                              }}
                             />
                           </div>
                         </>
