@@ -123,12 +123,21 @@ interface EditDialogProps {
   isSaving: boolean;
 }
 
+const FONT_OPTIONS = [
+  { value: 'Helvetica', label: 'Helvetica' },
+  { value: 'Poppins', label: 'Poppins' },
+  { value: 'Arial', label: 'Arial' },
+  { value: 'Times New Roman', label: 'Times New Roman' },
+  { value: 'Georgia', label: 'Georgia' },
+];
+
 function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogProps) {
   const isVisual = VISUAL_ELEMENT_TYPES.includes(template.element_type);
   
   const [name, setName] = useState(template.name);
   const [imageHeight, setImageHeight] = useState(template.image_height || 40);
   const [imageWidth, setImageWidth] = useState(template.image_width || 595);
+  const [fontFamily, setFontFamily] = useState(template.font_family || 'Helvetica');
   const [fontSize, setFontSize] = useState(template.font_size || 12);
   const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>((template.font_weight as 'normal' | 'bold') || 'normal');
   const [fontColor, setFontColor] = useState(template.font_color || '#000000');
@@ -185,6 +194,7 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
         updates.image_base64 = uploadedImage;
       }
     } else {
+      updates.font_family = fontFamily;
       updates.font_size = fontSize;
       updates.font_weight = fontWeight;
       updates.font_color = fontColor;
@@ -270,6 +280,22 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
             </>
           ) : (
             <>
+              <div className="space-y-2">
+                <Label>Font Family</Label>
+                <Select value={fontFamily} onValueChange={setFontFamily}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FONT_OPTIONS.map(font => (
+                      <SelectItem key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                        {font.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Font Size (px)</Label>
@@ -355,6 +381,7 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
                 <div 
                   className="p-4 border rounded bg-white"
                   style={{
+                    fontFamily: fontFamily,
                     fontSize: `${fontSize}px`,
                     fontWeight: fontWeight === 'bold' ? 700 : 400,
                     color: fontColor,
@@ -488,6 +515,7 @@ export function ElementTemplateEditor() {
   const [svgCode, setSvgCode] = useState('');
   
   // Text style state
+  const [fontFamily, setFontFamily] = useState<string>('Poppins');
   const [fontSize, setFontSize] = useState<number>(12);
   const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>('normal');
   const [fontColor, setFontColor] = useState('#000000');
@@ -549,7 +577,7 @@ export function ElementTemplateEditor() {
         image_base64: isVisual ? uploadedImage : null,
         image_height: isVisual ? imageHeight : null,
         image_width: isVisual ? imageWidth : null,
-        font_family: !isVisual ? 'Helvetica' : null,
+        font_family: !isVisual ? fontFamily : null,
         font_size: !isVisual ? fontSize : null,
         font_weight: !isVisual ? fontWeight : null,
         font_color: !isVisual ? fontColor : null,
@@ -815,6 +843,22 @@ export function ElementTemplateEditor() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label>Font Family</Label>
+                <Select value={fontFamily} onValueChange={setFontFamily}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FONT_OPTIONS.map(font => (
+                      <SelectItem key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                        {font.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Font Size (px)</Label>
@@ -904,6 +948,7 @@ export function ElementTemplateEditor() {
                 <div 
                   className="p-4 border rounded bg-white"
                   style={{
+                    fontFamily: fontFamily,
                     fontSize: `${fontSize}px`,
                     fontWeight: fontWeight === 'bold' ? 700 : 400,
                     color: fontColor,
