@@ -14,6 +14,7 @@ export interface DocumentTemplate {
   is_default: boolean;
   created_at: string;
   updated_at: string;
+  image_base64?: string | null;
 }
 
 export function useDocumentTemplates() {
@@ -54,9 +55,10 @@ export function useCreateTemplate() {
   
   return useMutation({
     mutationFn: async (template: Omit<DocumentTemplate, 'id' | 'created_at' | 'updated_at'>) => {
+      // Use any to handle image_base64 field
       const { data, error } = await supabase
         .from('document_templates')
-        .insert(template)
+        .insert(template as any)
         .select()
         .single();
       

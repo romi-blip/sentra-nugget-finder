@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,55 @@ const PAGE_TYPES = [
   { value: 'appendix', label: 'Appendix' },
 ];
 
+// A4 dimensions at 72 DPI
+const A4_WIDTH = 595;
+const A4_HEIGHT = 842;
+
+/**
+ * Render SVG to PNG using canvas
+ */
+async function renderSvgToPng(svgContent: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    // Create an image from the SVG
+    const svgBlob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    
+    const img = new Image();
+    img.onload = () => {
+      // Create canvas at A4 size (2x for high DPI)
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = A4_WIDTH * scale;
+      canvas.height = A4_HEIGHT * scale;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+      
+      // Fill white background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw the SVG scaled to fit
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // Convert to PNG base64
+      const pngBase64 = canvas.toDataURL('image/png');
+      URL.revokeObjectURL(url);
+      resolve(pngBase64);
+    };
+    
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load SVG as image'));
+    };
+    
+    img.src = url;
+  });
+}
+
 export function SVGToHTMLConverter() {
   const [file, setFile] = useState<File | null>(null);
   const [svgText, setSvgText] = useState('');
@@ -30,6 +79,7 @@ export function SVGToHTMLConverter() {
     html: string;
     css: string;
     placeholders: string[];
+    pngBase64?: string;
   } | null>(null);
   const [headerHtml, setHeaderHtml] = useState('');
   const [footerHtml, setFooterHtml] = useState('');
@@ -66,6 +116,7 @@ export function SVGToHTMLConverter() {
 
   const handleConvert = async () => {
     let svgContent: string;
+    let rawSvgText: string = '';
     
     if (inputMode === 'text') {
       if (!svgText.trim()) {
@@ -73,6 +124,7 @@ export function SVGToHTMLConverter() {
         return;
       }
       svgContent = btoa(unescape(encodeURIComponent(svgText)));
+      rawSvgText = svgText;
     } else {
       if (!file) {
         toast.error('Please select an SVG or TXT file');
@@ -82,19 +134,34 @@ export function SVGToHTMLConverter() {
       // Check if file is txt (already read into svgText) or svg
       if (file.name.endsWith('.txt') && svgText) {
         svgContent = btoa(unescape(encodeURIComponent(svgText)));
+        rawSvgText = svgText;
       } else {
+        // Read the SVG file content for PNG rendering
+        const fileText = await file.text();
+        rawSvgText = fileText;
         svgContent = await templateService.fileToBase64(file);
       }
     }
 
     setIsConverting(true);
     try {
+      // Convert SVG to HTML
       const convertResult = await templateService.convertSVGToHTML(svgContent, pageType, templateName);
+      
+      // Also render SVG to PNG for pdf-lib embedding
+      let pngBase64: string | undefined;
+      try {
+        pngBase64 = await renderSvgToPng(rawSvgText);
+        console.log('[SVGToHTMLConverter] Generated PNG, length:', pngBase64.length);
+      } catch (pngError) {
+        console.warn('[SVGToHTMLConverter] Could not generate PNG:', pngError);
+      }
       
       setResult({
         html: convertResult.html,
         css: convertResult.css,
         placeholders: convertResult.placeholders,
+        pngBase64,
       });
       
       toast.success('SVG converted successfully');
@@ -126,6 +193,7 @@ export function SVGToHTMLConverter() {
       header_html: pageType !== 'cover' ? headerHtml || null : null,
       footer_html: pageType !== 'cover' ? footerHtml || null : null,
       is_default: false,
+      image_base64: result.pngBase64 || null,
     });
 
     // Reset form
