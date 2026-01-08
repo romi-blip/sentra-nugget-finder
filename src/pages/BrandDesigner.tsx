@@ -14,7 +14,8 @@ import DocumentMetadataForm from '@/components/brand/DocumentMetadataForm';
 import ContentSectionEditor from '@/components/brand/ContentSectionEditor';
 import { ElementTemplateEditor } from '@/components/brand/ElementTemplateEditor';
 import { DocumentComposer } from '@/components/brand/DocumentComposer';
-import { brandService, BrandSettings, TransformResult } from '@/services/brandService';
+import DocumentEditor, { ExtractedDocument as EditorExtractedDoc } from '@/components/brand/DocumentEditor';
+import { brandService, BrandSettings, TransformResult, ExtractedDocument } from '@/services/brandService';
 import { documentService } from '@/services/documentService';
 import { 
   DocumentMetadata, 
@@ -31,8 +32,11 @@ const BrandDesigner: React.FC = () => {
     type: 'docx' | 'pdf' | null;
     modifiedFile: string | null;
     message?: string;
+    extractedContent?: ExtractedDocument;
+    pageCount?: number;
   }>({ type: null, modifiedFile: null });
   const [localSettings, setLocalSettings] = useState<Partial<BrandSettings>>({});
+  const [isEditing, setIsEditing] = useState(false);
 
   // Document generator state
   const [documentMetadata, setDocumentMetadata] = useState<DocumentMetadata>(DEFAULT_DOCUMENT_METADATA);
@@ -81,15 +85,61 @@ const BrandDesigner: React.FC = () => {
         type: result.type,
         modifiedFile: result.modifiedFile,
         message: result.message,
+        extractedContent: result.extractedContent,
+        pageCount: result.pageCount,
       });
       toast({
         title: 'Document transformed',
-        description: result.message || 'Your document has been styled with the brand settings.',
+        description: 'Click "Edit Before Download" to review and modify the content.',
       });
     },
     onError: (error) => {
       toast({
         title: 'Transformation failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const generateFromEditMutation = useMutation({
+    mutationFn: async (editedContent: ExtractedDocument) => {
+      return brandService.generateFromContent(editedContent, selectedFile?.name || 'document.pdf');
+    },
+    onSuccess: (result) => {
+      setTransformResult({
+        type: result.type,
+        modifiedFile: result.modifiedFile,
+        message: result.message,
+      });
+      setIsEditing(false);
+      
+      // Auto-download the final PDF
+      if (result.modifiedFile && result.type === 'pdf') {
+        const binaryString = atob(result.modifiedFile);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.originalFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      
+      toast({
+        title: 'Document generated',
+        description: 'Your edited document has been downloaded.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Generation failed',
         description: error.message,
         variant: 'destructive',
       });
@@ -244,6 +294,8 @@ const BrandDesigner: React.FC = () => {
                   modifiedFile={transformResult.modifiedFile}
                   originalFileName={selectedFile?.name || ''}
                   message={transformResult.message}
+                  extractedContent={transformResult.extractedContent}
+                  onEditClick={() => setIsEditing(true)}
                 />
               </CardContent>
             </Card>
@@ -419,6 +471,18 @@ const BrandDesigner: React.FC = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Document Editor Modal */}
+        {isEditing && transformResult.extractedContent && (
+          <DocumentEditor
+            extractedContent={transformResult.extractedContent as EditorExtractedDoc}
+            previewPdf={transformResult.modifiedFile}
+            originalFileName={selectedFile?.name || 'document.pdf'}
+            onSave={(editedContent) => generateFromEditMutation.mutate(editedContent)}
+            onCancel={() => setIsEditing(false)}
+            isGenerating={generateFromEditMutation.isPending}
+          />
+        )}
       </div>
     </>
   );

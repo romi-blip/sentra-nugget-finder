@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Download, FileText, CheckCircle, AlertCircle, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ExtractedDocument } from '@/services/brandService';
 
 interface TransformedPreviewProps {
   type: 'docx' | 'pdf' | null;
   modifiedFile: string | null; // base64
   originalFileName: string;
   message?: string;
+  extractedContent?: ExtractedDocument;
+  onEditClick?: () => void;
 }
 
 const TransformedPreview: React.FC<TransformedPreviewProps> = ({
@@ -16,6 +19,8 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
   modifiedFile,
   originalFileName,
   message,
+  extractedContent,
+  onEditClick,
 }) => {
   const getBaseFileName = () => originalFileName.replace(/\.(docx|pdf)$/i, '');
 
@@ -100,10 +105,18 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
               <>Your DOCX document has been styled with brand colors and fonts.</>
             )}
           </p>
-          <Button onClick={handleDownload} variant="default">
-            <Download className="h-4 w-4 mr-2" />
-            Download {type?.toUpperCase()}
-          </Button>
+          <div className="flex justify-center gap-3">
+            {extractedContent && onEditClick && (
+              <Button onClick={onEditClick} variant="outline">
+                <Edit3 className="h-4 w-4 mr-2" />
+                Edit Before Download
+              </Button>
+            )}
+            <Button onClick={handleDownload} variant="default">
+              <Download className="h-4 w-4 mr-2" />
+              Download {type?.toUpperCase()}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
