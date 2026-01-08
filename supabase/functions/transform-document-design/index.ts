@@ -1553,6 +1553,9 @@ serve(async (req) => {
     pdfBase64 = btoa(pdfBase64);
 
     const outputFileName = (fileName || 'document').replace(/\.(docx|pdf)$/i, '_branded.pdf');
+    
+    // Calculate approximate page count from sections
+    const pageCount = extractedDoc.sections.filter(s => s.type === 'h1' || s.type === 'page-break').length + 2;
 
     return new Response(
       JSON.stringify({
@@ -1561,7 +1564,7 @@ serve(async (req) => {
         originalFileName: outputFileName,
         message: `Document transformed successfully with Sentra branding. ${mode === 'generate' ? 'Generated from edited content.' : `Extracted ${extractedDoc.sections.filter(s => s.type === 'image').length} images.`}`,
         extractedContent: mode === 'extract' ? extractedDoc : undefined,
-        pageCount: pdfDoc?.getPageCount?.() || extractedDoc.sections.filter(s => s.type === 'h1' || s.type === 'page-break').length + 2,
+        pageCount: pageCount,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
