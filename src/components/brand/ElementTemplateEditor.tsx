@@ -36,8 +36,15 @@ import {
   ELEMENT_TYPE_LABELS,
 } from '@/hooks/useElementTemplates';
 
-// Render SVG to PNG using canvas
-async function renderSvgToPng(svgContent: string): Promise<string> {
+// Result type for SVG conversion
+interface SvgConversionResult {
+  pngDataUrl: string;
+  width: number;
+  height: number;
+}
+
+// Render SVG to PNG using canvas and extract dimensions
+async function renderSvgToPng(svgContent: string): Promise<SvgConversionResult> {
   return new Promise((resolve, reject) => {
     try {
       // Parse the SVG to extract/set dimensions
@@ -99,7 +106,7 @@ async function renderSvgToPng(svgContent: string): Promise<string> {
         canvas.height = img.height || height;
         ctx.drawImage(img, 0, 0);
         const pngDataUrl = canvas.toDataURL('image/png');
-        resolve(pngDataUrl);
+        resolve({ pngDataUrl, width, height });
       };
 
       img.onerror = (e) => {
@@ -135,8 +142,8 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
   const isVisual = VISUAL_ELEMENT_TYPES.includes(template.element_type);
   
   const [name, setName] = useState(template.name);
-  const [imageHeight, setImageHeight] = useState(template.image_height || 40);
-  const [imageWidth, setImageWidth] = useState(template.image_width || 595);
+  const [extractedHeight, setExtractedHeight] = useState(template.image_height || 40);
+  const [extractedWidth, setExtractedWidth] = useState(template.image_width || 595);
   const [fontFamily, setFontFamily] = useState(template.font_family || 'Helvetica');
   const [fontSize, setFontSize] = useState(template.font_size || 12);
   const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>((template.font_weight as 'normal' | 'bold') || 'normal');
@@ -154,9 +161,12 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
     try {
       if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
         const svgContent = await file.text();
-        const pngDataUrl = await renderSvgToPng(svgContent);
-        setUploadedImage(pngDataUrl);
-        toast({ title: 'SVG converted to PNG successfully' });
+        const result = await renderSvgToPng(svgContent);
+        setUploadedImage(result.pngDataUrl);
+        setExtractedWidth(result.width);
+        setExtractedHeight(result.height);
+        setSvgCode(svgContent);
+        toast({ title: `SVG converted (${result.width}x${result.height}px)` });
       } else if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -175,10 +185,11 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
       return;
     }
     try {
-      const pngDataUrl = await renderSvgToPng(svgCode);
-      setUploadedImage(pngDataUrl);
-      // Keep svgCode so it gets saved
-      toast({ title: 'SVG converted to PNG successfully' });
+      const result = await renderSvgToPng(svgCode);
+      setUploadedImage(result.pngDataUrl);
+      setExtractedWidth(result.width);
+      setExtractedHeight(result.height);
+      toast({ title: `SVG converted (${result.width}x${result.height}px)` });
     } catch (error) {
       toast({ title: 'Failed to convert SVG', variant: 'destructive' });
     }
@@ -188,8 +199,8 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
     const updates: Partial<ElementTemplate> = { name };
     
     if (isVisual) {
-      updates.image_height = imageHeight;
-      updates.image_width = imageWidth;
+      updates.image_height = extractedHeight;
+      updates.image_width = extractedWidth;
       updates.svg_content = svgCode || null;
       if (uploadedImage) {
         updates.image_base64 = uploadedImage;
@@ -260,24 +271,11 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Height (px)</Label>
-                  <Input 
-                    type="number"
-                    value={imageHeight}
-                    onChange={(e) => setImageHeight(parseInt(e.target.value) || 40)}
-                  />
+              {(extractedWidth > 0 || extractedHeight > 0) && (
+                <div className="text-sm text-muted-foreground">
+                  Dimensions: {extractedWidth} × {extractedHeight}px (extracted from SVG)
                 </div>
-                <div className="space-y-2">
-                  <Label>Width (px)</Label>
-                  <Input 
-                    type="number"
-                    value={imageWidth}
-                    onChange={(e) => setImageWidth(parseInt(e.target.value) || 595)}
-                  />
-                </div>
-              </div>
+              )}
             </>
           ) : (
             <>
@@ -511,8 +509,8 @@ export function ElementTemplateEditor() {
   
   // New template form state
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [imageHeight, setImageHeight] = useState<number>(40);
-  const [imageWidth, setImageWidth] = useState<number>(595);
+  const [extractedHeight, setExtractedHeight] = useState<number>(40);
+  const [extractedWidth, setExtractedWidth] = useState<number>(595);
   const [svgCode, setSvgCode] = useState('');
   
   // Text style state
@@ -531,9 +529,12 @@ export function ElementTemplateEditor() {
     try {
       if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
         const svgContent = await file.text();
-        const pngDataUrl = await renderSvgToPng(svgContent);
-        setUploadedImage(pngDataUrl);
-        toast({ title: 'SVG converted to PNG successfully' });
+        const result = await renderSvgToPng(svgContent);
+        setUploadedImage(result.pngDataUrl);
+        setExtractedWidth(result.width);
+        setExtractedHeight(result.height);
+        setSvgCode(svgContent);
+        toast({ title: `SVG converted (${result.width}x${result.height}px)` });
       } else if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -555,11 +556,12 @@ export function ElementTemplateEditor() {
     }
     try {
       console.log('Converting SVG to PNG, SVG length:', svgCode.length);
-      const pngDataUrl = await renderSvgToPng(svgCode);
-      console.log('SVG conversion successful, PNG length:', pngDataUrl.length);
-      setUploadedImage(pngDataUrl);
-      // Keep svgCode so it gets saved with the template
-      toast({ title: 'SVG converted to PNG successfully' });
+      const result = await renderSvgToPng(svgCode);
+      console.log('SVG conversion successful, dimensions:', result.width, 'x', result.height);
+      setUploadedImage(result.pngDataUrl);
+      setExtractedWidth(result.width);
+      setExtractedHeight(result.height);
+      toast({ title: `SVG converted (${result.width}x${result.height}px)` });
     } catch (error) {
       console.error('SVG conversion failed:', error);
       toast({ title: 'Failed to convert SVG: ' + (error instanceof Error ? error.message : 'Unknown error'), variant: 'destructive' });
@@ -579,8 +581,8 @@ export function ElementTemplateEditor() {
         name: newTemplateName,
         element_type: selectedType,
         image_base64: isVisual ? uploadedImage : null,
-        image_height: isVisual ? imageHeight : null,
-        image_width: isVisual ? imageWidth : null,
+        image_height: isVisual ? extractedHeight : null,
+        image_width: isVisual ? extractedWidth : null,
         svg_content: isVisual ? svgCode || null : null,
         font_family: !isVisual ? fontFamily : null,
         font_size: !isVisual ? fontSize : null,
@@ -757,24 +759,11 @@ export function ElementTemplateEditor() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Height (px)</Label>
-                  <Input 
-                    type="number"
-                    value={imageHeight}
-                    onChange={(e) => setImageHeight(parseInt(e.target.value) || 40)}
-                  />
+              {(extractedWidth > 0 || extractedHeight > 0) && uploadedImage && (
+                <div className="text-sm text-muted-foreground">
+                  Dimensions: {extractedWidth} × {extractedHeight}px (extracted from SVG)
                 </div>
-                <div className="space-y-2">
-                  <Label>Width (px)</Label>
-                  <Input 
-                    type="number"
-                    value={imageWidth}
-                    onChange={(e) => setImageWidth(parseInt(e.target.value) || 595)}
-                  />
-                </div>
-              </div>
+              )}
 
               <Button 
                 onClick={handleCreateTemplate}
