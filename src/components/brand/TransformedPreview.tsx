@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface TransformedPreviewProps {
-  type: 'docx' | 'pdf' | null;
+  type: 'docx' | 'pdf' | 'html' | null;
   modifiedFile: string | null; // base64
   originalFileName: string;
   message?: string;
