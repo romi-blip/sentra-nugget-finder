@@ -8,15 +8,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Brand colors matching the reference template
+// Brand colors matching the reference template exactly
 const COLORS = {
-  // Primary brand colors
-  primary: rgb(102/255, 255/255, 102/255),     // Neon green #66FF66
-  purple: rgb(138/255, 43/255, 226/255),        // Purple for header bar #8A2BE2
-  lightPurple: rgb(240/255, 234/255, 255/255),  // Light purple bg for icons #F0EAFF
+  // Header bar - purple from SVG template
+  headerPurple: rgb(124/255, 58/255, 237/255),  // #7C3AED exact match
+  
+  // Icon backgrounds - light purple from SVG
+  iconPurple: rgb(243/255, 232/255, 255/255),   // #F3E8FF
+  
+  // Cover page colors
+  primary: rgb(102/255, 255/255, 102/255),      // Neon green #66FF66
   orange: rgb(255/255, 174/255, 26/255),        // Orange accent #FFAE1A
   
-  // Footer bar colors
+  // Footer bar colors (cover page)
   pink: rgb(255/255, 20/255, 147/255),
   cyan: rgb(0/255, 255/255, 255/255),
   yellow: rgb(255/255, 215/255, 0/255),
@@ -27,11 +31,11 @@ const COLORS = {
   
   // Text colors
   lightText: rgb(240/255, 240/255, 240/255),
-  gray: rgb(107/255, 114/255, 128/255),
-  lightGray: rgb(156/255, 163/255, 175/255),
-  darkGray: rgb(31/255, 41/255, 55/255),
-  textGray: rgb(55/255, 65/255, 81/255),
-  bodyText: rgb(75/255, 85/255, 99/255),       // #4B5563
+  gray: rgb(107/255, 114/255, 128/255),         // #6B7280
+  lightGray: rgb(156/255, 163/255, 175/255),    // #9CA3AF
+  darkGray: rgb(31/255, 41/255, 55/255),        // #1F2937
+  bodyText: rgb(55/255, 65/255, 81/255),        // #374151
+  footerGray: rgb(107/255, 114/255, 128/255),   // #6B7280
 };
 
 interface BrandSettings {
@@ -254,68 +258,90 @@ function drawFooterBar(page: any) {
   page.drawRectangle({ x: segmentWidth * 3, y, width: segmentWidth, height: barHeight, color: COLORS.cyan });
 }
 
-// Draw content page header with purple bar (matching reference)
+// Draw Sentra logo icon (pixelated grid pattern) for content pages
+function drawSentraLogoIcon(page: any, x: number, y: number, color: any, scale: number = 1) {
+  const s = scale * 2.5;
+  // Grid pattern - 3x3 with some missing for the sentra look
+  // Top row
+  page.drawRectangle({ x: x, y: y, width: 4*s, height: 4*s, color });
+  page.drawRectangle({ x: x + 6*s, y: y, width: 4*s, height: 4*s, color });
+  page.drawRectangle({ x: x + 12*s, y: y, width: 4*s, height: 4*s, color });
+  // Middle row
+  page.drawRectangle({ x: x, y: y - 6*s, width: 4*s, height: 4*s, color });
+  page.drawRectangle({ x: x + 12*s, y: y - 6*s, width: 4*s, height: 4*s, color });
+  // Bottom row
+  page.drawRectangle({ x: x, y: y - 12*s, width: 4*s, height: 4*s, color });
+  page.drawRectangle({ x: x + 6*s, y: y - 12*s, width: 4*s, height: 4*s, color });
+  page.drawRectangle({ x: x + 12*s, y: y - 12*s, width: 4*s, height: 4*s, color });
+}
+
+// Draw content page header - FULL WIDTH PURPLE BAR with white logo
 function drawContentHeader(page: any, fonts: any) {
   const width = page.getWidth();
   const height = page.getHeight();
-  const margin = 40;
-  const headerY = height - 35;
+  const headerHeight = 50;
+  const logoMargin = 35;
 
-  // Sentra logo text
-  page.drawText('sentra', {
-    x: margin,
-    y: headerY,
-    size: 16,
-    font: fonts.bold,
-    color: COLORS.black,
-  });
-
-  // Purple bar underneath the header
+  // Full-width purple bar at the very top
   page.drawRectangle({
     x: 0,
-    y: height - 50,
+    y: height - headerHeight,
     width: width,
-    height: 4,
-    color: COLORS.purple,
+    height: headerHeight,
+    color: COLORS.headerPurple,
+  });
+
+  // Draw sentra logo icon (white)
+  drawSentraLogoIcon(page, logoMargin, height - 18, COLORS.white, 1);
+
+  // "sentra" text in white, next to icon
+  page.drawText('sentra', {
+    x: logoMargin + 48,
+    y: height - 33,
+    size: 18,
+    font: fonts.bold,
+    color: COLORS.white,
   });
 }
 
-// Draw content page footer with copyright, confidential, and page number
+// Draw content page footer - copyright left, confidential center, page number right
 function drawContentFooter(page: any, fonts: any, pageNumber: number, isConfidential: boolean) {
   const width = page.getWidth();
-  const margin = 40;
+  const margin = 35;
   const footerY = 25;
 
-  // Copyright left
-  page.drawText(`(c) Sentra ${new Date().getFullYear()}. All rights reserved.`, {
+  // Copyright - left aligned
+  const copyrightText = `(c) Sentra ${new Date().getFullYear()}. All rights reserved.`;
+  page.drawText(copyrightText, {
     x: margin,
     y: footerY,
-    size: 8,
+    size: 9,
     font: fonts.regular,
-    color: COLORS.gray,
+    color: COLORS.footerGray,
   });
 
-  // Confidential center
+  // Confidential - center aligned
   if (isConfidential) {
     const confText = 'Confidential';
-    const confWidth = fonts.regular.widthOfTextAtSize(confText, 8);
+    const confWidth = fonts.regular.widthOfTextAtSize(confText, 9);
     page.drawText(confText, {
       x: (width - confWidth) / 2,
       y: footerY,
-      size: 8,
+      size: 9,
       font: fonts.regular,
-      color: COLORS.gray,
+      color: COLORS.footerGray,
     });
   }
 
-  // Page number right
+  // Page number - right aligned
   const pageNumText = pageNumber.toString();
+  const pageNumWidth = fonts.regular.widthOfTextAtSize(pageNumText, 9);
   page.drawText(pageNumText, {
-    x: width - margin - fonts.regular.widthOfTextAtSize(pageNumText, 8),
+    x: width - margin - pageNumWidth,
     y: footerY,
-    size: 8,
+    size: 9,
     font: fonts.regular,
-    color: COLORS.gray,
+    color: COLORS.footerGray,
   });
 }
 
@@ -339,14 +365,14 @@ function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
   });
 }
 
-// Draw icon circle (purple background with icon placeholder)
-function drawIconCircle(page: any, x: number, y: number, size: number = 40) {
-  // Light purple circle background
+// Draw icon circle (light purple background) - matching SVG template
+function drawIconCircle(page: any, x: number, y: number, size: number = 44) {
+  // Light purple circle background (#F3E8FF)
   page.drawCircle({
     x: x + size / 2,
-    y: y + size / 2,
+    y: y - size / 2,
     size: size / 2,
-    color: COLORS.lightPurple,
+    color: COLORS.iconPurple,
   });
 }
 
@@ -508,29 +534,34 @@ function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry
   return entries;
 }
 
-// Create content pages with proper styling
+// Create content pages with proper styling - REBUILT FROM SCRATCH
 function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection[], isConfidential: boolean) {
   let currentPage = pdfDoc.addPage([595, 814]);
   const pageWidth = currentPage.getWidth();
   const pageHeight = currentPage.getHeight();
-  const margin = 40;
+  const margin = 35; // Match SVG template margin
   const contentWidth = pageWidth - margin * 2;
-  let y = pageHeight - 80;
-  const minY = 60;
+  
+  // Start content below the purple header bar (50px header + 30px gap)
+  let y = pageHeight - 90;
+  const minY = 55; // Leave room for footer
   let pageNumber = 2;
   let hasContent = false;
 
+  // Draw header on first content page
   drawContentHeader(currentPage, fonts);
 
+  // Helper to add a new page
   const addNewPage = () => {
     drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 814]);
-    y = pageHeight - 80;
+    y = pageHeight - 90;
     drawContentHeader(currentPage, fonts);
     hasContent = false;
   };
 
+  // Process each section
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
     const content = section.content || section.text || '';
@@ -548,143 +579,170 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
       addNewPage();
     }
 
-    // H1 - Main section headings (start new page, bold black text)
+    // H1 - Main section headings (24px, bold, black)
     if (section.type === 'h1') {
       if (hasContent && i > 0) {
         addNewPage();
       }
 
-      const lines = wrapText(content, fonts.bold, 22, contentWidth);
+      const lines = wrapText(content, fonts.bold, 24, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 22,
+          size: 24,
           font: fonts.bold,
           color: COLORS.black,
         });
-        y -= 28;
+        y -= 32;
       }
-      y -= 15;
+      y -= 20;
       hasContent = true;
     }
-    // H2 - Subsection headings
+    // H2 - Subsection headings (18px, bold, black)
     else if (section.type === 'h2') {
       if (y < minY + 60) addNewPage();
+      
+      y -= 8; // Add spacing before h2
 
-      const lines = wrapText(content, fonts.bold, 16, contentWidth);
+      const lines = wrapText(content, fonts.bold, 18, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 16,
+          size: 18,
           font: fonts.bold,
           color: COLORS.black,
         });
-        y -= 22;
+        y -= 24;
       }
-      y -= 10;
+      y -= 12;
       hasContent = true;
     }
-    // H3 - Sub-subsection headings
+    // H3 - Sub-subsection headings (14px, bold, dark gray)
     else if (section.type === 'h3') {
       if (y < minY + 40) addNewPage();
+      
+      y -= 6;
 
-      const lines = wrapText(content, fonts.bold, 13, contentWidth);
+      const lines = wrapText(content, fonts.bold, 14, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 13,
+          size: 14,
           font: fonts.bold,
           color: COLORS.darkGray,
         });
-        y -= 18;
+        y -= 20;
       }
       y -= 8;
       hasContent = true;
     }
-    // Feature grid - 2 column layout with icons
+    // Feature grid - 2 column layout with purple icon circles
     else if (section.type === 'feature-grid' && section.features) {
-      const colWidth = (contentWidth - 30) / 2;
+      const colGap = 30;
+      const colWidth = (contentWidth - colGap) / 2;
+      const iconSize = 44;
       const features = section.features;
       
       for (let j = 0; j < features.length; j += 2) {
+        // Check if we need space for feature row
         if (y < minY + 100) addNewPage();
 
         const leftFeature = features[j];
         const rightFeature = features[j + 1];
+        let rowHeight = 0;
 
-        // Left column
-        drawIconCircle(currentPage, margin, y - 35, 36);
+        // LEFT COLUMN
+        const leftX = margin;
+        const leftTextX = leftX + iconSize + 12;
+        const leftTextWidth = colWidth - iconSize - 12;
         
-        const leftTitleLines = wrapText(leftFeature.title, fonts.bold, 12, colWidth - 50);
-        let leftY = y;
+        // Draw icon circle
+        drawIconCircle(currentPage, leftX, y, iconSize);
+        
+        // Feature title (bold, 14px, black)
+        const leftTitleLines = wrapText(leftFeature.title, fonts.bold, 14, leftTextWidth);
+        let leftY = y - 8;
         for (const line of leftTitleLines) {
           currentPage.drawText(line, {
-            x: margin + 45,
+            x: leftTextX,
             y: leftY,
-            size: 12,
+            size: 14,
             font: fonts.bold,
             color: COLORS.black,
           });
-          leftY -= 16;
+          leftY -= 18;
         }
         
-        const leftDescLines = wrapText(leftFeature.description, fonts.regular, 10, colWidth - 50);
+        // Feature description (regular, 11px, gray)
+        const leftDescLines = wrapText(leftFeature.description, fonts.regular, 11, leftTextWidth);
         for (const line of leftDescLines) {
           currentPage.drawText(line, {
-            x: margin + 45,
+            x: leftTextX,
             y: leftY,
-            size: 10,
+            size: 11,
             font: fonts.regular,
             color: COLORS.bodyText,
           });
-          leftY -= 14;
+          leftY -= 15;
         }
+        
+        rowHeight = Math.max(rowHeight, y - leftY);
 
-        // Right column
+        // RIGHT COLUMN
         if (rightFeature) {
-          const rightX = margin + colWidth + 30;
-          drawIconCircle(currentPage, rightX, y - 35, 36);
+          const rightX = margin + colWidth + colGap;
+          const rightTextX = rightX + iconSize + 12;
+          const rightTextWidth = colWidth - iconSize - 12;
           
-          const rightTitleLines = wrapText(rightFeature.title, fonts.bold, 12, colWidth - 50);
-          let rightY = y;
+          // Draw icon circle
+          drawIconCircle(currentPage, rightX, y, iconSize);
+          
+          // Feature title
+          const rightTitleLines = wrapText(rightFeature.title, fonts.bold, 14, rightTextWidth);
+          let rightY = y - 8;
           for (const line of rightTitleLines) {
             currentPage.drawText(line, {
-              x: rightX + 45,
+              x: rightTextX,
               y: rightY,
-              size: 12,
+              size: 14,
               font: fonts.bold,
               color: COLORS.black,
             });
-            rightY -= 16;
+            rightY -= 18;
           }
           
-          const rightDescLines = wrapText(rightFeature.description, fonts.regular, 10, colWidth - 50);
+          // Feature description
+          const rightDescLines = wrapText(rightFeature.description, fonts.regular, 11, rightTextWidth);
           for (const line of rightDescLines) {
             currentPage.drawText(line, {
-              x: rightX + 45,
+              x: rightTextX,
               y: rightY,
-              size: 10,
+              size: 11,
               font: fonts.regular,
               color: COLORS.bodyText,
             });
-            rightY -= 14;
+            rightY -= 15;
           }
+          
+          rowHeight = Math.max(rowHeight, y - rightY);
         }
 
-        y -= 80;
+        y -= rowHeight + 20;
       }
-      y -= 15;
+      y -= 10;
       hasContent = true;
     }
     // Bullet list
     else if (section.type === 'bullet-list' && section.items) {
       for (const item of section.items) {
-        if (y < minY + 20) addNewPage();
+        if (y < minY + 25) addNewPage();
 
-        // Bullet point
+        const bulletIndent = 15;
+        
+        // Draw bullet character
         currentPage.drawText('-', {
           x: margin,
           y: y,
@@ -693,11 +751,12 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
           color: COLORS.black,
         });
 
-        const lines = wrapText(item, fonts.regular, 11, contentWidth - 15);
+        // Wrap and draw text
+        const lines = wrapText(item, fonts.regular, 11, contentWidth - bulletIndent);
         let isFirst = true;
         for (const line of lines) {
           currentPage.drawText(line, {
-            x: margin + (isFirst ? 15 : 15),
+            x: margin + bulletIndent,
             y: y,
             size: 11,
             font: fonts.regular,
@@ -710,7 +769,7 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
       y -= 10;
       hasContent = true;
     }
-    // Regular paragraph
+    // Regular paragraph (11px, regular, body text gray)
     else if (section.type === 'paragraph' && content) {
       const lines = wrapText(content, fonts.regular, 11, contentWidth);
       
@@ -726,11 +785,12 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
         });
         y -= 16;
       }
-      y -= 10;
+      y -= 12;
       hasContent = true;
     }
   }
 
+  // Draw footer on last page
   drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
 }
 
