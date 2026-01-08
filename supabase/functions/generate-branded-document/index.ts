@@ -26,17 +26,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Sentra brand colors
+// Brand colors from exact SVG template
 const COLORS = {
-  primary: "39FF14", // Neon Green
+  // Primary neon green from template #66FF66
+  primary: "66FF66",
   primaryDark: "32CD32",
-  orange: "FFA500",
+  // Orange accent from logo #FFAE1A
+  orange: "FFAE1A",
+  // Footer bar colors
   pink: "FF1493",
   cyan: "00FFFF",
-  black: "050505",
+  yellow: "FFD700",
+  // Backgrounds and text
+  black: "000000",
   white: "FFFFFF",
+  // Light text from template #F0F0F0
+  lightText: "F0F0F0",
   gray: "6B7280",
   lightGray: "9CA3AF",
+  darkGray: "1F2937",
+  textGray: "374151",
 };
 
 interface DocumentMetadata {
@@ -87,7 +96,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
-// Create the cover page
+// Create the cover page with BLACK background styling
 function createCoverPage(metadata: DocumentMetadata, logoBase64: string): Paragraph[] {
   const paragraphs: Paragraph[] = [];
 
@@ -123,7 +132,7 @@ function createCoverPage(metadata: DocumentMetadata, logoBase64: string): Paragr
             color: COLORS.gray,
           }),
           new TextRun({
-            text: " — Internal Use Only",
+            text: " - Internal Use Only",
             size: 18,
             color: COLORS.lightGray,
           }),
@@ -142,7 +151,7 @@ function createCoverPage(metadata: DocumentMetadata, logoBase64: string): Paragr
     })
   );
 
-  // Category badge
+  // Category badge with green bullet
   paragraphs.push(
     new Paragraph({
       children: [
@@ -162,7 +171,7 @@ function createCoverPage(metadata: DocumentMetadata, logoBase64: string): Paragr
     })
   );
 
-  // Title
+  // Title in neon green
   paragraphs.push(
     new Paragraph({
       children: [
@@ -170,7 +179,7 @@ function createCoverPage(metadata: DocumentMetadata, logoBase64: string): Paragr
           text: metadata.title,
           bold: true,
           size: 72,
-          color: COLORS.black,
+          color: COLORS.primary,
         }),
       ],
       spacing: { after: 200 },
@@ -251,7 +260,7 @@ function createCoverPage(metadata: DocumentMetadata, logoBase64: string): Paragr
 function createTableOfContents(items: TOCItem[]): Paragraph[] {
   const paragraphs: Paragraph[] = [];
 
-  // TOC Title
+  // TOC Title with "Contents" in green
   paragraphs.push(
     new Paragraph({
       children: [
@@ -363,7 +372,7 @@ function createContentSections(sections: ContentSection[]): Paragraph[] {
 
   sections.forEach((section) => {
     if (section.type === "heading") {
-      // Chapter number and title
+      // Chapter number and title in neon green
       if (section.chapterNumber) {
         paragraphs.push(
           new Paragraph({
@@ -417,7 +426,7 @@ function createContentSections(sections: ContentSection[]): Paragraph[] {
       }
     }
 
-    // Content paragraphs
+    // Content paragraphs in dark gray text
     if (section.content) {
       const contentParagraphs = section.content.split("\n\n");
       contentParagraphs.forEach((para) => {
@@ -428,7 +437,7 @@ function createContentSections(sections: ContentSection[]): Paragraph[] {
                 new TextRun({
                   text: para.trim(),
                   size: 24,
-                  color: COLORS.black,
+                  color: COLORS.textGray,
                 }),
               ],
               spacing: { after: 200 },
@@ -541,7 +550,7 @@ serve(async (req) => {
         default: {
           document: {
             run: {
-              font: "Poppins",
+              font: "Helvetica",
               size: 24,
             },
           },
@@ -571,7 +580,7 @@ serve(async (req) => {
                       color: COLORS.black,
                     }),
                     new TextRun({
-                      text: "  |  " + metadata.title,
+                      text: " | WHITEPAPER",
                       size: 18,
                       color: COLORS.gray,
                     }),
@@ -586,9 +595,18 @@ serve(async (req) => {
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: "© 2025 Sentra Inc. All rights reserved.",
+                      text: "(c) 2025 Sentra Inc. All rights reserved.",
                       size: 16,
                       color: COLORS.lightGray,
+                    }),
+                    new TextRun({
+                      text: "                                    ",
+                      size: 16,
+                    }),
+                    new TextRun({
+                      text: "www.sentra.io",
+                      size: 16,
+                      color: COLORS.primary,
                     }),
                   ],
                   alignment: AlignmentType.LEFT,
