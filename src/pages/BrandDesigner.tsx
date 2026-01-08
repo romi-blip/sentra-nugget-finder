@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Palette, Save, Wand2, FileText, PlusCircle } from 'lucide-react';
+import { Loader2, Palette, Save, Wand2, FileText, PlusCircle, FileCode, Layout } from 'lucide-react';
 import BrandColorPicker from '@/components/brand/BrandColorPicker';
 import FontSelector from '@/components/brand/FontSelector';
 import DocumentUploader from '@/components/brand/DocumentUploader';
@@ -13,6 +13,8 @@ import TransformedPreview from '@/components/brand/TransformedPreview';
 import DocumentMetadataForm from '@/components/brand/DocumentMetadataForm';
 import ContentSectionEditor from '@/components/brand/ContentSectionEditor';
 import TemplatePreview from '@/components/brand/TemplatePreview';
+import { SVGToHTMLConverter } from '@/components/brand/SVGToHTMLConverter';
+import { TemplateManager } from '@/components/brand/TemplateManager';
 import { brandService, BrandSettings } from '@/services/brandService';
 import { documentService } from '@/services/documentService';
 import { 
@@ -22,7 +24,6 @@ import {
   DEFAULT_DOCUMENT_METADATA 
 } from '@/lib/documentTemplates';
 import SEO from '@/components/SEO';
-
 const BrandDesigner: React.FC = () => {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -179,7 +180,7 @@ const BrandDesigner: React.FC = () => {
         </div>
 
         <Tabs defaultValue="create" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="create">
               <PlusCircle className="h-4 w-4 mr-2" />
               Create Document
@@ -187,6 +188,14 @@ const BrandDesigner: React.FC = () => {
             <TabsTrigger value="transform">
               <Wand2 className="h-4 w-4 mr-2" />
               Transform Document
+            </TabsTrigger>
+            <TabsTrigger value="templates">
+              <Layout className="h-4 w-4 mr-2" />
+              Templates
+            </TabsTrigger>
+            <TabsTrigger value="convert">
+              <FileCode className="h-4 w-4 mr-2" />
+              SVG Converter
             </TabsTrigger>
             <TabsTrigger value="settings">
               <Palette className="h-4 w-4 mr-2" />
@@ -296,6 +305,29 @@ const BrandDesigner: React.FC = () => {
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Templates Tab */}
+          <TabsContent value="templates" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-poppins flex items-center gap-2">
+                  <Layout className="h-5 w-5" />
+                  Document Templates
+                </CardTitle>
+                <CardDescription>
+                  Manage HTML templates for document generation. Set default templates for each page type.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TemplateManager />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* SVG Converter Tab */}
+          <TabsContent value="convert" className="space-y-6">
+            <SVGToHTMLConverter />
           </TabsContent>
 
           {/* Brand Settings Tab */}

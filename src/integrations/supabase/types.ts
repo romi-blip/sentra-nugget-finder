@@ -845,6 +845,48 @@ export type Database = {
         }
         Relationships: []
       }
+      document_templates: {
+        Row: {
+          created_at: string | null
+          css_content: string | null
+          footer_html: string | null
+          header_html: string | null
+          html_content: string
+          id: string
+          is_default: boolean | null
+          name: string
+          page_type: string
+          placeholders: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          css_content?: string | null
+          footer_html?: string | null
+          header_html?: string | null
+          html_content: string
+          id?: string
+          is_default?: boolean | null
+          name: string
+          page_type: string
+          placeholders?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          css_content?: string | null
+          footer_html?: string | null
+          header_html?: string | null
+          html_content?: string
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          page_type?: string
+          placeholders?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       documents_competitors: {
         Row: {
           content: string | null

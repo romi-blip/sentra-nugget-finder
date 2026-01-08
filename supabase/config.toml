@@ -148,3 +148,6 @@ verify_jwt = false
 
 [functions.structure-content]
 verify_jwt = true
+
+[functions.convert-svg-to-html]
+verify_jwt = true
