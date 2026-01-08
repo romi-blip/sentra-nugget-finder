@@ -24,6 +24,7 @@ export interface ElementTemplate {
   image_base64: string | null;
   image_height: number | null;
   image_width: number | null;
+  svg_content: string | null;
   font_family: string | null;
   font_size: number | null;
   font_weight: string | null;

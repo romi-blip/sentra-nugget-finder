@@ -1017,6 +1017,7 @@ export type Database = {
           name: string
           position_x: number | null
           position_y: number | null
+          svg_content: string | null
           text_align: string | null
           updated_at: string | null
         }
@@ -1041,6 +1042,7 @@ export type Database = {
           name: string
           position_x?: number | null
           position_y?: number | null
+          svg_content?: string | null
           text_align?: string | null
           updated_at?: string | null
         }
@@ -1065,6 +1067,7 @@ export type Database = {
           name?: string
           position_x?: number | null
           position_y?: number | null
+          svg_content?: string | null
           text_align?: string | null
           updated_at?: string | null
         }
