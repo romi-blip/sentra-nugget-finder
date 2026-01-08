@@ -299,48 +299,33 @@ function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
   });
 }
 
-// Draw header using element template
-async function drawHeaderElement(
+// Draw header using pre-embedded image or default
+function drawHeaderElement(
   page: any, 
-  pdfDoc: any, 
-  headerTemplate: ElementTemplate | null, 
+  embeddedHeaderImage: any | null,
+  headerHeight: number,
   logoImage: any
 ) {
   const width = page.getWidth();
   const height = page.getHeight();
   
-  if (headerTemplate?.image_base64) {
-    // Use the template image as header
-    try {
-      const base64Data = headerTemplate.image_base64.split(',')[1] || headerTemplate.image_base64;
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const headerImage = await pdfDoc.embedPng(bytes);
-      const imgHeight = headerTemplate.image_height || 40;
-      
-      page.drawImage(headerImage, {
-        x: 0,
-        y: height - imgHeight,
-        width: width,
-        height: imgHeight,
-      });
-      
-      return imgHeight;
-    } catch (e) {
-      console.log('[transform-document-design] Could not embed header image:', e);
-    }
+  if (embeddedHeaderImage) {
+    page.drawImage(embeddedHeaderImage, {
+      x: 0,
+      y: height - headerHeight,
+      width: width,
+      height: headerHeight,
+    });
+    return headerHeight;
   }
   
   // Default header if no template
-  const headerHeight = 40;
+  const defaultHeight = 40;
   page.drawRectangle({
     x: 0,
-    y: height - headerHeight,
+    y: height - defaultHeight,
     width: width,
-    height: headerHeight,
+    height: defaultHeight,
     color: COLORS.headerDark,
   });
 
@@ -349,50 +334,35 @@ async function drawHeaderElement(
     const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
     page.drawImage(logoImage, {
       x: 25,
-      y: height - headerHeight + 8,
+      y: height - defaultHeight + 8,
       width: logoWidth,
       height: logoHeight,
     });
   }
   
-  return headerHeight;
+  return defaultHeight;
 }
 
-// Draw footer using element template
-async function drawFooterElement(
+// Draw footer using pre-embedded image or default
+function drawFooterElement(
   page: any, 
-  pdfDoc: any, 
   fonts: any,
-  footerTemplate: ElementTemplate | null,
+  embeddedFooterImage: any | null,
+  footerHeight: number,
   pageNumber: number,
   isConfidential: boolean
 ) {
   const width = page.getWidth();
   const margin = 35;
   
-  if (footerTemplate?.image_base64) {
-    // Use the template image as footer
-    try {
-      const base64Data = footerTemplate.image_base64.split(',')[1] || footerTemplate.image_base64;
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const footerImage = await pdfDoc.embedPng(bytes);
-      const imgHeight = footerTemplate.image_height || 30;
-      
-      page.drawImage(footerImage, {
-        x: 0,
-        y: 0,
-        width: width,
-        height: imgHeight,
-      });
-      
-      return imgHeight;
-    } catch (e) {
-      console.log('[transform-document-design] Could not embed footer image:', e);
-    }
+  if (embeddedFooterImage) {
+    page.drawImage(embeddedFooterImage, {
+      x: 0,
+      y: 0,
+      width: width,
+      height: footerHeight,
+    });
+    return footerHeight;
   }
   
   // Default footer
@@ -499,23 +469,25 @@ async function createCoverPageWithElements(
 }
 
 // Create TOC page
-async function createTOCPage(
+function createTOCPage(
   pdfDoc: any, 
   fonts: any, 
   tocEntries: TOCEntry[], 
   isConfidential: boolean, 
   logoImage: any,
-  headerTemplate: ElementTemplate | null,
-  footerTemplate: ElementTemplate | null
+  embeddedHeaderImage: any | null,
+  headerHeight: number,
+  embeddedFooterImage: any | null,
+  footerHeight: number
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
 
-  const headerHeight = await drawHeaderElement(page, pdfDoc, headerTemplate, logoImage);
+  const actualHeaderHeight = drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage);
 
-  const titleY = height - headerHeight - 40;
+  const titleY = height - actualHeaderHeight - 40;
   page.drawText('Table of ', {
     x: margin,
     y: titleY,
@@ -582,7 +554,7 @@ async function createTOCPage(
     y -= 26;
   }
 
-  await drawFooterElement(page, pdfDoc, fonts, footerTemplate, 1, isConfidential);
+  drawFooterElement(page, fonts, embeddedFooterImage, footerHeight, 1, isConfidential);
 }
 
 // Generate TOC entries
@@ -615,15 +587,17 @@ function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry
 }
 
 // Create content pages with element templates
-async function createContentPages(
+function createContentPages(
   pdfDoc: any, 
   fonts: any, 
   sections: StructuredSection[], 
   isConfidential: boolean, 
   logoImage: any,
+  embeddedHeaderImage: any | null,
+  headerHeight: number,
+  embeddedFooterImage: any | null,
+  footerHeight: number,
   elements: {
-    header?: ElementTemplate | null;
-    footer?: ElementTemplate | null;
     h1?: ElementTemplate | null;
     h2?: ElementTemplate | null;
     h3?: ElementTemplate | null;
@@ -637,23 +611,19 @@ async function createContentPages(
   const margin = 50;
   const contentWidth = pageWidth - margin * 2;
   
-  // Calculate content area based on header/footer heights
-  const headerHeight = elements.header?.image_height || 40;
-  const footerHeight = elements.footer?.image_height || 40;
-  
   let y = pageHeight - headerHeight - 25;
   const minY = footerHeight + 20;
   let pageNumber = 2;
   let hasContent = false;
 
   // Draw header on first page
-  await drawHeaderElement(currentPage, pdfDoc, elements.header || null, logoImage);
+  drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage);
 
-  const addNewPage = async () => {
-    await drawFooterElement(currentPage, pdfDoc, fonts, elements.footer || null, pageNumber, isConfidential);
+  const addNewPage = () => {
+    drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 842]);
-    await drawHeaderElement(currentPage, pdfDoc, elements.header || null, logoImage);
+    drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage);
     y = pageHeight - headerHeight - 25;
     hasContent = false;
   };
@@ -678,18 +648,18 @@ async function createContentPages(
 
     if (section.type === 'page-break') {
       if (hasContent) {
-        await addNewPage();
+        addNewPage();
       }
       continue;
     }
 
     if (y < minY + 80) {
-      await addNewPage();
+      addNewPage();
     }
 
     if (section.type === 'h1') {
       if (hasContent && i > 0) {
-        await addNewPage();
+        addNewPage();
       }
 
       const style = getTextStyle('h1');
@@ -711,7 +681,7 @@ async function createContentPages(
       hasContent = true;
     }
     else if (section.type === 'h2') {
-      if (y < minY + 60) await addNewPage();
+      if (y < minY + 60) addNewPage();
       
       const style = getTextStyle('h2');
       y -= style.marginTop;
@@ -732,7 +702,7 @@ async function createContentPages(
       hasContent = true;
     }
     else if (section.type === 'h3') {
-      if (y < minY + 40) await addNewPage();
+      if (y < minY + 40) addNewPage();
       
       const style = getTextStyle('h3');
       y -= style.marginTop;
@@ -756,7 +726,7 @@ async function createContentPages(
       const style = getTextStyle('bullet');
       
       for (const item of section.items) {
-        if (y < minY + 30) await addNewPage();
+        if (y < minY + 30) addNewPage();
 
         const bulletX = margin + 8;
         
@@ -789,7 +759,7 @@ async function createContentPages(
       const lines = wrapText(content, fonts.regular, style.fontSize, contentWidth);
       
       for (const line of lines) {
-        if (y < minY) await addNewPage();
+        if (y < minY) addNewPage();
 
         currentPage.drawText(line, {
           x: margin,
@@ -805,7 +775,7 @@ async function createContentPages(
     }
   }
 
-  await drawFooterElement(currentPage, pdfDoc, fonts, elements.footer || null, pageNumber, isConfidential);
+  drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
 }
 
 // Main PDF generation
@@ -839,18 +809,54 @@ async function generatePDF(
     }
   }
 
+  // Embed header image ONCE if template has one
+  let embeddedHeaderImage: any = null;
+  let headerHeight = 40;
+  if (elements.header?.image_base64) {
+    try {
+      const base64Data = elements.header.image_base64.split(',')[1] || elements.header.image_base64;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      embeddedHeaderImage = await pdfDoc.embedPng(bytes);
+      headerHeight = elements.header.image_height || 40;
+      console.log('[transform-document-design] Embedded header image once');
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed header image:', e);
+    }
+  }
+
+  // Embed footer image ONCE if template has one
+  let embeddedFooterImage: any = null;
+  let footerHeight = 40;
+  if (elements.footer?.image_base64) {
+    try {
+      const base64Data = elements.footer.image_base64.split(',')[1] || elements.footer.image_base64;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      embeddedFooterImage = await pdfDoc.embedPng(bytes);
+      footerHeight = elements.footer.image_height || 30;
+      console.log('[transform-document-design] Embedded footer image once');
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed footer image:', e);
+    }
+  }
+
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
   // Create cover page
   await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null);
   
   // Create TOC page
-  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, elements.header || null, elements.footer || null);
+  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight);
   
   // Create content pages
-  await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, {
-    header: elements.header,
-    footer: elements.footer,
+  await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, {
     h1: elements.h1,
     h2: elements.h2,
     h3: elements.h3,
