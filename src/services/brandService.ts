@@ -14,17 +14,15 @@ export interface BrandSettings {
   body_font: string;
   body_weight: string;
   is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface TransformResult {
-  type: 'docx' | 'pdf' | 'html' | null;
-  modifiedFile: string | null; // base64
+  type: 'docx' | 'pdf' | null;
+  modifiedFile: string | null;
   originalFileName: string;
   message?: string;
-  html?: string; // For template-based rendering
-  css?: string;
 }
 
 export const brandService = {
@@ -62,7 +60,6 @@ export const brandService = {
       new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
     );
 
-    // Determine file type from extension
     const fileType = file.name.toLowerCase().endsWith('.docx') ? 'docx' : 'pdf';
 
     const { data, error } = await supabase.functions.invoke('transform-document-design', {
@@ -70,18 +67,6 @@ export const brandService = {
         file: base64,
         fileName: file.name,
         fileType,
-        settings: {
-          primaryColor: settings.primary_color,
-          secondaryColor: settings.secondary_color,
-          accentPink: settings.accent_pink,
-          accentCyan: settings.accent_cyan,
-          backgroundColor: settings.background_color,
-          textColor: settings.text_color,
-          headingFont: settings.heading_font,
-          headingWeight: settings.heading_weight,
-          bodyFont: settings.body_font,
-          bodyWeight: settings.body_weight,
-        },
       },
     });
 
@@ -93,56 +78,6 @@ export const brandService = {
       modifiedFile: data.modifiedFile,
       originalFileName: data.originalFileName || file.name,
       message: data.message,
-    };
-  },
-
-  async transformDocumentWithTemplates(
-    file: File, 
-    settings: BrandSettings,
-    coverTemplateId?: string,
-    textTemplateId?: string
-  ): Promise<TransformResult> {
-    // Read file as base64
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
-
-    const fileType = file.name.toLowerCase().endsWith('.docx') ? 'docx' : 'pdf';
-
-    const { data, error } = await supabase.functions.invoke('transform-document-design', {
-      body: {
-        file: base64,
-        fileName: file.name,
-        fileType,
-        coverTemplateId,
-        textTemplateId,
-        useTemplates: true,
-        settings: {
-          primaryColor: settings.primary_color,
-          secondaryColor: settings.secondary_color,
-          accentPink: settings.accent_pink,
-          accentCyan: settings.accent_cyan,
-          backgroundColor: settings.background_color,
-          textColor: settings.text_color,
-          headingFont: settings.heading_font,
-          headingWeight: settings.heading_weight,
-          bodyFont: settings.body_font,
-          bodyWeight: settings.body_weight,
-        },
-      },
-    });
-
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-
-    return {
-      type: data.type,
-      modifiedFile: data.modifiedFile,
-      originalFileName: data.originalFileName || file.name,
-      message: data.message,
-      html: data.html,
-      css: data.css,
     };
   },
 };

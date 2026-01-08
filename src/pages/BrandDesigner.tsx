@@ -27,10 +27,9 @@ const BrandDesigner: React.FC = () => {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [transformResult, setTransformResult] = useState<{
-    type: 'docx' | 'pdf' | 'html' | null;
+    type: 'docx' | 'pdf' | null;
     modifiedFile: string | null;
     message?: string;
-    html?: string;
   }>({ type: null, modifiedFile: null });
   const [localSettings, setLocalSettings] = useState<Partial<BrandSettings>>({});
 
@@ -240,7 +239,6 @@ const BrandDesigner: React.FC = () => {
                   modifiedFile={transformResult.modifiedFile}
                   originalFileName={selectedFile?.name || ''}
                   message={transformResult.message}
-                  html={transformResult.html}
                 />
               </CardContent>
             </Card>
