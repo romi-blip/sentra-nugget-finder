@@ -104,6 +104,13 @@ const BrandDesigner: React.FC = () => {
       return brandService.transformDocument(selectedFile, settings);
     },
     onSuccess: async (result) => {
+      console.log('[BrandDesigner] Transform result:', { 
+        hasHtml: !!result.html, 
+        htmlLength: result.html?.length,
+        type: result.type,
+        message: result.message 
+      });
+      
       // Check if result contains HTML for client-side rendering
       if (result.html) {
         // Store HTML for preview
