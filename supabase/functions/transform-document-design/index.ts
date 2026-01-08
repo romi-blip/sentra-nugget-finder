@@ -75,6 +75,15 @@ interface TOCEntry {
   level: number;
 }
 
+interface DocumentTemplate {
+  id: string;
+  name: string;
+  page_type: string;
+  html_content: string;
+  css_content?: string;
+  image_base64?: string;
+}
+
 // Decode HTML entities
 function decodeHtmlEntities(text: string): string {
   return text
@@ -191,7 +200,6 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       // Check if it's a bullet point
       if (paragraphText.startsWith('•') || paragraphText.startsWith('-') || paragraphText.startsWith('*')) {
         const cleanText = paragraphText.replace(/^[•\-*]\s*/, '');
-        // Try to add to existing bullet list or create new one
         const lastSection = sections[sections.length - 1];
         if (lastSection && lastSection.type === 'bullet-list' && lastSection.items) {
           lastSection.items.push(cleanText);
@@ -264,28 +272,23 @@ function drawFooterBar(page: any) {
 // Draw Sentra logo icon (pixelated grid pattern) for content pages
 function drawSentraLogoIcon(page: any, x: number, y: number, color: any, scale: number = 1) {
   const s = scale * 2.5;
-  // Grid pattern - 3x3 with some missing for the sentra look
-  // Top row
   page.drawRectangle({ x: x, y: y, width: 4*s, height: 4*s, color });
   page.drawRectangle({ x: x + 6*s, y: y, width: 4*s, height: 4*s, color });
   page.drawRectangle({ x: x + 12*s, y: y, width: 4*s, height: 4*s, color });
-  // Middle row
   page.drawRectangle({ x: x, y: y - 6*s, width: 4*s, height: 4*s, color });
   page.drawRectangle({ x: x + 12*s, y: y - 6*s, width: 4*s, height: 4*s, color });
-  // Bottom row
   page.drawRectangle({ x: x, y: y - 12*s, width: 4*s, height: 4*s, color });
   page.drawRectangle({ x: x + 6*s, y: y - 12*s, width: 4*s, height: 4*s, color });
   page.drawRectangle({ x: x + 12*s, y: y - 12*s, width: 4*s, height: 4*s, color });
 }
 
-// Draw content page header - DARK BAR (like cover page) with embedded Sentra logo image
+// Draw content page header with embedded Sentra logo image
 async function drawContentHeader(page: any, pdfDoc: any, logoImage: any) {
   const width = page.getWidth();
   const height = page.getHeight();
   const headerHeight = 40;
   const logoMargin = 25;
 
-  // Full-width dark charcoal header bar (matches cover page background)
   page.drawRectangle({
     x: 0,
     y: height - headerHeight,
@@ -294,7 +297,6 @@ async function drawContentHeader(page: any, pdfDoc: any, logoImage: any) {
     color: COLORS.headerDark,
   });
 
-  // Embed actual Sentra logo image (includes proper "sentra" text with correct font)
   if (logoImage) {
     const logoHeight = 24;
     const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
@@ -305,16 +307,14 @@ async function drawContentHeader(page: any, pdfDoc: any, logoImage: any) {
       height: logoHeight,
     });
   }
-  // NO purple accent line - removed per design spec
 }
 
-// Draw content page footer - copyright left, confidential center, page number right
+// Draw content page footer
 function drawContentFooter(page: any, fonts: any, pageNumber: number, isConfidential: boolean) {
   const width = page.getWidth();
   const margin = 35;
   const footerY = 25;
 
-  // Copyright - left aligned
   const copyrightText = `(c) Sentra ${new Date().getFullYear()}. All rights reserved.`;
   page.drawText(copyrightText, {
     x: margin,
@@ -324,7 +324,6 @@ function drawContentFooter(page: any, fonts: any, pageNumber: number, isConfiden
     color: COLORS.footerGray,
   });
 
-  // Confidential - center aligned
   if (isConfidential) {
     const confText = 'Confidential';
     const confWidth = fonts.regular.widthOfTextAtSize(confText, 9);
@@ -337,7 +336,6 @@ function drawContentFooter(page: any, fonts: any, pageNumber: number, isConfiden
     });
   }
 
-  // Page number - right aligned
   const pageNumText = pageNumber.toString();
   const pageNumWidth = fonts.regular.widthOfTextAtSize(pageNumText, 9);
   page.drawText(pageNumText, {
@@ -369,9 +367,8 @@ function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
   });
 }
 
-// Draw icon circle (light purple background) - matching SVG template
+// Draw icon circle (light purple background)
 function drawIconCircle(page: any, x: number, y: number, size: number = 44) {
-  // Light purple circle background (#F3E8FF)
   page.drawCircle({
     x: x + size / 2,
     y: y - size / 2,
@@ -380,14 +377,74 @@ function drawIconCircle(page: any, x: number, y: number, size: number = 44) {
   });
 }
 
-// Create cover page (BLACK background)
-function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
-  const page = pdfDoc.addPage([595, 814]);
+// Create cover page with template image if available
+async function createCoverPageWithTemplate(
+  pdfDoc: any, 
+  fonts: any, 
+  data: ExtractedDocument,
+  templateImage: any
+) {
+  const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
 
-  // Black background
+  // Draw template image as background
+  if (templateImage) {
+    page.drawImage(templateImage, {
+      x: 0,
+      y: 0,
+      width: width,
+      height: height,
+    });
+  } else {
+    // Fallback: draw black background
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width: width,
+      height: height,
+      color: COLORS.black,
+    });
+    
+    // Draw Sentra logo at top left
+    drawSentraLogo(page, margin, height - 60, 1);
+    
+    page.drawText('Sentra', {
+      x: margin + 50,
+      y: height - 75,
+      size: 20,
+      font: fonts.bold,
+      color: COLORS.lightText,
+    });
+    
+    // Colored footer bar
+    drawFooterBar(page);
+  }
+
+  // Draw title - position adjusted for template
+  const titleY = templateImage ? 400 : height - 440;
+  const titleLines = wrapText(data.title || 'Document Title', fonts.bold, 28, width - margin * 2);
+  let currentY = titleY;
+  for (const line of titleLines) {
+    page.drawText(line, {
+      x: margin,
+      y: currentY,
+      size: 28,
+      font: fonts.bold,
+      color: COLORS.primary,
+    });
+    currentY -= 36;
+  }
+}
+
+// Create cover page (BLACK background) - default
+function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
+  const page = pdfDoc.addPage([595, 842]);
+  const width = page.getWidth();
+  const height = page.getHeight();
+  const margin = 50;
+
   page.drawRectangle({
     x: 0,
     y: 0,
@@ -396,10 +453,8 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
     color: COLORS.black,
   });
 
-  // Draw Sentra logo at top left
   drawSentraLogo(page, margin, height - 60, 1);
 
-  // "Sentra" text next to logo
   page.drawText('Sentra', {
     x: margin + 50,
     y: height - 75,
@@ -408,7 +463,6 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
     color: COLORS.lightText,
   });
 
-  // Title in neon green
   const titleY = height - 440;
   const titleLines = wrapText(data.title || 'Document Title', fonts.bold, 32, width - margin * 2);
   let currentY = titleY;
@@ -423,20 +477,18 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
     currentY -= 40;
   }
 
-  // Colored footer bar
   drawFooterBar(page);
 }
 
 // Create TOC page
 async function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[], isConfidential: boolean, logoImage: any) {
-  const page = pdfDoc.addPage([595, 814]);
+  const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
 
   await drawContentHeader(page, pdfDoc, logoImage);
 
-  // TOC Title
   const titleY = height - 100;
   page.drawText('Table of ', {
     x: margin,
@@ -454,7 +506,6 @@ async function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[], is
     color: COLORS.primary,
   });
 
-  // TOC entries
   let y = titleY - 50;
 
   for (let i = 0; i < tocEntries.length; i++) {
@@ -489,7 +540,6 @@ async function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[], is
       color: COLORS.gray,
     });
 
-    // Dot leader
     const titleWidth = fonts.bold.widthOfTextAtSize(displayTitle, fontSize);
     const dotsStartX = margin + titleWidth + 8;
     const dotsEndX = pageNumX - 8;
@@ -538,39 +588,64 @@ function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry
   return entries;
 }
 
-// Create content pages with proper styling - REBUILT FROM SCRATCH
-async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection[], isConfidential: boolean, logoImage: any) {
-  let currentPage = pdfDoc.addPage([595, 814]);
+// Create content pages with optional template background
+async function createContentPages(
+  pdfDoc: any, 
+  fonts: any, 
+  sections: StructuredSection[], 
+  isConfidential: boolean, 
+  logoImage: any,
+  textTemplateImage?: any
+) {
+  let currentPage = pdfDoc.addPage([595, 842]);
   const pageWidth = currentPage.getWidth();
   const pageHeight = currentPage.getHeight();
-  const margin = 40; // Proper margin for clean layout
+  const margin = 50;
   const contentWidth = pageWidth - margin * 2;
   
-  // Start content below the dark header bar (40px) + padding
-  let y = pageHeight - 65;
-  const minY = 60; // Leave room for footer
+  let y = pageHeight - 80;
+  const minY = 60;
   let pageNumber = 2;
   let hasContent = false;
 
-  // Draw header on first content page
-  await drawContentHeader(currentPage, pdfDoc, logoImage);
+  // Draw template or header
+  if (textTemplateImage) {
+    currentPage.drawImage(textTemplateImage, {
+      x: 0,
+      y: 0,
+      width: pageWidth,
+      height: pageHeight,
+    });
+    y = pageHeight - 80;
+  } else {
+    await drawContentHeader(currentPage, pdfDoc, logoImage);
+    y = pageHeight - 65;
+  }
 
-  // Helper to add a new page
   const addNewPage = async () => {
     drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
     pageNumber++;
-    currentPage = pdfDoc.addPage([595, 814]);
-    y = pageHeight - 65; // Below header (40px) + padding
-    await drawContentHeader(currentPage, pdfDoc, logoImage);
+    currentPage = pdfDoc.addPage([595, 842]);
+    
+    if (textTemplateImage) {
+      currentPage.drawImage(textTemplateImage, {
+        x: 0,
+        y: 0,
+        width: pageWidth,
+        height: pageHeight,
+      });
+      y = pageHeight - 80;
+    } else {
+      await drawContentHeader(currentPage, pdfDoc, logoImage);
+      y = pageHeight - 65;
+    }
     hasContent = false;
   };
 
-  // Process each section
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
     const content = section.content || section.text || '';
 
-    // Handle page breaks
     if (section.type === 'page-break') {
       if (hasContent) {
         await addNewPage();
@@ -578,12 +653,10 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
       continue;
     }
 
-    // Check if we need a new page
     if (y < minY + 80) {
       await addNewPage();
     }
 
-    // H1 - Main section headings (22px, bold, black)
     if (section.type === 'h1') {
       if (hasContent && i > 0) {
         await addNewPage();
@@ -600,14 +673,13 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
         });
         y -= 28;
       }
-      y -= 24; // Consistent section gap
+      y -= 24;
       hasContent = true;
     }
-    // H2 - Subsection headings (16px, bold, black)
     else if (section.type === 'h2') {
       if (y < minY + 60) await addNewPage();
       
-      y -= 16; // Add spacing before h2
+      y -= 16;
 
       const lines = wrapText(content, fonts.bold, 16, contentWidth);
       for (const line of lines) {
@@ -623,7 +695,6 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
       y -= 16;
       hasContent = true;
     }
-    // H3 - Sub-subsection headings (13px, bold, dark gray)
     else if (section.type === 'h3') {
       if (y < minY + 40) await addNewPage();
       
@@ -643,7 +714,6 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
       y -= 10;
       hasContent = true;
     }
-    // Feature grid - 2 column layout with purple icon circles
     else if (section.type === 'feature-grid' && section.features) {
       const colGap = 30;
       const colWidth = (contentWidth - colGap) / 2;
@@ -651,22 +721,18 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
       const features = section.features;
       
       for (let j = 0; j < features.length; j += 2) {
-        // Check if we need space for feature row
         if (y < minY + 100) await addNewPage();
 
         const leftFeature = features[j];
         const rightFeature = features[j + 1];
         let rowHeight = 0;
 
-        // LEFT COLUMN
         const leftX = margin;
         const leftTextX = leftX + iconSize + 12;
         const leftTextWidth = colWidth - iconSize - 12;
         
-        // Draw icon circle
         drawIconCircle(currentPage, leftX, y, iconSize);
         
-        // Feature title (bold, 14px, black)
         const leftTitleLines = wrapText(leftFeature.title, fonts.bold, 14, leftTextWidth);
         let leftY = y - 8;
         for (const line of leftTitleLines) {
@@ -680,7 +746,6 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
           leftY -= 18;
         }
         
-        // Feature description (regular, 11px, gray)
         const leftDescLines = wrapText(leftFeature.description, fonts.regular, 11, leftTextWidth);
         for (const line of leftDescLines) {
           currentPage.drawText(line, {
@@ -695,16 +760,13 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
         
         rowHeight = Math.max(rowHeight, y - leftY);
 
-        // RIGHT COLUMN
         if (rightFeature) {
           const rightX = margin + colWidth + colGap;
           const rightTextX = rightX + iconSize + 12;
           const rightTextWidth = colWidth - iconSize - 12;
           
-          // Draw icon circle
           drawIconCircle(currentPage, rightX, y, iconSize);
           
-          // Feature title
           const rightTitleLines = wrapText(rightFeature.title, fonts.bold, 14, rightTextWidth);
           let rightY = y - 8;
           for (const line of rightTitleLines) {
@@ -718,7 +780,6 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
             rightY -= 18;
           }
           
-          // Feature description
           const rightDescLines = wrapText(rightFeature.description, fonts.regular, 11, rightTextWidth);
           for (const line of rightDescLines) {
             currentPage.drawText(line, {
@@ -739,7 +800,6 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
       y -= 10;
       hasContent = true;
     }
-    // Bullet list - clean indented bullets
     else if (section.type === 'bullet-list' && section.items) {
       for (const item of section.items) {
         if (y < minY + 30) await addNewPage();
@@ -747,7 +807,6 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
         const bulletIndent = 20;
         const bulletX = margin + 8;
         
-        // Draw bullet character (filled circle approximation using dash)
         currentPage.drawText('-', {
           x: bulletX,
           y: y,
@@ -756,7 +815,6 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
           color: COLORS.bodyText,
         });
 
-        // Wrap and draw text with proper spacing
         const lines = wrapText(item, fonts.regular, 10, contentWidth - bulletIndent - 8);
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
           currentPage.drawText(lines[lineIdx], {
@@ -768,12 +826,11 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
           });
           y -= 16;
         }
-        y -= 4; // Small gap between bullet items
+        y -= 4;
       }
       y -= 12;
       hasContent = true;
     }
-    // Regular paragraph (10px, regular, body text gray)
     else if (section.type === 'paragraph' && content) {
       const lines = wrapText(content, fonts.regular, 10, contentWidth);
       
@@ -787,19 +844,23 @@ async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredS
           font: fonts.regular,
           color: COLORS.bodyText,
         });
-        y -= 15; // Better line height
+        y -= 15;
       }
-      y -= 14; // Paragraph gap
+      y -= 14;
       hasContent = true;
     }
   }
 
-  // Draw footer on last page
   drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
 }
 
-// Main PDF generation
-async function generatePDF(extractedDoc: ExtractedDocument, logoBytes: Uint8Array | null): Promise<Uint8Array> {
+// Main PDF generation with template images
+async function generatePDFWithTemplates(
+  extractedDoc: ExtractedDocument, 
+  logoBytes: Uint8Array | null,
+  coverTemplateImage?: any,
+  textTemplateImage?: any
+): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   
   const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -807,7 +868,6 @@ async function generatePDF(extractedDoc: ExtractedDocument, logoBytes: Uint8Arra
   
   const fonts = { regular: regularFont, bold: boldFont };
 
-  // Embed logo image if available
   let logoImage = null;
   if (logoBytes) {
     try {
@@ -819,11 +879,22 @@ async function generatePDF(extractedDoc: ExtractedDocument, logoBytes: Uint8Arra
 
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
-  createCoverPage(pdfDoc, fonts, extractedDoc);
+  // Create cover page
+  if (coverTemplateImage) {
+    await createCoverPageWithTemplate(pdfDoc, fonts, extractedDoc, coverTemplateImage);
+  } else {
+    createCoverPage(pdfDoc, fonts, extractedDoc);
+  }
+  
   await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage);
-  await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage);
+  await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, textTemplateImage);
 
   return await pdfDoc.save();
+}
+
+// Main PDF generation - default
+async function generatePDF(extractedDoc: ExtractedDocument, logoBytes: Uint8Array | null): Promise<Uint8Array> {
+  return generatePDFWithTemplates(extractedDoc, logoBytes);
 }
 
 serve(async (req) => {
@@ -872,260 +943,195 @@ serve(async (req) => {
       );
     }
 
-    // If using templates, fetch them and return HTML for client-side rendering
+    // Extract document content
+    const extractedDoc = await extractDocxContent(file);
+
+    // Fetch Sentra logo
+    let logoBytes: Uint8Array | null = null;
+    try {
+      const logoResponse = await fetch('https://gmgrlphiopslkyxmuced.supabase.co/storage/v1/object/public/knowledge-files/sentra-logo.jpg');
+      if (logoResponse.ok) {
+        logoBytes = new Uint8Array(await logoResponse.arrayBuffer());
+      }
+    } catch (e) {
+      console.log('[transform-document-design] Could not fetch logo:', e);
+    }
+
+    // If using templates with image_base64, embed them as backgrounds
     if (useTemplates && (coverTemplateId || textTemplateId)) {
-      console.log('[transform-document-design] Using template-based transformation');
+      console.log('[transform-document-design] Using template-based PDF generation');
       
-      // Fetch templates from database
-      let coverTemplate = null;
-      let textTemplate = null;
+      let coverTemplateImage = null;
+      let textTemplateImage = null;
       
+      // Fetch cover template
       if (coverTemplateId) {
-        const { data } = await supabase
+        const { data: coverTemplate } = await supabase
           .from('document_templates')
           .select('*')
           .eq('id', coverTemplateId)
           .single();
-        coverTemplate = data;
+        
+        if (coverTemplate?.image_base64) {
+          console.log('[transform-document-design] Cover template has image_base64');
+          try {
+            // Parse base64 data URL
+            const base64Data = coverTemplate.image_base64.split(',')[1] || coverTemplate.image_base64;
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            coverTemplateImage = await PDFDocument.create().then(async (tempDoc) => {
+              const pdfDoc = await PDFDocument.create();
+              return await pdfDoc.embedPng(bytes);
+            }).catch(async () => {
+              // Try embedding directly in main doc
+              const pdfDoc = await PDFDocument.create();
+              return await pdfDoc.embedPng(bytes);
+            });
+          } catch (e) {
+            console.log('[transform-document-design] Could not embed cover template image:', e);
+          }
+        }
       }
       
+      // Fetch text template
       if (textTemplateId) {
-        const { data } = await supabase
+        const { data: textTemplate } = await supabase
           .from('document_templates')
           .select('*')
           .eq('id', textTemplateId)
           .single();
-        textTemplate = data;
-      }
-      
-      // Extract content from DOCX
-      const extractedDoc = await extractDocxContent(file);
-      
-      // Build HTML response
-      const placeholderData: Record<string, string> = {
-        title: extractedDoc.title || 'Untitled Document',
-        subtitle: extractedDoc.subtitle || '',
-        date: new Date().toLocaleDateString(),
-        year: new Date().getFullYear().toString(),
-        confidential: extractedDoc.isConfidential ? 'Confidential' : '',
-      };
-      
-      // Generate content HTML
-      const contentHtml = extractedDoc.sections.map(section => {
-        const content = section.content || '';
-        switch (section.type) {
-          case 'h1':
-            return `<h1 class="section-heading">${content}</h1>`;
-          case 'h2':
-            return `<h2 class="subsection-heading">${content}</h2>`;
-          case 'h3':
-            return `<h3 class="subsubsection-heading">${content}</h3>`;
-          case 'paragraph':
-            return `<p class="body-text">${content}</p>`;
-          case 'bullet-list':
-            if (section.items && section.items.length > 0) {
-              return `<ul class="bullet-list">${section.items.map(item => `<li>${item}</li>`).join('')}</ul>`;
+        
+        if (textTemplate?.image_base64) {
+          console.log('[transform-document-design] Text template has image_base64');
+          try {
+            const base64Data = textTemplate.image_base64.split(',')[1] || textTemplate.image_base64;
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
             }
-            return '';
-          default:
-            return content ? `<p>${content}</p>` : '';
+            textTemplateImage = await PDFDocument.create().then(async (tempDoc) => {
+              const pdfDoc = await PDFDocument.create();
+              return await pdfDoc.embedPng(bytes);
+            }).catch(async () => {
+              const pdfDoc = await PDFDocument.create();
+              return await pdfDoc.embedPng(bytes);
+            });
+          } catch (e) {
+            console.log('[transform-document-design] Could not embed text template image:', e);
+          }
         }
-      }).join('\n');
+      }
+
+      // Generate PDF with template images embedded
+      const pdfDoc = await PDFDocument.create();
       
-      placeholderData.content = contentHtml;
-      
-      // Replace placeholders in templates
-      const replacePlaceholders = (html: string, data: Record<string, string>): string => {
-        let result = html;
-        for (const [key, value] of Object.entries(data)) {
-          result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'gi'), value);
-          result = result.replace(new RegExp(`\\$\\{${key}\\}`, 'gi'), value);
-          result = result.replace(new RegExp(`%${key}%`, 'gi'), value);
+      const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const fonts = { regular: regularFont, bold: boldFont };
+
+      let logoImage = null;
+      if (logoBytes) {
+        try {
+          logoImage = await pdfDoc.embedJpg(logoBytes);
+        } catch (e) {
+          console.log('[transform-document-design] Could not embed logo:', e);
         }
-        return result;
-      };
+      }
+
+      // Embed template images
+      let embeddedCoverImage = null;
+      let embeddedTextImage = null;
       
-      // Build combined HTML document with CSS-only styling (SVGs don't render well in html2pdf)
-      // Use Sentra brand colors: black background for cover, white for content pages
-      let combinedHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-    .page { width: 595px; min-height: 842px; page-break-after: always; position: relative; overflow: hidden; }
-    .page:last-child { page-break-after: auto; }
-    
-    /* Cover page - Sentra dark theme */
-    .cover-page { 
-      background: linear-gradient(180deg, #000000 0%, #1a1a2e 100%);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 60px 50px;
-    }
-    .cover-header { display: flex; align-items: center; gap: 12px; }
-    .cover-logo { width: 32px; height: 32px; }
-    .cover-logo-text { color: white; font-size: 20px; font-weight: bold; }
-    .cover-content { flex: 1; display: flex; flex-direction: column; justify-content: center; }
-    .cover-title { font-size: 32px; font-weight: bold; color: #66FF66; margin: 0 0 16px 0; line-height: 1.3; }
-    .cover-subtitle { font-size: 16px; color: #9CA3AF; margin: 0; }
-    .cover-footer { display: flex; gap: 0; height: 8px; border-radius: 4px; overflow: hidden; }
-    .cover-footer-seg { flex: 1; }
-    .seg-green { background: #66FF66; }
-    .seg-cyan { background: #00D4FF; }
-    .seg-pink { background: #FF66B2; }
-    .seg-purple { background: #8B5CF6; }
-    
-    /* Content pages - clean white with header */
-    .text-page { background: #ffffff; }
-    .page-header { 
-      background: #1a1a2e; 
-      padding: 16px 50px; 
-      display: flex; 
-      align-items: center; 
-      gap: 12px;
-    }
-    .header-logo { width: 24px; height: 24px; }
-    .header-logo-text { color: white; font-size: 16px; font-weight: 600; }
-    .content-area { padding: 40px 50px 60px 50px; }
-    .section-heading { font-size: 20px; font-weight: bold; color: #000; margin: 24px 0 12px 0; }
-    .section-heading:first-child { margin-top: 0; }
-    .subsection-heading { font-size: 14px; font-weight: bold; color: #1a1a2e; margin: 20px 0 10px 0; }
-    .subsubsection-heading { font-size: 12px; font-weight: bold; color: #374151; margin: 16px 0 8px 0; }
-    .body-text { font-size: 11px; line-height: 1.7; color: #374151; margin: 0 0 10px 0; }
-    .bullet-list { margin: 8px 0; padding-left: 24px; }
-    .bullet-list li { font-size: 11px; color: #374151; margin-bottom: 6px; line-height: 1.6; }
-    
-    /* Page footer */
-    .page-footer {
-      position: absolute;
-      bottom: 20px;
-      left: 50px;
-      right: 50px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 9px;
-      color: #9CA3AF;
-    }
-    
-    ${coverTemplate?.css_content || ''}
-    ${textTemplate?.css_content || ''}
-  </style>
-</head>
-<body>
-`;
-      
-      // Cover page with Sentra branding (CSS-based, no SVG)
-      combinedHtml += `<div class="page cover-page">
-  <div class="cover-header">
-    <div class="cover-logo-text">SENTRA</div>
-  </div>
-  <div class="cover-content">
-    <h1 class="cover-title">${placeholderData.title}</h1>
-    ${placeholderData.subtitle ? `<p class="cover-subtitle">${placeholderData.subtitle}</p>` : ''}
-  </div>
-  <div class="cover-footer">
-    <div class="cover-footer-seg seg-green"></div>
-    <div class="cover-footer-seg seg-cyan"></div>
-    <div class="cover-footer-seg seg-pink"></div>
-    <div class="cover-footer-seg seg-purple"></div>
-  </div>
-</div>\n`;
-      
-      // Content pages with header and footer
-      if (extractedDoc.sections.length > 0) {
-        combinedHtml += `<div class="page text-page">
-  <div class="page-header">
-    <span class="header-logo-text">SENTRA</span>
-  </div>
-  <div class="content-area">${contentHtml}</div>
-  <div class="page-footer">
-    <span>© ${placeholderData.year} Sentra</span>
-    <span>${placeholderData.confidential}</span>
-  </div>
-</div>\n`;
+      if (coverTemplateId) {
+        const { data: coverTemplate } = await supabase
+          .from('document_templates')
+          .select('image_base64')
+          .eq('id', coverTemplateId)
+          .single();
+        
+        if (coverTemplate?.image_base64) {
+          try {
+            const base64Data = coverTemplate.image_base64.split(',')[1] || coverTemplate.image_base64;
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            embeddedCoverImage = await pdfDoc.embedPng(bytes);
+            console.log('[transform-document-design] Embedded cover template image');
+          } catch (e) {
+            console.log('[transform-document-design] Could not embed cover image:', e);
+          }
+        }
       }
       
-      combinedHtml += `</body></html>`;
+      if (textTemplateId) {
+        const { data: textTemplate } = await supabase
+          .from('document_templates')
+          .select('image_base64')
+          .eq('id', textTemplateId)
+          .single();
+        
+        if (textTemplate?.image_base64) {
+          try {
+            const base64Data = textTemplate.image_base64.split(',')[1] || textTemplate.image_base64;
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            embeddedTextImage = await pdfDoc.embedPng(bytes);
+            console.log('[transform-document-design] Embedded text template image');
+          } catch (e) {
+            console.log('[transform-document-design] Could not embed text image:', e);
+          }
+        }
+      }
+
+      const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
+
+      // Create cover page with template image
+      if (embeddedCoverImage) {
+        await createCoverPageWithTemplate(pdfDoc, fonts, extractedDoc, embeddedCoverImage);
+      } else {
+        createCoverPage(pdfDoc, fonts, extractedDoc);
+      }
       
-      console.log('[transform-document-design] Template HTML generated successfully');
-      
+      await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage);
+      await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, embeddedTextImage);
+
+      const pdfBytes = await pdfDoc.save();
+      const pdfBase64 = btoa(String.fromCharCode(...pdfBytes));
+
       return new Response(
         JSON.stringify({
-          type: 'html',
-          html: combinedHtml,
-          modifiedFile: null,
-          originalFileName: fileName,
-          message: 'Document prepared for template-based rendering.',
+          type: 'pdf',
+          modifiedFile: pdfBase64,
+          originalFileName: fileName.replace(/\.docx$/i, '_branded.pdf'),
+          message: 'Document transformed successfully with templates.',
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // First, structure the content using the structure-content function
-    let extractedDoc = await extractDocxContent(file);
-    
-    // Call structure-content to get properly formatted sections
-    try {
-      const structureResponse = await supabase.functions.invoke('structure-content', {
-        body: { 
-          content: extractedDoc.sections.map(s => s.content || '').join('\n\n'),
-          documentTitle: extractedDoc.title 
-        }
-      });
-
-      if (structureResponse.data?.success && structureResponse.data?.structured) {
-        const structured = structureResponse.data.structured;
-        extractedDoc = {
-          ...extractedDoc,
-          title: structured.title || extractedDoc.title,
-          subtitle: structured.subtitle || extractedDoc.subtitle,
-          sections: structured.sections || extractedDoc.sections,
-        };
-        console.log('[transform-document-design] Content structured successfully via AI');
-      }
-    } catch (structureError) {
-      console.log('[transform-document-design] Structure function unavailable, using basic extraction:', structureError);
-    }
-    
-    console.log(`[transform-document-design] Generating PDF from extracted content`);
-
-    // Fetch Sentra logo for header embedding
-    let logoBytes: Uint8Array | null = null;
-    try {
-      const logoResponse = await fetch('https://sentra.io/images/sentra-logo.png');
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer();
-        logoBytes = new Uint8Array(logoArrayBuffer);
-      }
-    } catch (logoError) {
-      console.log('[transform-document-design] Could not fetch logo, will use fallback:', logoError);
-    }
-
+    // Default PDF generation (no templates)
     const pdfBytes = await generatePDF(extractedDoc, logoBytes);
-    
-    let base64 = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < pdfBytes.length; i += chunkSize) {
-      const chunk = pdfBytes.subarray(i, Math.min(i + chunkSize, pdfBytes.length));
-      base64 += String.fromCharCode(...chunk);
-    }
-    const modifiedFile = btoa(base64);
-
-    console.log(`[transform-document-design] PDF generated successfully`);
+    const pdfBase64 = btoa(String.fromCharCode(...pdfBytes));
 
     return new Response(
       JSON.stringify({
         type: 'pdf',
-        modifiedFile,
-        originalFileName: fileName,
-        message: 'Your document has been transformed into a branded PDF with Sentra styling.',
+        modifiedFile: pdfBase64,
+        originalFileName: fileName.replace(/\.docx$/i, '_branded.pdf'),
+        message: 'Document transformed successfully with Sentra branding.',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
   } catch (error) {
     console.error('[transform-document-design] Error:', error);
     return new Response(
@@ -1133,7 +1139,6 @@ serve(async (req) => {
         error: error.message,
         type: null,
         modifiedFile: null,
-        message: `Error transforming document: ${error.message}`
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

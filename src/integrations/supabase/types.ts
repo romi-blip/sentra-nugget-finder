@@ -853,6 +853,7 @@ export type Database = {
           header_html: string | null
           html_content: string
           id: string
+          image_base64: string | null
           is_default: boolean | null
           name: string
           page_type: string
@@ -866,6 +867,7 @@ export type Database = {
           header_html?: string | null
           html_content: string
           id?: string
+          image_base64?: string | null
           is_default?: boolean | null
           name: string
           page_type: string
@@ -879,6 +881,7 @@ export type Database = {
           header_html?: string | null
           html_content?: string
           id?: string
+          image_base64?: string | null
           is_default?: boolean | null
           name?: string
           page_type?: string
