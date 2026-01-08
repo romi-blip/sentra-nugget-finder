@@ -12,6 +12,30 @@ interface PageLayoutEditorProps {
   showLogo?: boolean;
 }
 
+// Helper to get image source from element template
+const getImageSrc = (element: ElementTemplate | null | undefined): string | null => {
+  if (!element) return null;
+  
+  // Check for PNG/JPG base64 first
+  if (element.image_base64) {
+    // If it starts with data:, use as-is
+    if (element.image_base64.startsWith('data:')) {
+      return element.image_base64;
+    }
+    // Otherwise wrap in data URL
+    return `data:image/png;base64,${element.image_base64}`;
+  }
+  
+  // Check for SVG content
+  if (element.svg_content) {
+    // Convert SVG to data URL
+    const svgBlob = new Blob([element.svg_content], { type: 'image/svg+xml' });
+    return URL.createObjectURL(svgBlob);
+  }
+  
+  return null;
+};
+
 export function PageLayoutEditor({
   pageType,
   headerElement,
@@ -26,6 +50,11 @@ export function PageLayoutEditor({
   const PREVIEW_HEIGHT = 396;
   const SCALE = PREVIEW_WIDTH / 595;
 
+  const headerSrc = getImageSrc(headerElement);
+  const footerSrc = getImageSrc(footerElement);
+  const logoSrc = getImageSrc(logoElement);
+  const backgroundSrc = getImageSrc(backgroundElement);
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
@@ -37,9 +66,9 @@ export function PageLayoutEditor({
           }}
         >
           {/* Background */}
-          {backgroundElement?.image_base64 && (
+          {backgroundSrc && (
             <img
-              src={`data:image/png;base64,${backgroundElement.image_base64}`}
+              src={backgroundSrc}
               alt="Background"
               className="absolute inset-0 w-full h-full object-cover"
             />
@@ -50,9 +79,9 @@ export function PageLayoutEditor({
             className="absolute top-0 left-0 right-0 border-b border-dashed border-muted-foreground/30 flex items-center justify-center"
             style={{ height: 40 }}
           >
-            {headerElement?.image_base64 ? (
+            {headerSrc ? (
               <img
-                src={`data:image/png;base64,${headerElement.image_base64}`}
+                src={headerSrc}
                 alt="Header"
                 className="h-full object-contain"
               />
@@ -103,16 +132,16 @@ export function PageLayoutEditor({
           </div>
 
           {/* Logo */}
-          {showLogo && logoElement?.image_base64 && (
+          {showLogo && logoSrc && (
             <img
-              src={`data:image/png;base64,${logoElement.image_base64}`}
+              src={logoSrc}
               alt="Logo"
               className="absolute"
               style={{
                 left: logoPosition.x * SCALE,
                 top: logoPosition.y * SCALE,
-                width: (logoElement.image_width || 100) * SCALE,
-                height: (logoElement.image_height || 50) * SCALE,
+                width: (logoElement?.image_width || 100) * SCALE,
+                height: (logoElement?.image_height || 50) * SCALE,
                 objectFit: 'contain',
               }}
             />
@@ -123,9 +152,9 @@ export function PageLayoutEditor({
             className="absolute bottom-0 left-0 right-0 border-t border-dashed border-muted-foreground/30 flex items-center justify-center"
             style={{ height: 30 }}
           >
-            {footerElement?.image_base64 ? (
+            {footerSrc ? (
               <img
-                src={`data:image/png;base64,${footerElement.image_base64}`}
+                src={footerSrc}
                 alt="Footer"
                 className="h-full object-contain"
               />
