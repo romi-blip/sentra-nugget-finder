@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { 
   Layout, 
@@ -17,7 +19,9 @@ import {
   Star, 
   Loader2, 
   ImageIcon,
-  FileText
+  FileText,
+  Pencil,
+  Code
 } from 'lucide-react';
 import {
   useElementTemplates,
@@ -71,15 +75,279 @@ async function renderSvgToPng(svgContent: string): Promise<string> {
   });
 }
 
+interface EditDialogProps {
+  template: ElementTemplate;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (updates: Partial<ElementTemplate>) => void;
+  isSaving: boolean;
+}
+
+function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogProps) {
+  const isVisual = VISUAL_ELEMENT_TYPES.includes(template.element_type);
+  
+  const [name, setName] = useState(template.name);
+  const [imageHeight, setImageHeight] = useState(template.image_height || 40);
+  const [imageWidth, setImageWidth] = useState(template.image_width || 595);
+  const [fontSize, setFontSize] = useState(template.font_size || 12);
+  const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>((template.font_weight as 'normal' | 'bold') || 'normal');
+  const [fontColor, setFontColor] = useState(template.font_color || '#000000');
+  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>((template.text_align as 'left' | 'center' | 'right') || 'left');
+  const [marginTop, setMarginTop] = useState(template.margin_top || 0);
+  const [marginBottom, setMarginBottom] = useState(template.margin_bottom || 8);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [svgCode, setSvgCode] = useState('');
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
+        const svgContent = await file.text();
+        const pngDataUrl = await renderSvgToPng(svgContent);
+        setUploadedImage(pngDataUrl);
+        toast({ title: 'SVG converted to PNG successfully' });
+      } else if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setUploadedImage(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (error) {
+      toast({ title: 'Failed to process image', variant: 'destructive' });
+    }
+  }, []);
+
+  const handleSvgPaste = async () => {
+    if (!svgCode.trim()) {
+      toast({ title: 'Please paste SVG code', variant: 'destructive' });
+      return;
+    }
+    try {
+      const pngDataUrl = await renderSvgToPng(svgCode);
+      setUploadedImage(pngDataUrl);
+      setSvgCode('');
+      toast({ title: 'SVG converted to PNG successfully' });
+    } catch (error) {
+      toast({ title: 'Failed to convert SVG', variant: 'destructive' });
+    }
+  };
+
+  const handleSave = () => {
+    const updates: Partial<ElementTemplate> = { name };
+    
+    if (isVisual) {
+      updates.image_height = imageHeight;
+      updates.image_width = imageWidth;
+      if (uploadedImage) {
+        updates.image_base64 = uploadedImage;
+      }
+    } else {
+      updates.font_size = fontSize;
+      updates.font_weight = fontWeight;
+      updates.font_color = fontColor;
+      updates.text_align = textAlign;
+      updates.margin_top = marginTop;
+      updates.margin_bottom = marginBottom;
+    }
+    
+    onSave(updates);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit {ELEMENT_TYPE_LABELS[template.element_type]}</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Template Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+
+          {isVisual ? (
+            <>
+              <div className="space-y-2">
+                <Label>Current Image</Label>
+                {(uploadedImage || template.image_base64) && (
+                  <div className="border rounded p-2 bg-muted/50">
+                    <img 
+                      src={uploadedImage || template.image_base64 || ''} 
+                      alt="Preview" 
+                      className="max-h-32 object-contain"
+                    />
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Upload New Image (SVG or PNG)</Label>
+                <Input 
+                  type="file" 
+                  accept=".svg,.png,image/svg+xml,image/png"
+                  onChange={handleFileUpload}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Code className="h-4 w-4" />
+                  Or Paste SVG Code
+                </Label>
+                <Textarea 
+                  value={svgCode}
+                  onChange={(e) => setSvgCode(e.target.value)}
+                  placeholder="<svg>...</svg>"
+                  className="font-mono text-xs h-24"
+                />
+                <Button variant="outline" size="sm" onClick={handleSvgPaste} disabled={!svgCode.trim()}>
+                  Convert SVG to PNG
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Height (px)</Label>
+                  <Input 
+                    type="number"
+                    value={imageHeight}
+                    onChange={(e) => setImageHeight(parseInt(e.target.value) || 40)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Width (px)</Label>
+                  <Input 
+                    type="number"
+                    value={imageWidth}
+                    onChange={(e) => setImageWidth(parseInt(e.target.value) || 595)}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Font Size (px)</Label>
+                  <div className="flex items-center gap-2">
+                    <Slider
+                      value={[fontSize]}
+                      onValueChange={([v]) => setFontSize(v)}
+                      min={8}
+                      max={48}
+                      step={1}
+                      className="flex-1"
+                    />
+                    <span className="w-12 text-sm text-right">{fontSize}px</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Font Weight</Label>
+                  <Select value={fontWeight} onValueChange={(v) => setFontWeight(v as 'normal' | 'bold')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="bold">Bold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Text Color</Label>
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="color"
+                      value={fontColor}
+                      onChange={(e) => setFontColor(e.target.value)}
+                      className="w-12 h-10 p-1 cursor-pointer"
+                    />
+                    <Input 
+                      value={fontColor}
+                      onChange={(e) => setFontColor(e.target.value)}
+                      className="flex-1 font-mono text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Text Align</Label>
+                  <Select value={textAlign} onValueChange={(v) => setTextAlign(v as 'left' | 'center' | 'right')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="left">Left</SelectItem>
+                      <SelectItem value="center">Center</SelectItem>
+                      <SelectItem value="right">Right</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Margin Top (px)</Label>
+                  <Input 
+                    type="number"
+                    value={marginTop}
+                    onChange={(e) => setMarginTop(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Margin Bottom (px)</Label>
+                  <Input 
+                    type="number"
+                    value={marginBottom}
+                    onChange={(e) => setMarginBottom(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Preview</Label>
+                <div 
+                  className="p-4 border rounded bg-white"
+                  style={{
+                    fontSize: `${fontSize}px`,
+                    fontWeight: fontWeight === 'bold' ? 700 : 400,
+                    color: fontColor,
+                    textAlign: textAlign,
+                  }}
+                >
+                  Sample text preview
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 interface ElementCardProps {
   template: ElementTemplate;
   onSetDefault: () => void;
   onDelete: () => void;
-  onUpdate: (updates: Partial<ElementTemplate>) => void;
-  isUpdating: boolean;
+  onEdit: () => void;
 }
 
-function ElementCard({ template, onSetDefault, onDelete, onUpdate, isUpdating }: ElementCardProps) {
+function ElementCard({ template, onSetDefault, onDelete, onEdit }: ElementCardProps) {
   const isVisual = VISUAL_ELEMENT_TYPES.includes(template.element_type);
   
   return (
@@ -96,6 +364,9 @@ function ElementCard({ template, onSetDefault, onDelete, onUpdate, isUpdating }:
             )}
           </div>
           <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={onEdit}>
+              <Pencil className="h-4 w-4" />
+            </Button>
             {!template.is_default && (
               <Button variant="ghost" size="sm" onClick={onSetDefault}>
                 <Star className="h-4 w-4" />
@@ -168,11 +439,13 @@ export function ElementTemplateEditor() {
   const [activeTab, setActiveTab] = useState<'visual' | 'text'>('visual');
   const [selectedType, setSelectedType] = useState<ElementType>('header');
   const [newTemplateName, setNewTemplateName] = useState('');
+  const [editingTemplate, setEditingTemplate] = useState<ElementTemplate | null>(null);
   
   // New template form state
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [imageHeight, setImageHeight] = useState<number>(40);
   const [imageWidth, setImageWidth] = useState<number>(595);
+  const [svgCode, setSvgCode] = useState('');
   
   // Text style state
   const [fontSize, setFontSize] = useState<number>(12);
@@ -205,6 +478,21 @@ export function ElementTemplateEditor() {
       toast({ title: 'Failed to process image', variant: 'destructive' });
     }
   }, []);
+
+  const handleSvgPaste = async () => {
+    if (!svgCode.trim()) {
+      toast({ title: 'Please paste SVG code', variant: 'destructive' });
+      return;
+    }
+    try {
+      const pngDataUrl = await renderSvgToPng(svgCode);
+      setUploadedImage(pngDataUrl);
+      setSvgCode('');
+      toast({ title: 'SVG converted to PNG successfully' });
+    } catch (error) {
+      toast({ title: 'Failed to convert SVG', variant: 'destructive' });
+    }
+  };
 
   const handleCreateTemplate = async () => {
     if (!newTemplateName) {
@@ -240,6 +528,7 @@ export function ElementTemplateEditor() {
       toast({ title: 'Template created successfully' });
       setNewTemplateName('');
       setUploadedImage(null);
+      setSvgCode('');
     } catch (error) {
       toast({ title: 'Failed to create template', variant: 'destructive' });
     }
@@ -266,13 +555,23 @@ export function ElementTemplateEditor() {
     }
   };
 
+  const handleUpdateTemplate = async (updates: Partial<ElementTemplate>) => {
+    if (!editingTemplate) return;
+    
+    try {
+      await updateMutation.mutateAsync({ id: editingTemplate.id, ...updates });
+      toast({ title: 'Template updated successfully' });
+      setEditingTemplate(null);
+    } catch (error) {
+      toast({ title: 'Failed to update template', variant: 'destructive' });
+    }
+  };
+
   const filteredTemplates = templates?.filter(t => 
     activeTab === 'visual' 
       ? VISUAL_ELEMENT_TYPES.includes(t.element_type)
       : TEXT_ELEMENT_TYPES.includes(t.element_type)
   ) || [];
-
-  const currentTypeTemplates = filteredTemplates.filter(t => t.element_type === selectedType);
 
   if (isLoading) {
     return (
@@ -284,6 +583,16 @@ export function ElementTemplateEditor() {
 
   return (
     <div className="space-y-6">
+      {editingTemplate && (
+        <EditDialog
+          template={editingTemplate}
+          isOpen={!!editingTemplate}
+          onClose={() => setEditingTemplate(null)}
+          onSave={handleUpdateTemplate}
+          isSaving={updateMutation.isPending}
+        />
+      )}
+
       <Tabs value={activeTab} onValueChange={(v) => {
         setActiveTab(v as 'visual' | 'text');
         setSelectedType(v === 'visual' ? 'header' : 'h1');
@@ -304,7 +613,7 @@ export function ElementTemplateEditor() {
             <CardHeader>
               <CardTitle className="text-lg">Add Visual Element</CardTitle>
               <CardDescription>
-                Upload an SVG or PNG image for headers, footers, or cover backgrounds.
+                Upload an SVG or PNG image for headers, footers, logos, or cover backgrounds.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -346,6 +655,22 @@ export function ElementTemplateEditor() {
                     onChange={handleFileUpload}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Code className="h-4 w-4" />
+                  Or Paste SVG Code
+                </Label>
+                <Textarea 
+                  value={svgCode}
+                  onChange={(e) => setSvgCode(e.target.value)}
+                  placeholder="<svg>...</svg>"
+                  className="font-mono text-xs h-24"
+                />
+                <Button variant="outline" size="sm" onClick={handleSvgPaste} disabled={!svgCode.trim()}>
+                  Convert SVG to PNG
+                </Button>
               </div>
 
               {uploadedImage && (
@@ -404,8 +729,7 @@ export function ElementTemplateEditor() {
                     template={template}
                     onSetDefault={() => handleSetDefault(template)}
                     onDelete={() => handleDelete(template)}
-                    onUpdate={(updates) => updateMutation.mutate({ id: template.id, ...updates })}
-                    isUpdating={updateMutation.isPending}
+                    onEdit={() => setEditingTemplate(template)}
                   />
                 ))}
               </div>
@@ -579,8 +903,7 @@ export function ElementTemplateEditor() {
                     template={template}
                     onSetDefault={() => handleSetDefault(template)}
                     onDelete={() => handleDelete(template)}
-                    onUpdate={(updates) => updateMutation.mutate({ id: template.id, ...updates })}
-                    isUpdating={updateMutation.isPending}
+                    onEdit={() => setEditingTemplate(template)}
                   />
                 ))}
               </div>
