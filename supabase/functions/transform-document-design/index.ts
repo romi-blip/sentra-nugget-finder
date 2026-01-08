@@ -12,7 +12,6 @@ const corsHeaders = {
 const COLORS = {
   // Header bar - dark charcoal/black (matches cover page background)
   headerDark: rgb(15/255, 15/255, 26/255),      // #0F0F1A - dark navy/black
-  headerAccent: rgb(124/255, 58/255, 237/255),  // #7C3AED - purple accent line
   
   // Icon backgrounds - light purple from SVG
   iconPurple: rgb(243/255, 232/255, 255/255),   // #F3E8FF
@@ -276,13 +275,12 @@ function drawSentraLogoIcon(page: any, x: number, y: number, color: any, scale: 
   page.drawRectangle({ x: x + 12*s, y: y - 12*s, width: 4*s, height: 4*s, color });
 }
 
-// Draw content page header - DARK BAR (like cover page) with Sentra logo + purple accent line
-function drawContentHeader(page: any, fonts: any) {
+// Draw content page header - DARK BAR (like cover page) with embedded Sentra logo image
+async function drawContentHeader(page: any, pdfDoc: any, logoImage: any) {
   const width = page.getWidth();
   const height = page.getHeight();
-  const headerHeight = 45;
-  const accentLineHeight = 4;
-  const logoMargin = 35;
+  const headerHeight = 40;
+  const logoMargin = 25;
 
   // Full-width dark charcoal header bar (matches cover page background)
   page.drawRectangle({
@@ -293,26 +291,18 @@ function drawContentHeader(page: any, fonts: any) {
     color: COLORS.headerDark,
   });
 
-  // Draw full Sentra logo (same as cover page - geometric with orange dot)
-  drawSentraLogo(page, logoMargin, height - 12, 0.55);
-
-  // "sentra" text in white, next to logo
-  page.drawText('sentra', {
-    x: logoMargin + 25,
-    y: height - 30,
-    size: 16,
-    font: fonts.bold,
-    color: COLORS.lightText,
-  });
-
-  // Thin purple accent line below the header bar
-  page.drawRectangle({
-    x: 0,
-    y: height - headerHeight - accentLineHeight,
-    width: width,
-    height: accentLineHeight,
-    color: COLORS.headerAccent,
-  });
+  // Embed actual Sentra logo image (includes proper "sentra" text with correct font)
+  if (logoImage) {
+    const logoHeight = 24;
+    const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
+    page.drawImage(logoImage, {
+      x: logoMargin,
+      y: height - headerHeight + 8,
+      width: logoWidth,
+      height: logoHeight,
+    });
+  }
+  // NO purple accent line - removed per design spec
 }
 
 // Draw content page footer - copyright left, confidential center, page number right
@@ -435,13 +425,13 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
 }
 
 // Create TOC page
-function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[], isConfidential: boolean) {
+async function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[], isConfidential: boolean, logoImage: any) {
   const page = pdfDoc.addPage([595, 814]);
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
 
-  drawContentHeader(page, fonts);
+  await drawContentHeader(page, pdfDoc, logoImage);
 
   // TOC Title
   const titleY = height - 100;
@@ -546,29 +536,29 @@ function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry
 }
 
 // Create content pages with proper styling - REBUILT FROM SCRATCH
-function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection[], isConfidential: boolean) {
+async function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection[], isConfidential: boolean, logoImage: any) {
   let currentPage = pdfDoc.addPage([595, 814]);
   const pageWidth = currentPage.getWidth();
   const pageHeight = currentPage.getHeight();
-  const margin = 35; // Match SVG template margin
+  const margin = 40; // Proper margin for clean layout
   const contentWidth = pageWidth - margin * 2;
   
-  // Start content below the dark header bar (45px) + purple accent line (4px) + gap
-  let y = pageHeight - 75;
-  const minY = 55; // Leave room for footer
+  // Start content below the dark header bar (40px) + padding
+  let y = pageHeight - 65;
+  const minY = 60; // Leave room for footer
   let pageNumber = 2;
   let hasContent = false;
 
   // Draw header on first content page
-  drawContentHeader(currentPage, fonts);
+  await drawContentHeader(currentPage, pdfDoc, logoImage);
 
   // Helper to add a new page
-  const addNewPage = () => {
+  const addNewPage = async () => {
     drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 814]);
-    y = pageHeight - 75; // Below header (45px) + accent line (4px) + padding
-    drawContentHeader(currentPage, fonts);
+    y = pageHeight - 65; // Below header (40px) + padding
+    await drawContentHeader(currentPage, pdfDoc, logoImage);
     hasContent = false;
   };
 
@@ -580,74 +570,74 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
     // Handle page breaks
     if (section.type === 'page-break') {
       if (hasContent) {
-        addNewPage();
+        await addNewPage();
       }
       continue;
     }
 
     // Check if we need a new page
     if (y < minY + 80) {
-      addNewPage();
+      await addNewPage();
     }
 
-    // H1 - Main section headings (24px, bold, black)
+    // H1 - Main section headings (22px, bold, black)
     if (section.type === 'h1') {
       if (hasContent && i > 0) {
-        addNewPage();
+        await addNewPage();
       }
 
-      const lines = wrapText(content, fonts.bold, 24, contentWidth);
+      const lines = wrapText(content, fonts.bold, 22, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 24,
+          size: 22,
           font: fonts.bold,
           color: COLORS.black,
         });
-        y -= 32;
+        y -= 28;
       }
-      y -= 20;
+      y -= 24; // Consistent section gap
       hasContent = true;
     }
-    // H2 - Subsection headings (18px, bold, black)
+    // H2 - Subsection headings (16px, bold, black)
     else if (section.type === 'h2') {
-      if (y < minY + 60) addNewPage();
+      if (y < minY + 60) await addNewPage();
       
-      y -= 8; // Add spacing before h2
+      y -= 16; // Add spacing before h2
 
-      const lines = wrapText(content, fonts.bold, 18, contentWidth);
+      const lines = wrapText(content, fonts.bold, 16, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 18,
+          size: 16,
           font: fonts.bold,
           color: COLORS.black,
         });
-        y -= 24;
+        y -= 22;
       }
-      y -= 12;
+      y -= 16;
       hasContent = true;
     }
-    // H3 - Sub-subsection headings (14px, bold, dark gray)
+    // H3 - Sub-subsection headings (13px, bold, dark gray)
     else if (section.type === 'h3') {
-      if (y < minY + 40) addNewPage();
+      if (y < minY + 40) await addNewPage();
       
-      y -= 6;
+      y -= 12;
 
-      const lines = wrapText(content, fonts.bold, 14, contentWidth);
+      const lines = wrapText(content, fonts.bold, 13, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 14,
+          size: 13,
           font: fonts.bold,
           color: COLORS.darkGray,
         });
-        y -= 20;
+        y -= 18;
       }
-      y -= 8;
+      y -= 10;
       hasContent = true;
     }
     // Feature grid - 2 column layout with purple icon circles
@@ -659,7 +649,7 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
       
       for (let j = 0; j < features.length; j += 2) {
         // Check if we need space for feature row
-        if (y < minY + 100) addNewPage();
+        if (y < minY + 100) await addNewPage();
 
         const leftFeature = features[j];
         const rightFeature = features[j + 1];
@@ -746,57 +736,57 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
       y -= 10;
       hasContent = true;
     }
-    // Bullet list
+    // Bullet list - clean indented bullets
     else if (section.type === 'bullet-list' && section.items) {
       for (const item of section.items) {
-        if (y < minY + 25) addNewPage();
+        if (y < minY + 30) await addNewPage();
 
-        const bulletIndent = 15;
+        const bulletIndent = 20;
+        const bulletX = margin + 8;
         
-        // Draw bullet character
+        // Draw bullet character (filled circle approximation using dash)
         currentPage.drawText('-', {
-          x: margin,
+          x: bulletX,
           y: y,
-          size: 11,
-          font: fonts.regular,
-          color: COLORS.black,
+          size: 10,
+          font: fonts.bold,
+          color: COLORS.bodyText,
         });
 
-        // Wrap and draw text
-        const lines = wrapText(item, fonts.regular, 11, contentWidth - bulletIndent);
-        let isFirst = true;
-        for (const line of lines) {
-          currentPage.drawText(line, {
+        // Wrap and draw text with proper spacing
+        const lines = wrapText(item, fonts.regular, 10, contentWidth - bulletIndent - 8);
+        for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+          currentPage.drawText(lines[lineIdx], {
             x: margin + bulletIndent,
             y: y,
-            size: 11,
+            size: 10,
             font: fonts.regular,
             color: COLORS.bodyText,
           });
           y -= 16;
-          isFirst = false;
         }
+        y -= 4; // Small gap between bullet items
       }
-      y -= 10;
+      y -= 12;
       hasContent = true;
     }
-    // Regular paragraph (11px, regular, body text gray)
+    // Regular paragraph (10px, regular, body text gray)
     else if (section.type === 'paragraph' && content) {
-      const lines = wrapText(content, fonts.regular, 11, contentWidth);
+      const lines = wrapText(content, fonts.regular, 10, contentWidth);
       
       for (const line of lines) {
-        if (y < minY) addNewPage();
+        if (y < minY) await addNewPage();
 
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 11,
+          size: 10,
           font: fonts.regular,
           color: COLORS.bodyText,
         });
-        y -= 16;
+        y -= 15; // Better line height
       }
-      y -= 12;
+      y -= 14; // Paragraph gap
       hasContent = true;
     }
   }
@@ -806,7 +796,7 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
 }
 
 // Main PDF generation
-async function generatePDF(extractedDoc: ExtractedDocument): Promise<Uint8Array> {
+async function generatePDF(extractedDoc: ExtractedDocument, logoBytes: Uint8Array | null): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   
   const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -814,11 +804,21 @@ async function generatePDF(extractedDoc: ExtractedDocument): Promise<Uint8Array>
   
   const fonts = { regular: regularFont, bold: boldFont };
 
+  // Embed logo image if available
+  let logoImage = null;
+  if (logoBytes) {
+    try {
+      logoImage = await pdfDoc.embedJpg(logoBytes);
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed logo:', e);
+    }
+  }
+
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
   createCoverPage(pdfDoc, fonts, extractedDoc);
-  createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential);
-  createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential);
+  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage);
+  await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage);
 
   return await pdfDoc.save();
 }
@@ -897,7 +897,19 @@ serve(async (req) => {
     
     console.log(`[transform-document-design] Generating PDF from extracted content`);
 
-    const pdfBytes = await generatePDF(extractedDoc);
+    // Fetch Sentra logo for header embedding
+    let logoBytes: Uint8Array | null = null;
+    try {
+      const logoResponse = await fetch('https://sentra.io/images/sentra-logo.png');
+      if (logoResponse.ok) {
+        const logoArrayBuffer = await logoResponse.arrayBuffer();
+        logoBytes = new Uint8Array(logoArrayBuffer);
+      }
+    } catch (logoError) {
+      console.log('[transform-document-design] Could not fetch logo, will use fallback:', logoError);
+    }
+
+    const pdfBytes = await generatePDF(extractedDoc, logoBytes);
     
     let base64 = '';
     const chunkSize = 8192;
