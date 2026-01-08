@@ -603,8 +603,8 @@ async function createContentPages(
   const margin = 50;
   const contentWidth = pageWidth - margin * 2;
   
-  let y = pageHeight - 80;
-  const minY = 60;
+  let y = pageHeight - 100;
+  const minY = textTemplateImage ? 80 : 60;
   let pageNumber = 2;
   let hasContent = false;
 
@@ -616,14 +616,16 @@ async function createContentPages(
       width: pageWidth,
       height: pageHeight,
     });
-    y = pageHeight - 80;
+    y = pageHeight - 100;
   } else {
     await drawContentHeader(currentPage, pdfDoc, logoImage);
     y = pageHeight - 65;
   }
 
   const addNewPage = async () => {
-    drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
+    if (!textTemplateImage) {
+      drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
+    }
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 842]);
     
@@ -634,7 +636,7 @@ async function createContentPages(
         width: pageWidth,
         height: pageHeight,
       });
-      y = pageHeight - 80;
+      y = pageHeight - 100;
     } else {
       await drawContentHeader(currentPage, pdfDoc, logoImage);
       y = pageHeight - 65;
@@ -851,7 +853,9 @@ async function createContentPages(
     }
   }
 
-  drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
+  if (!textTemplateImage) {
+    drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
+  }
 }
 
 // Main PDF generation with template images
