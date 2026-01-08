@@ -8,14 +8,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Sentra brand colors (RGB 0-1 scale)
+// Brand colors from the exact SVG template (RGB 0-1 scale)
 const COLORS = {
-  primary: rgb(57/255, 255/255, 20/255),      // #39FF14 Neon Green
+  // Primary neon green from template #66FF66
+  primary: rgb(102/255, 255/255, 102/255),
+  // Orange accent from logo #FFAE1A
+  orange: rgb(255/255, 174/255, 26/255),
+  // Footer bar colors
   pink: rgb(255/255, 20/255, 147/255),        // #FF1493
   cyan: rgb(0/255, 255/255, 255/255),         // #00FFFF
   yellow: rgb(255/255, 215/255, 0/255),       // #FFD700
-  black: rgb(5/255, 5/255, 5/255),            // #050505
+  // Backgrounds
+  black: rgb(0, 0, 0),                        // #000000 Pure black
   white: rgb(1, 1, 1),
+  // Text colors - from template #F0F0F0
+  lightText: rgb(240/255, 240/255, 240/255),  // #F0F0F0
   gray: rgb(107/255, 114/255, 128/255),       // #6B7280
   lightGray: rgb(156/255, 163/255, 175/255),  // #9CA3AF
   darkGray: rgb(31/255, 41/255, 55/255),      // #1F2937
@@ -78,32 +85,20 @@ function decodeHtmlEntities(text: string): string {
 // Sanitize text for WinAnsi encoding (replace non-ASCII characters with ASCII equivalents)
 function sanitizeForPdf(text: string): string {
   return text
-    // Non-breaking hyphen and other hyphens
     .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
-    // Various quotes
     .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
     .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
-    // Ellipsis
     .replace(/\u2026/g, '...')
-    // Bullets and other symbols
     .replace(/[\u2022\u2023\u2043\u25CF\u25E6\u25AA\u25AB]/g, '-')
-    // Spaces
     .replace(/[\u00A0\u2002\u2003\u2009]/g, ' ')
-    // Arrows
     .replace(/[\u2190-\u21FF]/g, '->')
-    // Copyright, trademark, registered
     .replace(/\u00A9/g, '(c)')
     .replace(/\u00AE/g, '(R)')
     .replace(/\u2122/g, '(TM)')
-    // Degree symbol
     .replace(/\u00B0/g, ' deg')
-    // Plus/minus
     .replace(/\u00B1/g, '+/-')
-    // Multiplication
     .replace(/\u00D7/g, 'x')
-    // Division
     .replace(/\u00F7/g, '/')
-    // Any remaining non-ASCII characters - replace with space
     .replace(/[^\x00-\x7F]/g, ' ');
 }
 
@@ -150,7 +145,6 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       paragraphText = decodeHtmlEntities(paragraphText.trim());
       if (!paragraphText) continue;
       
-      // FIX 4: Filter out original "Contents" section from source DOCX
       const lowerText = paragraphText.toLowerCase();
       if (lowerText === 'contents' || 
           lowerText === 'table of contents' ||
@@ -206,13 +200,10 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     }
   }
 
-  // FIX: Filter out document title from sections so it doesn't appear as Chapter 1
-  // The title is displayed on the cover page, not in the content
   let filteredSections = sections;
   if (title) {
     const titleLower = title.toLowerCase().trim();
     filteredSections = sections.filter((s, i) => {
-      // Remove first heading if it matches the document title
       if (i === 0 && s.type === 'heading' && s.level === 1) {
         const sectionLower = s.text.toLowerCase().trim();
         if (sectionLower === titleLower || titleLower.includes(sectionLower) || sectionLower.includes(titleLower)) {
@@ -254,7 +245,7 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   return lines;
 }
 
-// FIX 2: Truncate title with ellipsis if too long
+// Truncate title with ellipsis if too long
 function truncateTitle(text: string, font: any, fontSize: number, maxWidth: number): string {
   const sanitized = sanitizeForPdf(text);
   if (font.widthOfTextAtSize(sanitized, fontSize) <= maxWidth) {
@@ -268,7 +259,7 @@ function truncateTitle(text: string, font: any, fontSize: number, maxWidth: numb
   return truncated + '...';
 }
 
-// Draw the colored footer bar
+// Draw the colored footer bar (4 segments: green, pink, yellow, cyan)
 function drawFooterBar(page: any) {
   const width = page.getWidth();
   const barHeight = 8;
@@ -281,14 +272,14 @@ function drawFooterBar(page: any) {
   page.drawRectangle({ x: segmentWidth * 3, y, width: segmentWidth, height: barHeight, color: COLORS.cyan });
 }
 
-// Draw header with green underline
+// Draw header with green underline (content pages)
 function drawHeader(page: any, fonts: any) {
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
   const headerY = height - 40;
 
-  // sentra text
+  // sentra text in black
   page.drawText('sentra', {
     x: margin,
     y: headerY,
@@ -297,7 +288,7 @@ function drawHeader(page: any, fonts: any) {
     color: COLORS.black,
   });
 
-  // | WHITEPAPER
+  // | WHITEPAPER in gray
   const sentraWidth = fonts.bold.widthOfTextAtSize('sentra', 14);
   page.drawText(' | WHITEPAPER', {
     x: margin + sentraWidth,
@@ -323,7 +314,7 @@ function drawFooter(page: any, fonts: any) {
   const margin = 50;
   const footerY = 30;
 
-  page.drawText('© 2025 Sentra Inc. All rights reserved.', {
+  page.drawText('(c) 2025 Sentra Inc. All rights reserved.', {
     x: margin,
     y: footerY,
     size: 9,
@@ -340,102 +331,101 @@ function drawFooter(page: any, fonts: any) {
   });
 }
 
-// Create cover page
+// Draw Sentra logo (geometric design matching SVG template)
+function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
+  const s = scale;
+  
+  // White/light gray squares pattern (simplified geometric logo)
+  const lightColor = COLORS.lightText;
+  
+  // Top row rectangles
+  page.drawRectangle({ x: x, y: y, width: 8 * s, height: 8 * s, color: lightColor });
+  page.drawRectangle({ x: x + 12 * s, y: y, width: 20 * s, height: 8 * s, color: lightColor });
+  
+  // Bottom row rectangles  
+  page.drawRectangle({ x: x, y: y - 24 * s, width: 20 * s, height: 8 * s, color: lightColor });
+  page.drawRectangle({ x: x + 24 * s, y: y - 24 * s, width: 8 * s, height: 8 * s, color: lightColor });
+  
+  // Middle row rectangles
+  page.drawRectangle({ x: x, y: y - 12 * s, width: 8 * s, height: 8 * s, color: lightColor });
+  page.drawRectangle({ x: x + 24 * s, y: y - 12 * s, width: 8 * s, height: 8 * s, color: lightColor });
+  
+  // Orange circle in center
+  page.drawCircle({
+    x: x + 16 * s,
+    y: y - 8 * s,
+    size: 5 * s,
+    color: COLORS.orange,
+  });
+}
+
+// Create cover page (BLACK background, matching SVG template exactly)
 function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
-  const page = pdfDoc.addPage([612, 792]); // Letter size
+  const page = pdfDoc.addPage([595, 814]); // A4 size matching SVG dimensions
   const width = page.getWidth();
   const height = page.getHeight();
-  const margin = 50;
+  const margin = 56;
 
-  // Sentra logo text
-  page.drawText('sentra', {
-    x: margin,
-    y: height - 60,
-    size: 28,
-    font: fonts.bold,
+  // Black background (matching template)
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: width,
+    height: height,
     color: COLORS.black,
   });
 
-  // Confidential badge (top right)
+  // Draw Sentra logo at top left (matching position from SVG)
+  drawSentraLogo(page, margin, height - 60, 1);
+
+  // "Sentra" text next to logo
+  page.drawText('Sentra', {
+    x: margin + 50,
+    y: height - 75,
+    size: 20,
+    font: fonts.bold,
+    color: COLORS.lightText,
+  });
+
+  // Confidential badge (top right) if applicable
   if (data.isConfidential) {
     const confText = sanitizeForPdf('CONFIDENTIAL - Internal Use Only');
     page.drawText(confText, {
       x: width - margin - fonts.regular.widthOfTextAtSize(confText, 10),
-      y: height - 60,
+      y: height - 75,
       size: 10,
       font: fonts.regular,
       color: COLORS.gray,
     });
   }
 
-  // Category badge - draw circle instead of bullet text
-  const categoryY = height - 200;
-  page.drawCircle({
-    x: margin + 4,
-    y: categoryY + 4,
-    size: 4,
-    color: COLORS.primary,
-  });
-  page.drawText('TECHNICAL WHITEPAPER', {
-    x: margin + 15,
-    y: categoryY,
-    size: 13,
-    font: fonts.bold,
-    color: COLORS.primary,
-  });
-
-  // Main title (wrapped)
-  const titleLines = wrapText(data.title || 'Untitled Document', fonts.bold, 36, width - margin * 2);
-  let titleY = categoryY - 50;
+  // Title in neon green (matching template position ~y=355)
+  const titleY = height - 440;
+  const titleLines = wrapText(data.title || 'Document Title', fonts.bold, 32, width - margin * 2);
+  let currentY = titleY;
   for (const line of titleLines) {
     page.drawText(line, {
       x: margin,
-      y: titleY,
-      size: 36,
+      y: currentY,
+      size: 32,
       font: fonts.bold,
-      color: COLORS.black,
+      color: COLORS.primary,
     });
-    titleY -= 44;
+    currentY -= 40;
   }
 
-  // Metadata grid
-  const metaY = 280;
-  const col1X = margin;
-  const col2X = width / 2;
-  const labelSize = 9;
-  const valueSize = 12;
-  const rowHeight = 45;
-
-  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-  // Row 1: Prepared For, Version
-  page.drawText('PREPARED FOR', { x: col1X, y: metaY, size: labelSize, font: fonts.regular, color: COLORS.gray });
-  page.drawText('Enterprise Customers', { x: col1X, y: metaY - 16, size: valueSize, font: fonts.bold, color: COLORS.black });
-  
-  page.drawText('VERSION', { x: col2X, y: metaY, size: labelSize, font: fonts.regular, color: COLORS.gray });
-  page.drawText('v1.0', { x: col2X, y: metaY - 16, size: valueSize, font: fonts.bold, color: COLORS.black });
-
-  // Row 2: Author, Date
-  page.drawText('AUTHOR', { x: col1X, y: metaY - rowHeight, size: labelSize, font: fonts.regular, color: COLORS.gray });
-  page.drawText('Sentra, Inc.', { x: col1X, y: metaY - rowHeight - 16, size: valueSize, font: fonts.bold, color: COLORS.black });
-  
-  page.drawText('DATE', { x: col2X, y: metaY - rowHeight, size: labelSize, font: fonts.regular, color: COLORS.gray });
-  page.drawText(today, { x: col2X, y: metaY - rowHeight - 16, size: valueSize, font: fonts.bold, color: COLORS.black });
-
-  // SYSTEM_SECURE badge - draw circle instead of bullet text
-  page.drawCircle({ x: margin + 3, y: 103, size: 3, color: COLORS.primary });
-  page.drawText('SYSTEM_SECURE', { x: margin + 12, y: 100, size: 8, font: fonts.regular, color: COLORS.gray });
-
-  // Colored footer bar
+  // Colored footer bar at bottom
   drawFooterBar(page);
 }
 
-// Create TOC page - NO NUMBERING
+// Create TOC page (White background with header/footer)
 function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
-  const page = pdfDoc.addPage([612, 792]);
+  const page = pdfDoc.addPage([595, 814]);
   const width = page.getWidth();
   const height = page.getHeight();
-  const margin = 50;
+  const margin = 56;
+
+  // White background (default)
 
   drawHeader(page, fonts);
 
@@ -457,7 +447,7 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
     color: COLORS.primary,
   });
 
-  // TOC entries - NO NUMBERING
+  // TOC entries
   let y = titleY - 60;
   const lineHeight = 28;
 
@@ -466,12 +456,10 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
     const textFont = fonts.bold;
     const fontSize = 11;
 
-    // Truncate long titles with ellipsis - NO NUMBER PREFIX
     const pageNumReserve = 60;
     const maxTitleWidth = width - margin * 2 - pageNumReserve;
     const displayTitle = truncateTitle(entry.title, textFont, fontSize, maxTitleWidth);
     
-    // Draw title directly without numbering
     page.drawText(displayTitle, {
       x: margin,
       y: y,
@@ -508,7 +496,7 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
 
     y -= lineHeight;
 
-    // Add separator line between entries
+    // Separator line between entries
     if (i < tocEntries.length - 1) {
       page.drawRectangle({
         x: margin,
@@ -523,34 +511,31 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
   drawFooter(page, fonts);
 }
 
-// Generate TOC entries - Only H1 chapters, NO NUMBERING, accurate page numbers
+// Generate TOC entries - Only H1 chapters with accurate page numbers
 function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[] {
   const entries: TOCEntry[] = [];
   
-  // Simulate content page layout to get accurate page numbers
-  const pageHeight = 792;
-  const margin = 50;
+  const pageHeight = 814;
+  const margin = 56;
   const minY = 100;
   const startY = pageHeight - 100;
   const bodyFontSize = 11;
   const lineHeight = 16;
-  const contentWidth = 612 - margin * 2;
+  const contentWidth = 595 - margin * 2;
   
   let simulatedY = startY;
-  let simulatedPage = 3; // Start after cover + TOC
+  let simulatedPage = 3;
   let hasContentOnPage = false;
 
   for (const section of sections) {
     if (section.type === 'heading') {
       if (section.level === 1) {
-        // Page break before new H1 chapter ONLY if we have content on page
         if (hasContentOnPage) {
           simulatedPage++;
           simulatedY = startY;
           hasContentOnPage = false;
         }
         
-        // H1 chapters go in TOC - NO NUMBER
         entries.push({
           title: section.text,
           page: simulatedPage,
@@ -575,7 +560,6 @@ function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[
         hasContentOnPage = true;
       }
     } else {
-      // Simulate paragraph text wrapping
       const lines = wrapText(section.text, fonts.regular, bodyFontSize, contentWidth);
       
       for (const _line of lines) {
@@ -593,17 +577,16 @@ function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[
   return entries;
 }
 
-// Create content pages - NO NUMBERING, standardized spacing, smart page breaks
+// Create content pages - standardized spacing, smart page breaks
 function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[]) {
-  let currentPage = pdfDoc.addPage([612, 792]);
+  let currentPage = pdfDoc.addPage([595, 814]);
   let y = currentPage.getHeight() - 100;
-  const margin = 50;
+  const margin = 56;
   const contentWidth = currentPage.getWidth() - margin * 2;
   const bodyFontSize = 11;
   const lineHeight = 16;
   const minY = 100;
 
-  // Standardized spacing
   const SPACING = {
     afterH1: 20,
     afterH2: 16,
@@ -618,10 +601,9 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
 
-    // Check if we need a new page for minimum content space
     if (y < minY + 60) {
       drawFooter(currentPage, fonts);
-      currentPage = pdfDoc.addPage([612, 792]);
+      currentPage = pdfDoc.addPage([595, 814]);
       y = currentPage.getHeight() - 100;
       drawHeader(currentPage, fonts);
       hasContentOnPage = false;
@@ -629,16 +611,14 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
 
     if (section.type === 'heading') {
       if (section.level === 1) {
-        // Page break before H1 ONLY if we have content on current page
         if (hasContentOnPage) {
           drawFooter(currentPage, fonts);
-          currentPage = pdfDoc.addPage([612, 792]);
+          currentPage = pdfDoc.addPage([595, 814]);
           y = currentPage.getHeight() - 100;
           drawHeader(currentPage, fonts);
           hasContentOnPage = false;
         }
 
-        // H1 heading - NO NUMBERING
         const headingLines = wrapText(section.text, fonts.bold, 20, contentWidth);
         
         for (let j = 0; j < headingLines.length; j++) {
@@ -650,7 +630,6 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
             color: COLORS.primary,
           });
           
-          // Green underline only on first line
           if (j === 0) {
             const headingWidth = Math.min(fonts.bold.widthOfTextAtSize(headingLines[j], 20), 200);
             currentPage.drawRectangle({
@@ -666,7 +645,6 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
         y -= SPACING.afterH1;
         hasContentOnPage = true;
       } else if (section.level === 2) {
-        // H2 heading - NO NUMBERING
         const subHeadingLines = wrapText(section.text, fonts.bold, 15, contentWidth);
         
         for (const line of subHeadingLines) {
@@ -682,7 +660,6 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
         y -= SPACING.afterH2;
         hasContentOnPage = true;
       } else if (section.level === 3) {
-        // H3 heading - NO NUMBERING
         const h3Lines = wrapText(section.text, fonts.bold, 13, contentWidth);
         
         for (const line of h3Lines) {
@@ -699,13 +676,12 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
         hasContentOnPage = true;
       }
     } else {
-      // Paragraph text
       const lines = wrapText(section.text, fonts.regular, bodyFontSize, contentWidth);
       
       for (const line of lines) {
         if (y < minY) {
           drawFooter(currentPage, fonts);
-          currentPage = pdfDoc.addPage([612, 792]);
+          currentPage = pdfDoc.addPage([595, 814]);
           y = currentPage.getHeight() - 100;
           drawHeader(currentPage, fonts);
         }
@@ -732,7 +708,6 @@ function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[
 async function generatePDF(extractedDoc: ExtractedDocument): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   
-  // Embed fonts
   const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   
@@ -741,10 +716,8 @@ async function generatePDF(extractedDoc: ExtractedDocument): Promise<Uint8Array>
     bold: boldFont,
   };
 
-  // FIX 5: Generate TOC entries with accurate page numbers (needs fonts for text measurement)
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
-  // Create pages
   createCoverPage(pdfDoc, fonts, extractedDoc);
   createTOCPage(pdfDoc, fonts, tocEntries);
   createContentPages(pdfDoc, fonts, extractedDoc.sections);
@@ -758,7 +731,6 @@ serve(async (req) => {
   }
 
   try {
-    // Auth check
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -799,15 +771,12 @@ serve(async (req) => {
       );
     }
 
-    // Extract content from DOCX
     const extractedDoc = await extractDocxContent(file);
     
     console.log(`[transform-document-design] Generating PDF from extracted content`);
 
-    // Generate PDF
     const pdfBytes = await generatePDF(extractedDoc);
     
-    // Convert to base64
     let base64 = '';
     const chunkSize = 8192;
     for (let i = 0; i < pdfBytes.length; i += chunkSize) {
