@@ -5,21 +5,16 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Palette, Save, Wand2, FileText, PlusCircle, FileCode, Layout } from 'lucide-react';
+import { Loader2, Palette, Save, Wand2, FileText, PlusCircle, Layout } from 'lucide-react';
 import BrandColorPicker from '@/components/brand/BrandColorPicker';
 import FontSelector from '@/components/brand/FontSelector';
 import DocumentUploader from '@/components/brand/DocumentUploader';
 import TransformedPreview from '@/components/brand/TransformedPreview';
 import DocumentMetadataForm from '@/components/brand/DocumentMetadataForm';
 import ContentSectionEditor from '@/components/brand/ContentSectionEditor';
-import TemplatePreview from '@/components/brand/TemplatePreview';
-import { SVGToHTMLConverter } from '@/components/brand/SVGToHTMLConverter';
-import { TemplateManager } from '@/components/brand/TemplateManager';
-import { TemplateSelector } from '@/components/brand/TemplateSelector';
+import { ElementTemplateEditor } from '@/components/brand/ElementTemplateEditor';
 import { brandService, BrandSettings, TransformResult } from '@/services/brandService';
 import { documentService } from '@/services/documentService';
-import { useDocumentTemplates, DocumentTemplate } from '@/hooks/useDocumentTemplates';
-import { renderTemplateToHtml, convertHtmlToPdf } from '@/services/htmlToPdfService';
 import { 
   DocumentMetadata, 
   ContentSection, 
@@ -27,6 +22,7 @@ import {
   DEFAULT_DOCUMENT_METADATA 
 } from '@/lib/documentTemplates';
 import SEO from '@/components/SEO';
+
 const BrandDesigner: React.FC = () => {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -42,13 +38,6 @@ const BrandDesigner: React.FC = () => {
   const [documentMetadata, setDocumentMetadata] = useState<DocumentMetadata>(DEFAULT_DOCUMENT_METADATA);
   const [contentSections, setContentSections] = useState<ContentSection[]>([]);
   const [tableOfContents, setTableOfContents] = useState<TOCItem[]>([]);
-  
-  // Template selection for transform
-  const [coverTemplateId, setCoverTemplateId] = useState<string | null>(null);
-  const [textTemplateId, setTextTemplateId] = useState<string | null>(null);
-  
-  // Fetch all templates
-  const { data: allTemplates } = useDocumentTemplates();
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['brand-settings'],
@@ -85,56 +74,18 @@ const BrandDesigner: React.FC = () => {
   const transformMutation = useMutation({
     mutationFn: async () => {
       if (!selectedFile || !settings) throw new Error('Missing file or settings');
-      
-      // Get selected templates
-      const coverTemplate = coverTemplateId ? allTemplates?.find(t => t.id === coverTemplateId) : null;
-      const textTemplate = textTemplateId ? allTemplates?.find(t => t.id === textTemplateId) : null;
-      
-      // If templates selected, use template-based transformation
-      if (coverTemplate || textTemplate) {
-        return brandService.transformDocumentWithTemplates(
-          selectedFile, 
-          settings, 
-          coverTemplateId || undefined, 
-          textTemplateId || undefined
-        );
-      }
-      
-      // Otherwise use the default PDF-lib transformation
       return brandService.transformDocument(selectedFile, settings);
     },
     onSuccess: async (result) => {
-      console.log('[BrandDesigner] Transform result:', { 
-        hasHtml: !!result.html, 
-        htmlLength: result.html?.length,
+      setTransformResult({
         type: result.type,
-        message: result.message 
+        modifiedFile: result.modifiedFile,
+        message: result.message,
       });
-      
-      // Check if result contains HTML for client-side rendering
-      if (result.html) {
-        // Store HTML for preview
-        setTransformResult({
-          type: 'html',
-          modifiedFile: null,
-          message: result.message || 'Document transformed with templates. Click Download to save as PDF.',
-          html: result.html,
-        });
-        toast({
-          title: 'Document transformed',
-          description: 'Click Download PDF to save your branded document.',
-        });
-      } else {
-        setTransformResult({
-          type: result.type,
-          modifiedFile: result.modifiedFile,
-          message: result.message,
-        });
-        toast({
-          title: 'Document transformed',
-          description: result.message || 'Your document has been styled with the brand settings.',
-        });
-      }
+      toast({
+        title: 'Document transformed',
+        description: result.message || 'Your document has been styled with the brand settings.',
+      });
     },
     onError: (error) => {
       toast({
@@ -149,7 +100,6 @@ const BrandDesigner: React.FC = () => {
     mutationFn: async () => {
       if (!documentMetadata.title) throw new Error('Document title is required');
       
-      // Fetch the Sentra logo
       const logoBase64 = await documentService.fetchLogoBase64();
       
       return documentService.generateBrandedDocument({
@@ -197,7 +147,7 @@ const BrandDesigner: React.FC = () => {
     const newToc: TOCItem[] = headings.map((h, index) => ({
       id: h.id,
       title: h.chapterNumber ? `${h.chapterNumber} ${h.title}` : h.title || '',
-      page: index + 3, // Start from page 3 (after cover and TOC)
+      page: index + 3,
       level: 1,
     }));
     setTableOfContents(newToc);
@@ -228,23 +178,19 @@ const BrandDesigner: React.FC = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="create" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="create">
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Create Document
-            </TabsTrigger>
+        <Tabs defaultValue="transform" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="transform">
               <Wand2 className="h-4 w-4 mr-2" />
               Transform Document
             </TabsTrigger>
-            <TabsTrigger value="templates">
+            <TabsTrigger value="elements">
               <Layout className="h-4 w-4 mr-2" />
-              Templates
+              Element Templates
             </TabsTrigger>
-            <TabsTrigger value="convert">
-              <FileCode className="h-4 w-4 mr-2" />
-              SVG Converter
+            <TabsTrigger value="create">
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Create Document
             </TabsTrigger>
             <TabsTrigger value="settings">
               <Palette className="h-4 w-4 mr-2" />
@@ -252,90 +198,16 @@ const BrandDesigner: React.FC = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Create New Document Tab */}
-          <TabsContent value="create" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-poppins flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Create Branded Document
-                </CardTitle>
-                <CardDescription>
-                  Generate a new document using Sentra brand templates. Fill in the metadata
-                  and add content sections.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {/* Document Metadata */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Document Information</h3>
-                  <DocumentMetadataForm
-                    metadata={documentMetadata}
-                    onChange={setDocumentMetadata}
-                  />
-                </div>
-
-                <Separator />
-
-                {/* Content Sections */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Content Sections</h3>
-                  <ContentSectionEditor
-                    sections={contentSections}
-                    onChange={setContentSections}
-                  />
-                </div>
-
-                <Separator />
-
-                {/* Generate Button */}
-                <div className="flex justify-center">
-                  <Button
-                    onClick={handleGenerateDocument}
-                    disabled={generateDocumentMutation.isPending || !documentMetadata.title}
-                    size="lg"
-                    className="min-w-[200px]"
-                  >
-                    {generateDocumentMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <FileText className="h-4 w-4 mr-2" />
-                    )}
-                    Generate Document
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* Transform Document Tab */}
           <TabsContent value="transform" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="font-poppins">Transform Existing Document</CardTitle>
                 <CardDescription>
-                  Upload a DOCX file to apply brand styling. Select templates to use or use the default styling.
+                  Upload a DOCX file to apply brand styling using your configured element templates.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Template Selection */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <TemplateSelector
-                    pageType="cover"
-                    label="Cover Page Template"
-                    value={coverTemplateId}
-                    onChange={setCoverTemplateId}
-                  />
-                  <TemplateSelector
-                    pageType="text"
-                    label="Content Page Template"
-                    value={textTemplateId}
-                    onChange={setTextTemplateId}
-                  />
-                </div>
-
-                <Separator />
-
                 <DocumentUploader
                   onFileSelect={setSelectedFile}
                   selectedFile={selectedFile}
@@ -374,27 +246,74 @@ const BrandDesigner: React.FC = () => {
             </Card>
           </TabsContent>
 
-          {/* Templates Tab */}
-          <TabsContent value="templates" className="space-y-6">
+          {/* Element Templates Tab */}
+          <TabsContent value="elements" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="font-poppins flex items-center gap-2">
                   <Layout className="h-5 w-5" />
-                  Document Templates
+                  Element Templates
                 </CardTitle>
                 <CardDescription>
-                  Manage HTML templates for document generation. Set default templates for each page type.
+                  Configure visual elements (headers, footers, covers) and text styles for document generation.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TemplateManager />
+                <ElementTemplateEditor />
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* SVG Converter Tab */}
-          <TabsContent value="convert" className="space-y-6">
-            <SVGToHTMLConverter />
+          {/* Create New Document Tab */}
+          <TabsContent value="create" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-poppins flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Create Branded Document
+                </CardTitle>
+                <CardDescription>
+                  Generate a new document using Sentra brand templates.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Document Information</h3>
+                  <DocumentMetadataForm
+                    metadata={documentMetadata}
+                    onChange={setDocumentMetadata}
+                  />
+                </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Content Sections</h3>
+                  <ContentSectionEditor
+                    sections={contentSections}
+                    onChange={setContentSections}
+                  />
+                </div>
+
+                <Separator />
+
+                <div className="flex justify-center">
+                  <Button
+                    onClick={handleGenerateDocument}
+                    disabled={generateDocumentMutation.isPending || !documentMetadata.title}
+                    size="lg"
+                    className="min-w-[200px]"
+                  >
+                    {generateDocumentMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4 mr-2" />
+                    )}
+                    Generate Document
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Brand Settings Tab */}
@@ -403,12 +322,10 @@ const BrandDesigner: React.FC = () => {
               <CardHeader>
                 <CardTitle className="font-poppins">Brand Settings</CardTitle>
                 <CardDescription>
-                  Configure your brand colors and typography. These settings will be applied
-                  when transforming documents.
+                  Configure your brand colors and typography.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Colors */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Colors</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -447,7 +364,6 @@ const BrandDesigner: React.FC = () => {
 
                 <Separator />
 
-                {/* Typography */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Typography</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -464,7 +380,7 @@ const BrandDesigner: React.FC = () => {
                     />
                     <FontSelector
                       label="Body Font"
-                      fontValue={localSettings.body_font || 'Poppins'}
+                      fontValue={localSettings.body_font || 'Inter'}
                       weightValue={localSettings.body_weight || '400'}
                       onFontChange={(v) =>
                         setLocalSettings((prev) => ({ ...prev, body_font: v }))
@@ -476,8 +392,9 @@ const BrandDesigner: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center">
-                  <TemplatePreview />
+                <Separator />
+
+                <div className="flex justify-end">
                   <Button
                     onClick={handleSaveSettings}
                     disabled={updateMutation.isPending}

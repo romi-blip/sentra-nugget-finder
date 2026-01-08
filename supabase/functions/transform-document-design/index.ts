@@ -13,9 +13,6 @@ const COLORS = {
   // Header bar - dark charcoal/black (matches cover page background)
   headerDark: rgb(15/255, 15/255, 26/255),      // #0F0F1A - dark navy/black
   
-  // Icon backgrounds - light purple from SVG
-  iconPurple: rgb(243/255, 232/255, 255/255),   // #F3E8FF
-  
   // Cover page colors
   primary: rgb(102/255, 255/255, 102/255),      // Neon green #66FF66
   orange: rgb(255/255, 174/255, 26/255),        // Orange accent #FFAE1A
@@ -38,19 +35,10 @@ const COLORS = {
   footerGray: rgb(107/255, 114/255, 128/255),   // #6B7280
 };
 
-interface BrandSettings {
-  primaryColor: string;
-  secondaryColor: string;
-}
-
 interface RequestBody {
   file: string;
   fileName: string;
   fileType: string;
-  settings: BrandSettings;
-  useTemplates?: boolean;
-  coverTemplateId?: string;
-  textTemplateId?: string;
 }
 
 interface StructuredSection {
@@ -75,13 +63,35 @@ interface TOCEntry {
   level: number;
 }
 
-interface DocumentTemplate {
+interface ElementTemplate {
   id: string;
-  name: string;
-  page_type: string;
-  html_content: string;
-  css_content?: string;
-  image_base64?: string;
+  element_type: string;
+  image_base64: string | null;
+  image_height: number | null;
+  image_width: number | null;
+  font_family: string | null;
+  font_size: number | null;
+  font_weight: string | null;
+  font_color: string | null;
+  margin_top: number | null;
+  margin_bottom: number | null;
+  margin_left: number | null;
+  text_align: string | null;
+  bullet_character: string | null;
+  bullet_indent: number | null;
+}
+
+// Helper to convert hex color to RGB
+function hexToRgb(hex: string) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (result) {
+    return rgb(
+      parseInt(result[1], 16) / 255,
+      parseInt(result[2], 16) / 255,
+      parseInt(result[3], 16) / 255
+    );
+  }
+  return COLORS.bodyText;
 }
 
 // Decode HTML entities
@@ -269,26 +279,63 @@ function drawFooterBar(page: any) {
   page.drawRectangle({ x: segmentWidth * 3, y, width: segmentWidth, height: barHeight, color: COLORS.cyan });
 }
 
-// Draw Sentra logo icon (pixelated grid pattern) for content pages
-function drawSentraLogoIcon(page: any, x: number, y: number, color: any, scale: number = 1) {
-  const s = scale * 2.5;
-  page.drawRectangle({ x: x, y: y, width: 4*s, height: 4*s, color });
-  page.drawRectangle({ x: x + 6*s, y: y, width: 4*s, height: 4*s, color });
-  page.drawRectangle({ x: x + 12*s, y: y, width: 4*s, height: 4*s, color });
-  page.drawRectangle({ x: x, y: y - 6*s, width: 4*s, height: 4*s, color });
-  page.drawRectangle({ x: x + 12*s, y: y - 6*s, width: 4*s, height: 4*s, color });
-  page.drawRectangle({ x: x, y: y - 12*s, width: 4*s, height: 4*s, color });
-  page.drawRectangle({ x: x + 6*s, y: y - 12*s, width: 4*s, height: 4*s, color });
-  page.drawRectangle({ x: x + 12*s, y: y - 12*s, width: 4*s, height: 4*s, color });
+// Draw Sentra logo (geometric design)
+function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
+  const s = scale;
+  const lightColor = COLORS.lightText;
+  
+  page.drawRectangle({ x: x, y: y, width: 8 * s, height: 8 * s, color: lightColor });
+  page.drawRectangle({ x: x + 12 * s, y: y, width: 20 * s, height: 8 * s, color: lightColor });
+  page.drawRectangle({ x: x, y: y - 24 * s, width: 20 * s, height: 8 * s, color: lightColor });
+  page.drawRectangle({ x: x + 24 * s, y: y - 24 * s, width: 8 * s, height: 8 * s, color: lightColor });
+  page.drawRectangle({ x: x, y: y - 12 * s, width: 8 * s, height: 8 * s, color: lightColor });
+  page.drawRectangle({ x: x + 24 * s, y: y - 12 * s, width: 8 * s, height: 8 * s, color: lightColor });
+  
+  page.drawCircle({
+    x: x + 16 * s,
+    y: y - 8 * s,
+    size: 5 * s,
+    color: COLORS.orange,
+  });
 }
 
-// Draw content page header with embedded Sentra logo image
-async function drawContentHeader(page: any, pdfDoc: any, logoImage: any) {
+// Draw header using element template
+async function drawHeaderElement(
+  page: any, 
+  pdfDoc: any, 
+  headerTemplate: ElementTemplate | null, 
+  logoImage: any
+) {
   const width = page.getWidth();
   const height = page.getHeight();
+  
+  if (headerTemplate?.image_base64) {
+    // Use the template image as header
+    try {
+      const base64Data = headerTemplate.image_base64.split(',')[1] || headerTemplate.image_base64;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const headerImage = await pdfDoc.embedPng(bytes);
+      const imgHeight = headerTemplate.image_height || 40;
+      
+      page.drawImage(headerImage, {
+        x: 0,
+        y: height - imgHeight,
+        width: width,
+        height: imgHeight,
+      });
+      
+      return imgHeight;
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed header image:', e);
+    }
+  }
+  
+  // Default header if no template
   const headerHeight = 40;
-  const logoMargin = 25;
-
   page.drawRectangle({
     x: 0,
     y: height - headerHeight,
@@ -301,18 +348,54 @@ async function drawContentHeader(page: any, pdfDoc: any, logoImage: any) {
     const logoHeight = 24;
     const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
     page.drawImage(logoImage, {
-      x: logoMargin,
+      x: 25,
       y: height - headerHeight + 8,
       width: logoWidth,
       height: logoHeight,
     });
   }
+  
+  return headerHeight;
 }
 
-// Draw content page footer
-function drawContentFooter(page: any, fonts: any, pageNumber: number, isConfidential: boolean) {
+// Draw footer using element template
+async function drawFooterElement(
+  page: any, 
+  pdfDoc: any, 
+  fonts: any,
+  footerTemplate: ElementTemplate | null,
+  pageNumber: number,
+  isConfidential: boolean
+) {
   const width = page.getWidth();
   const margin = 35;
+  
+  if (footerTemplate?.image_base64) {
+    // Use the template image as footer
+    try {
+      const base64Data = footerTemplate.image_base64.split(',')[1] || footerTemplate.image_base64;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const footerImage = await pdfDoc.embedPng(bytes);
+      const imgHeight = footerTemplate.image_height || 30;
+      
+      page.drawImage(footerImage, {
+        x: 0,
+        y: 0,
+        width: width,
+        height: imgHeight,
+      });
+      
+      return imgHeight;
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed footer image:', e);
+    }
+  }
+  
+  // Default footer
   const footerY = 25;
 
   const copyrightText = `(c) Sentra ${new Date().getFullYear()}. All rights reserved.`;
@@ -345,151 +428,94 @@ function drawContentFooter(page: any, fonts: any, pageNumber: number, isConfiden
     font: fonts.regular,
     color: COLORS.footerGray,
   });
-}
-
-// Draw Sentra logo (geometric design)
-function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
-  const s = scale;
-  const lightColor = COLORS.lightText;
   
-  page.drawRectangle({ x: x, y: y, width: 8 * s, height: 8 * s, color: lightColor });
-  page.drawRectangle({ x: x + 12 * s, y: y, width: 20 * s, height: 8 * s, color: lightColor });
-  page.drawRectangle({ x: x, y: y - 24 * s, width: 20 * s, height: 8 * s, color: lightColor });
-  page.drawRectangle({ x: x + 24 * s, y: y - 24 * s, width: 8 * s, height: 8 * s, color: lightColor });
-  page.drawRectangle({ x: x, y: y - 12 * s, width: 8 * s, height: 8 * s, color: lightColor });
-  page.drawRectangle({ x: x + 24 * s, y: y - 12 * s, width: 8 * s, height: 8 * s, color: lightColor });
-  
-  page.drawCircle({
-    x: x + 16 * s,
-    y: y - 8 * s,
-    size: 5 * s,
-    color: COLORS.orange,
-  });
+  return 40;
 }
 
-// Draw icon circle (light purple background)
-function drawIconCircle(page: any, x: number, y: number, size: number = 44) {
-  page.drawCircle({
-    x: x + size / 2,
-    y: y - size / 2,
-    size: size / 2,
-    color: COLORS.iconPurple,
-  });
-}
-
-// Create cover page with template image if available
-async function createCoverPageWithTemplate(
+// Create cover page with element templates
+async function createCoverPageWithElements(
   pdfDoc: any, 
   fonts: any, 
   data: ExtractedDocument,
-  templateImage: any
+  coverTemplate: ElementTemplate | null,
+  titleStyle: ElementTemplate | null
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
 
-  // Draw template image as background
-  if (templateImage) {
-    page.drawImage(templateImage, {
-      x: 0,
-      y: 0,
-      width: width,
-      height: height,
-    });
+  // Draw cover background if template has image
+  if (coverTemplate?.image_base64) {
+    try {
+      const base64Data = coverTemplate.image_base64.split(',')[1] || coverTemplate.image_base64;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const coverImage = await pdfDoc.embedPng(bytes);
+      
+      page.drawImage(coverImage, {
+        x: 0,
+        y: 0,
+        width: width,
+        height: height,
+      });
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed cover image:', e);
+      // Fallback to black background
+      page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
+      drawSentraLogo(page, margin, height - 60, 1);
+      page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
+      drawFooterBar(page);
+    }
   } else {
-    // Fallback: draw black background
-    page.drawRectangle({
-      x: 0,
-      y: 0,
-      width: width,
-      height: height,
-      color: COLORS.black,
-    });
-    
-    // Draw Sentra logo at top left
+    // Default black cover
+    page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
     drawSentraLogo(page, margin, height - 60, 1);
-    
-    page.drawText('Sentra', {
-      x: margin + 50,
-      y: height - 75,
-      size: 20,
-      font: fonts.bold,
-      color: COLORS.lightText,
-    });
-    
-    // Colored footer bar
+    page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
     drawFooterBar(page);
   }
 
-  // Draw title - position adjusted for template
-  const titleY = templateImage ? 400 : height - 440;
-  const titleLines = wrapText(data.title || 'Document Title', fonts.bold, 28, width - margin * 2);
+  // Draw title with element style
+  const titleY = coverTemplate?.image_base64 ? 400 : height - 440;
+  const titleFontSize = titleStyle?.font_size || 28;
+  const titleColor = titleStyle?.font_color ? hexToRgb(titleStyle.font_color) : COLORS.primary;
+  const titleFont = titleStyle?.font_weight === 'bold' ? fonts.bold : fonts.bold;
+  
+  const titleLines = wrapText(data.title || 'Document Title', titleFont, titleFontSize, width - margin * 2);
   let currentY = titleY;
   for (const line of titleLines) {
     page.drawText(line, {
       x: margin,
       y: currentY,
-      size: 28,
-      font: fonts.bold,
-      color: COLORS.primary,
+      size: titleFontSize,
+      font: titleFont,
+      color: titleColor,
     });
-    currentY -= 36;
+    currentY -= titleFontSize + 8;
   }
-}
-
-// Create cover page (BLACK background) - default
-function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
-  const page = pdfDoc.addPage([595, 842]);
-  const width = page.getWidth();
-  const height = page.getHeight();
-  const margin = 50;
-
-  page.drawRectangle({
-    x: 0,
-    y: 0,
-    width: width,
-    height: height,
-    color: COLORS.black,
-  });
-
-  drawSentraLogo(page, margin, height - 60, 1);
-
-  page.drawText('Sentra', {
-    x: margin + 50,
-    y: height - 75,
-    size: 20,
-    font: fonts.bold,
-    color: COLORS.lightText,
-  });
-
-  const titleY = height - 440;
-  const titleLines = wrapText(data.title || 'Document Title', fonts.bold, 32, width - margin * 2);
-  let currentY = titleY;
-  for (const line of titleLines) {
-    page.drawText(line, {
-      x: margin,
-      y: currentY,
-      size: 32,
-      font: fonts.bold,
-      color: COLORS.primary,
-    });
-    currentY -= 40;
-  }
-
-  drawFooterBar(page);
 }
 
 // Create TOC page
-async function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[], isConfidential: boolean, logoImage: any) {
+async function createTOCPage(
+  pdfDoc: any, 
+  fonts: any, 
+  tocEntries: TOCEntry[], 
+  isConfidential: boolean, 
+  logoImage: any,
+  headerTemplate: ElementTemplate | null,
+  footerTemplate: ElementTemplate | null
+) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
 
-  await drawContentHeader(page, pdfDoc, logoImage);
+  const headerHeight = await drawHeaderElement(page, pdfDoc, headerTemplate, logoImage);
 
-  const titleY = height - 100;
+  const titleY = height - headerHeight - 40;
   page.drawText('Table of ', {
     x: margin,
     y: titleY,
@@ -556,7 +582,7 @@ async function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[], is
     y -= 26;
   }
 
-  drawContentFooter(page, fonts, 1, isConfidential);
+  await drawFooterElement(page, pdfDoc, fonts, footerTemplate, 1, isConfidential);
 }
 
 // Generate TOC entries
@@ -588,14 +614,22 @@ function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry
   return entries;
 }
 
-// Create content pages with optional template background
+// Create content pages with element templates
 async function createContentPages(
   pdfDoc: any, 
   fonts: any, 
   sections: StructuredSection[], 
   isConfidential: boolean, 
   logoImage: any,
-  textTemplateImage?: any
+  elements: {
+    header?: ElementTemplate | null;
+    footer?: ElementTemplate | null;
+    h1?: ElementTemplate | null;
+    h2?: ElementTemplate | null;
+    h3?: ElementTemplate | null;
+    paragraph?: ElementTemplate | null;
+    bullet?: ElementTemplate | null;
+  }
 ) {
   let currentPage = pdfDoc.addPage([595, 842]);
   const pageWidth = currentPage.getWidth();
@@ -603,45 +637,39 @@ async function createContentPages(
   const margin = 50;
   const contentWidth = pageWidth - margin * 2;
   
-  let y = pageHeight - 100;
-  const minY = textTemplateImage ? 80 : 60;
+  // Calculate content area based on header/footer heights
+  const headerHeight = elements.header?.image_height || 40;
+  const footerHeight = elements.footer?.image_height || 40;
+  
+  let y = pageHeight - headerHeight - 25;
+  const minY = footerHeight + 20;
   let pageNumber = 2;
   let hasContent = false;
 
-  // Draw template or header
-  if (textTemplateImage) {
-    currentPage.drawImage(textTemplateImage, {
-      x: 0,
-      y: 0,
-      width: pageWidth,
-      height: pageHeight,
-    });
-    y = pageHeight - 100;
-  } else {
-    await drawContentHeader(currentPage, pdfDoc, logoImage);
-    y = pageHeight - 65;
-  }
+  // Draw header on first page
+  await drawHeaderElement(currentPage, pdfDoc, elements.header || null, logoImage);
 
   const addNewPage = async () => {
-    if (!textTemplateImage) {
-      drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
-    }
+    await drawFooterElement(currentPage, pdfDoc, fonts, elements.footer || null, pageNumber, isConfidential);
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 842]);
-    
-    if (textTemplateImage) {
-      currentPage.drawImage(textTemplateImage, {
-        x: 0,
-        y: 0,
-        width: pageWidth,
-        height: pageHeight,
-      });
-      y = pageHeight - 100;
-    } else {
-      await drawContentHeader(currentPage, pdfDoc, logoImage);
-      y = pageHeight - 65;
-    }
+    await drawHeaderElement(currentPage, pdfDoc, elements.header || null, logoImage);
+    y = pageHeight - headerHeight - 25;
     hasContent = false;
+  };
+
+  // Get text style properties
+  const getTextStyle = (type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet') => {
+    const template = elements[type];
+    return {
+      fontSize: template?.font_size || (type === 'h1' ? 22 : type === 'h2' ? 16 : type === 'h3' ? 13 : 10),
+      fontWeight: template?.font_weight || (type.startsWith('h') ? 'bold' : 'normal'),
+      color: template?.font_color ? hexToRgb(template.font_color) : (type.startsWith('h') ? COLORS.black : COLORS.bodyText),
+      marginTop: template?.margin_top || (type === 'h1' ? 20 : type === 'h2' ? 16 : type === 'h3' ? 12 : 0),
+      marginBottom: template?.margin_bottom || (type === 'h1' ? 12 : type === 'h2' ? 8 : type === 'h3' ? 6 : 8),
+      bulletChar: template?.bullet_character || '-',
+      bulletIndent: template?.bullet_indent || 20,
+    };
   };
 
   for (let i = 0; i < sections.length; i++) {
@@ -664,177 +692,101 @@ async function createContentPages(
         await addNewPage();
       }
 
-      const lines = wrapText(content, fonts.bold, 22, contentWidth);
+      const style = getTextStyle('h1');
+      y -= style.marginTop;
+      
+      const font = style.fontWeight === 'bold' ? fonts.bold : fonts.regular;
+      const lines = wrapText(content, font, style.fontSize, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 22,
-          font: fonts.bold,
-          color: COLORS.black,
+          size: style.fontSize,
+          font: font,
+          color: style.color,
         });
-        y -= 28;
+        y -= style.fontSize + 6;
       }
-      y -= 24;
+      y -= style.marginBottom;
       hasContent = true;
     }
     else if (section.type === 'h2') {
       if (y < minY + 60) await addNewPage();
       
-      y -= 16;
+      const style = getTextStyle('h2');
+      y -= style.marginTop;
 
-      const lines = wrapText(content, fonts.bold, 16, contentWidth);
+      const font = style.fontWeight === 'bold' ? fonts.bold : fonts.regular;
+      const lines = wrapText(content, font, style.fontSize, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 16,
-          font: fonts.bold,
-          color: COLORS.black,
+          size: style.fontSize,
+          font: font,
+          color: style.color,
         });
-        y -= 22;
+        y -= style.fontSize + 6;
       }
-      y -= 16;
+      y -= style.marginBottom;
       hasContent = true;
     }
     else if (section.type === 'h3') {
       if (y < minY + 40) await addNewPage();
       
-      y -= 12;
+      const style = getTextStyle('h3');
+      y -= style.marginTop;
 
-      const lines = wrapText(content, fonts.bold, 13, contentWidth);
+      const font = style.fontWeight === 'bold' ? fonts.bold : fonts.regular;
+      const lines = wrapText(content, font, style.fontSize, contentWidth);
       for (const line of lines) {
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 13,
-          font: fonts.bold,
-          color: COLORS.darkGray,
+          size: style.fontSize,
+          font: font,
+          color: style.color,
         });
-        y -= 18;
+        y -= style.fontSize + 4;
       }
-      y -= 10;
-      hasContent = true;
-    }
-    else if (section.type === 'feature-grid' && section.features) {
-      const colGap = 30;
-      const colWidth = (contentWidth - colGap) / 2;
-      const iconSize = 44;
-      const features = section.features;
-      
-      for (let j = 0; j < features.length; j += 2) {
-        if (y < minY + 100) await addNewPage();
-
-        const leftFeature = features[j];
-        const rightFeature = features[j + 1];
-        let rowHeight = 0;
-
-        const leftX = margin;
-        const leftTextX = leftX + iconSize + 12;
-        const leftTextWidth = colWidth - iconSize - 12;
-        
-        drawIconCircle(currentPage, leftX, y, iconSize);
-        
-        const leftTitleLines = wrapText(leftFeature.title, fonts.bold, 14, leftTextWidth);
-        let leftY = y - 8;
-        for (const line of leftTitleLines) {
-          currentPage.drawText(line, {
-            x: leftTextX,
-            y: leftY,
-            size: 14,
-            font: fonts.bold,
-            color: COLORS.black,
-          });
-          leftY -= 18;
-        }
-        
-        const leftDescLines = wrapText(leftFeature.description, fonts.regular, 11, leftTextWidth);
-        for (const line of leftDescLines) {
-          currentPage.drawText(line, {
-            x: leftTextX,
-            y: leftY,
-            size: 11,
-            font: fonts.regular,
-            color: COLORS.bodyText,
-          });
-          leftY -= 15;
-        }
-        
-        rowHeight = Math.max(rowHeight, y - leftY);
-
-        if (rightFeature) {
-          const rightX = margin + colWidth + colGap;
-          const rightTextX = rightX + iconSize + 12;
-          const rightTextWidth = colWidth - iconSize - 12;
-          
-          drawIconCircle(currentPage, rightX, y, iconSize);
-          
-          const rightTitleLines = wrapText(rightFeature.title, fonts.bold, 14, rightTextWidth);
-          let rightY = y - 8;
-          for (const line of rightTitleLines) {
-            currentPage.drawText(line, {
-              x: rightTextX,
-              y: rightY,
-              size: 14,
-              font: fonts.bold,
-              color: COLORS.black,
-            });
-            rightY -= 18;
-          }
-          
-          const rightDescLines = wrapText(rightFeature.description, fonts.regular, 11, rightTextWidth);
-          for (const line of rightDescLines) {
-            currentPage.drawText(line, {
-              x: rightTextX,
-              y: rightY,
-              size: 11,
-              font: fonts.regular,
-              color: COLORS.bodyText,
-            });
-            rightY -= 15;
-          }
-          
-          rowHeight = Math.max(rowHeight, y - rightY);
-        }
-
-        y -= rowHeight + 20;
-      }
-      y -= 10;
+      y -= style.marginBottom;
       hasContent = true;
     }
     else if (section.type === 'bullet-list' && section.items) {
+      const style = getTextStyle('bullet');
+      
       for (const item of section.items) {
         if (y < minY + 30) await addNewPage();
 
-        const bulletIndent = 20;
         const bulletX = margin + 8;
         
-        currentPage.drawText('-', {
+        currentPage.drawText(style.bulletChar, {
           x: bulletX,
           y: y,
-          size: 10,
+          size: style.fontSize,
           font: fonts.bold,
-          color: COLORS.bodyText,
+          color: style.color,
         });
 
-        const lines = wrapText(item, fonts.regular, 10, contentWidth - bulletIndent - 8);
+        const lines = wrapText(item, fonts.regular, style.fontSize, contentWidth - style.bulletIndent - 8);
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
           currentPage.drawText(lines[lineIdx], {
-            x: margin + bulletIndent,
+            x: margin + style.bulletIndent,
             y: y,
-            size: 10,
+            size: style.fontSize,
             font: fonts.regular,
-            color: COLORS.bodyText,
+            color: style.color,
           });
-          y -= 16;
+          y -= style.fontSize + 6;
         }
         y -= 4;
       }
-      y -= 12;
+      y -= style.marginBottom;
       hasContent = true;
     }
     else if (section.type === 'paragraph' && content) {
-      const lines = wrapText(content, fonts.regular, 10, contentWidth);
+      const style = getTextStyle('paragraph');
+      const lines = wrapText(content, fonts.regular, style.fontSize, contentWidth);
       
       for (const line of lines) {
         if (y < minY) await addNewPage();
@@ -842,34 +794,40 @@ async function createContentPages(
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: 10,
+          size: style.fontSize,
           font: fonts.regular,
-          color: COLORS.bodyText,
+          color: style.color,
         });
-        y -= 15;
+        y -= style.fontSize + 5;
       }
-      y -= 14;
+      y -= style.marginBottom;
       hasContent = true;
     }
   }
 
-  if (!textTemplateImage) {
-    drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
-  }
+  await drawFooterElement(currentPage, pdfDoc, fonts, elements.footer || null, pageNumber, isConfidential);
 }
 
-// Main PDF generation with template images
-async function generatePDFWithTemplates(
+// Main PDF generation
+async function generatePDF(
   extractedDoc: ExtractedDocument, 
   logoBytes: Uint8Array | null,
-  coverTemplateImage?: any,
-  textTemplateImage?: any
+  elements: {
+    cover_background?: ElementTemplate | null;
+    header?: ElementTemplate | null;
+    footer?: ElementTemplate | null;
+    title?: ElementTemplate | null;
+    h1?: ElementTemplate | null;
+    h2?: ElementTemplate | null;
+    h3?: ElementTemplate | null;
+    paragraph?: ElementTemplate | null;
+    bullet?: ElementTemplate | null;
+  }
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   
   const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  
   const fonts = { regular: regularFont, bold: boldFont };
 
   let logoImage = null;
@@ -884,21 +842,23 @@ async function generatePDFWithTemplates(
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
   // Create cover page
-  if (coverTemplateImage) {
-    await createCoverPageWithTemplate(pdfDoc, fonts, extractedDoc, coverTemplateImage);
-  } else {
-    createCoverPage(pdfDoc, fonts, extractedDoc);
-  }
+  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null);
   
-  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage);
-  await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, textTemplateImage);
+  // Create TOC page
+  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, elements.header || null, elements.footer || null);
+  
+  // Create content pages
+  await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, {
+    header: elements.header,
+    footer: elements.footer,
+    h1: elements.h1,
+    h2: elements.h2,
+    h3: elements.h3,
+    paragraph: elements.paragraph,
+    bullet: elements.bullet,
+  });
 
   return await pdfDoc.save();
-}
-
-// Main PDF generation - default
-async function generatePDF(extractedDoc: ExtractedDocument, logoBytes: Uint8Array | null): Promise<Uint8Array> {
-  return generatePDFWithTemplates(extractedDoc, logoBytes);
 }
 
 serve(async (req) => {
@@ -930,9 +890,9 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { file, fileName, fileType, useTemplates, coverTemplateId, textTemplateId } = body;
+    const { file, fileName, fileType } = body;
 
-    console.log(`[transform-document-design] Processing ${fileName} (${fileType}), useTemplates: ${useTemplates}`);
+    console.log(`[transform-document-design] Processing ${fileName} (${fileType})`);
 
     if (fileType !== 'docx') {
       return new Response(
@@ -961,169 +921,35 @@ serve(async (req) => {
       console.log('[transform-document-design] Could not fetch logo:', e);
     }
 
-    // If using templates with image_base64, embed them as backgrounds
-    if (useTemplates && (coverTemplateId || textTemplateId)) {
-      console.log('[transform-document-design] Using template-based PDF generation');
-      
-      let coverTemplateImage = null;
-      let textTemplateImage = null;
-      
-      // Fetch cover template
-      if (coverTemplateId) {
-        const { data: coverTemplate } = await supabase
-          .from('document_templates')
-          .select('*')
-          .eq('id', coverTemplateId)
-          .single();
-        
-        if (coverTemplate?.image_base64) {
-          console.log('[transform-document-design] Cover template has image_base64');
-          try {
-            // Parse base64 data URL
-            const base64Data = coverTemplate.image_base64.split(',')[1] || coverTemplate.image_base64;
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            coverTemplateImage = await PDFDocument.create().then(async (tempDoc) => {
-              const pdfDoc = await PDFDocument.create();
-              return await pdfDoc.embedPng(bytes);
-            }).catch(async () => {
-              // Try embedding directly in main doc
-              const pdfDoc = await PDFDocument.create();
-              return await pdfDoc.embedPng(bytes);
-            });
-          } catch (e) {
-            console.log('[transform-document-design] Could not embed cover template image:', e);
-          }
-        }
+    // Fetch default element templates
+    const { data: elementTemplates } = await supabase
+      .from('element_templates')
+      .select('*')
+      .eq('is_default', true);
+
+    console.log(`[transform-document-design] Found ${elementTemplates?.length || 0} default element templates`);
+
+    // Create a map by element_type
+    const elements: Record<string, ElementTemplate> = {};
+    if (elementTemplates) {
+      for (const template of elementTemplates) {
+        elements[template.element_type] = template;
       }
-      
-      // Fetch text template
-      if (textTemplateId) {
-        const { data: textTemplate } = await supabase
-          .from('document_templates')
-          .select('*')
-          .eq('id', textTemplateId)
-          .single();
-        
-        if (textTemplate?.image_base64) {
-          console.log('[transform-document-design] Text template has image_base64');
-          try {
-            const base64Data = textTemplate.image_base64.split(',')[1] || textTemplate.image_base64;
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            textTemplateImage = await PDFDocument.create().then(async (tempDoc) => {
-              const pdfDoc = await PDFDocument.create();
-              return await pdfDoc.embedPng(bytes);
-            }).catch(async () => {
-              const pdfDoc = await PDFDocument.create();
-              return await pdfDoc.embedPng(bytes);
-            });
-          } catch (e) {
-            console.log('[transform-document-design] Could not embed text template image:', e);
-          }
-        }
-      }
-
-      // Generate PDF with template images embedded
-      const pdfDoc = await PDFDocument.create();
-      
-      const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      const fonts = { regular: regularFont, bold: boldFont };
-
-      let logoImage = null;
-      if (logoBytes) {
-        try {
-          logoImage = await pdfDoc.embedJpg(logoBytes);
-        } catch (e) {
-          console.log('[transform-document-design] Could not embed logo:', e);
-        }
-      }
-
-      // Embed template images
-      let embeddedCoverImage = null;
-      let embeddedTextImage = null;
-      
-      if (coverTemplateId) {
-        const { data: coverTemplate } = await supabase
-          .from('document_templates')
-          .select('image_base64')
-          .eq('id', coverTemplateId)
-          .single();
-        
-        if (coverTemplate?.image_base64) {
-          try {
-            const base64Data = coverTemplate.image_base64.split(',')[1] || coverTemplate.image_base64;
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            embeddedCoverImage = await pdfDoc.embedPng(bytes);
-            console.log('[transform-document-design] Embedded cover template image');
-          } catch (e) {
-            console.log('[transform-document-design] Could not embed cover image:', e);
-          }
-        }
-      }
-      
-      if (textTemplateId) {
-        const { data: textTemplate } = await supabase
-          .from('document_templates')
-          .select('image_base64')
-          .eq('id', textTemplateId)
-          .single();
-        
-        if (textTemplate?.image_base64) {
-          try {
-            const base64Data = textTemplate.image_base64.split(',')[1] || textTemplate.image_base64;
-            const binaryString = atob(base64Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            embeddedTextImage = await pdfDoc.embedPng(bytes);
-            console.log('[transform-document-design] Embedded text template image');
-          } catch (e) {
-            console.log('[transform-document-design] Could not embed text image:', e);
-          }
-        }
-      }
-
-      const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
-
-      // Create cover page with template image
-      if (embeddedCoverImage) {
-        await createCoverPageWithTemplate(pdfDoc, fonts, extractedDoc, embeddedCoverImage);
-      } else {
-        createCoverPage(pdfDoc, fonts, extractedDoc);
-      }
-      
-      await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage);
-      await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, embeddedTextImage);
-
-      const pdfBytes = await pdfDoc.save();
-      const pdfBase64 = btoa(String.fromCharCode(...pdfBytes));
-
-      return new Response(
-        JSON.stringify({
-          type: 'pdf',
-          modifiedFile: pdfBase64,
-          originalFileName: fileName.replace(/\.docx$/i, '_branded.pdf'),
-          message: 'Document transformed successfully with templates.',
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
-    // Default PDF generation (no templates)
-    const pdfBytes = await generatePDF(extractedDoc, logoBytes);
+    // Generate PDF with element templates
+    const pdfBytes = await generatePDF(extractedDoc, logoBytes, {
+      cover_background: elements['cover_background'] || null,
+      header: elements['header'] || null,
+      footer: elements['footer'] || null,
+      title: elements['title'] || null,
+      h1: elements['h1'] || null,
+      h2: elements['h2'] || null,
+      h3: elements['h3'] || null,
+      paragraph: elements['paragraph'] || null,
+      bullet: elements['bullet'] || null,
+    });
+    
     const pdfBase64 = btoa(String.fromCharCode(...pdfBytes));
 
     return new Response(

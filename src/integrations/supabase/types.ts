@@ -995,6 +995,81 @@ export type Database = {
         }
         Relationships: []
       }
+      element_templates: {
+        Row: {
+          bullet_character: string | null
+          bullet_indent: number | null
+          created_at: string | null
+          element_type: string
+          font_color: string | null
+          font_family: string | null
+          font_size: number | null
+          font_weight: string | null
+          id: string
+          image_base64: string | null
+          image_height: number | null
+          image_width: number | null
+          is_default: boolean | null
+          line_height: number | null
+          margin_bottom: number | null
+          margin_left: number | null
+          margin_top: number | null
+          name: string
+          position_x: number | null
+          position_y: number | null
+          text_align: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          bullet_character?: string | null
+          bullet_indent?: number | null
+          created_at?: string | null
+          element_type: string
+          font_color?: string | null
+          font_family?: string | null
+          font_size?: number | null
+          font_weight?: string | null
+          id?: string
+          image_base64?: string | null
+          image_height?: number | null
+          image_width?: number | null
+          is_default?: boolean | null
+          line_height?: number | null
+          margin_bottom?: number | null
+          margin_left?: number | null
+          margin_top?: number | null
+          name: string
+          position_x?: number | null
+          position_y?: number | null
+          text_align?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          bullet_character?: string | null
+          bullet_indent?: number | null
+          created_at?: string | null
+          element_type?: string
+          font_color?: string | null
+          font_family?: string | null
+          font_size?: number | null
+          font_weight?: string | null
+          id?: string
+          image_base64?: string | null
+          image_height?: number | null
+          image_width?: number | null
+          is_default?: boolean | null
+          line_height?: number | null
+          margin_bottom?: number | null
+          margin_left?: number | null
+          margin_top?: number | null
+          name?: string
+          position_x?: number | null
+          position_y?: number | null
+          text_align?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       event_leads: {
         Row: {
           account_name: string
