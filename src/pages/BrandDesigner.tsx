@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Palette, Save, Wand2, FileText, PlusCircle, Layout } from 'lucide-react';
+import { Loader2, Palette, Save, Wand2, FileText, PlusCircle, Layout, Layers } from 'lucide-react';
 import BrandColorPicker from '@/components/brand/BrandColorPicker';
 import FontSelector from '@/components/brand/FontSelector';
 import DocumentUploader from '@/components/brand/DocumentUploader';
@@ -13,6 +13,7 @@ import TransformedPreview from '@/components/brand/TransformedPreview';
 import DocumentMetadataForm from '@/components/brand/DocumentMetadataForm';
 import ContentSectionEditor from '@/components/brand/ContentSectionEditor';
 import { ElementTemplateEditor } from '@/components/brand/ElementTemplateEditor';
+import { DocumentComposer } from '@/components/brand/DocumentComposer';
 import { brandService, BrandSettings, TransformResult } from '@/services/brandService';
 import { documentService } from '@/services/documentService';
 import { 
@@ -178,22 +179,26 @@ const BrandDesigner: React.FC = () => {
         </div>
 
         <Tabs defaultValue="transform" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="transform">
               <Wand2 className="h-4 w-4 mr-2" />
-              Transform Document
+              Transform
             </TabsTrigger>
             <TabsTrigger value="elements">
               <Layout className="h-4 w-4 mr-2" />
-              Element Templates
+              Elements
+            </TabsTrigger>
+            <TabsTrigger value="composer">
+              <Layers className="h-4 w-4 mr-2" />
+              Composer
             </TabsTrigger>
             <TabsTrigger value="create">
               <PlusCircle className="h-4 w-4 mr-2" />
-              Create Document
+              Create
             </TabsTrigger>
             <TabsTrigger value="settings">
               <Palette className="h-4 w-4 mr-2" />
-              Brand Settings
+              Settings
             </TabsTrigger>
           </TabsList>
 
@@ -260,6 +265,11 @@ const BrandDesigner: React.FC = () => {
                 <ElementTemplateEditor />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Document Composer Tab */}
+          <TabsContent value="composer" className="space-y-6">
+            <DocumentComposer />
           </TabsContent>
 
           {/* Create New Document Tab */}

@@ -845,6 +845,54 @@ export type Database = {
         }
         Relationships: []
       }
+      document_profiles: {
+        Row: {
+          created_at: string | null
+          default_line_height: number | null
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          page_break_before_h1: boolean | null
+          page_margin_bottom: number | null
+          page_margin_left: number | null
+          page_margin_right: number | null
+          page_margin_top: number | null
+          paragraph_spacing: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_line_height?: number | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          page_break_before_h1?: boolean | null
+          page_margin_bottom?: number | null
+          page_margin_left?: number | null
+          page_margin_right?: number | null
+          page_margin_top?: number | null
+          paragraph_spacing?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_line_height?: number | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          page_break_before_h1?: boolean | null
+          page_margin_bottom?: number | null
+          page_margin_left?: number | null
+          page_margin_right?: number | null
+          page_margin_top?: number | null
+          paragraph_spacing?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       document_templates: {
         Row: {
           created_at: string | null
@@ -1732,6 +1780,129 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      page_layouts: {
+        Row: {
+          background_element_id: string | null
+          created_at: string | null
+          footer_element_id: string | null
+          header_element_id: string | null
+          id: string
+          logo_element_id: string | null
+          logo_position_x: number | null
+          logo_position_y: number | null
+          page_type: string
+          profile_id: string
+          show_logo: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          background_element_id?: string | null
+          created_at?: string | null
+          footer_element_id?: string | null
+          header_element_id?: string | null
+          id?: string
+          logo_element_id?: string | null
+          logo_position_x?: number | null
+          logo_position_y?: number | null
+          page_type: string
+          profile_id: string
+          show_logo?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          background_element_id?: string | null
+          created_at?: string | null
+          footer_element_id?: string | null
+          header_element_id?: string | null
+          id?: string
+          logo_element_id?: string | null
+          logo_position_x?: number | null
+          logo_position_y?: number | null
+          page_type?: string
+          profile_id?: string
+          show_logo?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_layouts_background_element_id_fkey"
+            columns: ["background_element_id"]
+            isOneToOne: false
+            referencedRelation: "element_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_layouts_footer_element_id_fkey"
+            columns: ["footer_element_id"]
+            isOneToOne: false
+            referencedRelation: "element_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_layouts_header_element_id_fkey"
+            columns: ["header_element_id"]
+            isOneToOne: false
+            referencedRelation: "element_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_layouts_logo_element_id_fkey"
+            columns: ["logo_element_id"]
+            isOneToOne: false
+            referencedRelation: "element_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_layouts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "document_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      page_text_styles: {
+        Row: {
+          context: string
+          created_at: string | null
+          element_template_id: string | null
+          id: string
+          page_layout_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          context: string
+          created_at?: string | null
+          element_template_id?: string | null
+          id?: string
+          page_layout_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          context?: string
+          created_at?: string | null
+          element_template_id?: string | null
+          id?: string
+          page_layout_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_text_styles_element_template_id_fkey"
+            columns: ["element_template_id"]
+            isOneToOne: false
+            referencedRelation: "element_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_text_styles_page_layout_id_fkey"
+            columns: ["page_layout_id"]
+            isOneToOne: false
+            referencedRelation: "page_layouts"
             referencedColumns: ["id"]
           },
         ]
