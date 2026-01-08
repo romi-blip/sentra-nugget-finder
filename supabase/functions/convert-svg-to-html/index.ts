@@ -5,147 +5,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface SVGElement {
-  tag: string;
-  attrs: Record<string, string>;
-  content?: string;
-  children?: SVGElement[];
-}
-
-function parseAttributes(attrString: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  const regex = /(\w+(?:-\w+)*)=["']([^"']*)["']/g;
-  let match;
-  while ((match = regex.exec(attrString)) !== null) {
-    attrs[match[1]] = match[2];
-  }
-  return attrs;
-}
-
-function extractSVGElements(svgContent: string): SVGElement[] {
-  const elements: SVGElement[] = [];
-  
-  // Extract rect elements
-  const rectRegex = /<rect\s+([^>]*)(?:\/>|>)/g;
-  let match;
-  while ((match = rectRegex.exec(svgContent)) !== null) {
-    elements.push({ tag: 'rect', attrs: parseAttributes(match[1]) });
-  }
-  
-  // Extract text elements with content
-  const textRegex = /<text\s+([^>]*)>([^<]*)<\/text>/g;
-  while ((match = textRegex.exec(svgContent)) !== null) {
-    elements.push({ tag: 'text', attrs: parseAttributes(match[1]), content: match[2] });
-  }
-  
-  // Extract tspan elements (nested text)
-  const tspanRegex = /<tspan\s+([^>]*)>([^<]*)<\/tspan>/g;
-  while ((match = tspanRegex.exec(svgContent)) !== null) {
-    elements.push({ tag: 'tspan', attrs: parseAttributes(match[1]), content: match[2] });
-  }
-  
-  // Extract path elements (for logos, icons)
-  const pathRegex = /<path\s+([^>]*)(?:\/>|>)/g;
-  while ((match = pathRegex.exec(svgContent)) !== null) {
-    elements.push({ tag: 'path', attrs: parseAttributes(match[1]) });
-  }
-  
-  // Extract image elements
-  const imageRegex = /<image\s+([^>]*)(?:\/>|>)/g;
-  while ((match = imageRegex.exec(svgContent)) !== null) {
-    elements.push({ tag: 'image', attrs: parseAttributes(match[1]) });
-  }
-  
-  // Extract circle elements
-  const circleRegex = /<circle\s+([^>]*)(?:\/>|>)/g;
-  while ((match = circleRegex.exec(svgContent)) !== null) {
-    elements.push({ tag: 'circle', attrs: parseAttributes(match[1]) });
-  }
-  
-  // Extract line elements
-  const lineRegex = /<line\s+([^>]*)(?:\/>|>)/g;
-  while ((match = lineRegex.exec(svgContent)) !== null) {
-    elements.push({ tag: 'line', attrs: parseAttributes(match[1]) });
-  }
-  
-  // Extract g groups with their content
-  const gRegex = /<g\s+([^>]*)>([\s\S]*?)<\/g>/g;
-  while ((match = gRegex.exec(svgContent)) !== null) {
-    const groupContent = match[2];
-    const groupElements = extractSVGElements(groupContent);
-    elements.push({ tag: 'g', attrs: parseAttributes(match[1]), children: groupElements });
-  }
-  
-  return elements;
-}
-
-function getSVGViewBox(svgContent: string): { width: number; height: number } {
+function getSVGDimensions(svgContent: string): { width: number; height: number } {
   const viewBoxMatch = svgContent.match(/viewBox=["']([^"']*)["']/);
   if (viewBoxMatch) {
     const parts = viewBoxMatch[1].split(/\s+/).map(Number);
-    return { width: parts[2] || 612, height: parts[3] || 792 };
+    return { width: parts[2] || 595, height: parts[3] || 842 };
   }
   
   const widthMatch = svgContent.match(/width=["'](\d+)/);
   const heightMatch = svgContent.match(/height=["'](\d+)/);
   
   return {
-    width: widthMatch ? parseInt(widthMatch[1]) : 612,
-    height: heightMatch ? parseInt(heightMatch[1]) : 792
+    width: widthMatch ? parseInt(widthMatch[1]) : 595,
+    height: heightMatch ? parseInt(heightMatch[1]) : 842
   };
-}
-
-function convertToCSS(element: SVGElement, viewBox: { width: number; height: number }): string {
-  const { tag, attrs } = element;
-  const styles: string[] = [];
-  
-  // Position
-  if (attrs.x) styles.push(`left: ${(parseFloat(attrs.x) / viewBox.width * 100).toFixed(2)}%`);
-  if (attrs.y) styles.push(`top: ${(parseFloat(attrs.y) / viewBox.height * 100).toFixed(2)}%`);
-  
-  // Dimensions
-  if (attrs.width) styles.push(`width: ${(parseFloat(attrs.width) / viewBox.width * 100).toFixed(2)}%`);
-  if (attrs.height) styles.push(`height: ${(parseFloat(attrs.height) / viewBox.height * 100).toFixed(2)}%`);
-  
-  // Colors
-  if (attrs.fill && attrs.fill !== 'none') styles.push(`background-color: ${attrs.fill}`);
-  if (attrs.stroke) styles.push(`border-color: ${attrs.stroke}`);
-  if (attrs['stroke-width']) styles.push(`border-width: ${attrs['stroke-width']}px`);
-  
-  // Text styles
-  if (attrs['font-family']) styles.push(`font-family: ${attrs['font-family']}`);
-  if (attrs['font-size']) styles.push(`font-size: ${attrs['font-size']}`);
-  if (attrs['font-weight']) styles.push(`font-weight: ${attrs['font-weight']}`);
-  if (attrs['text-anchor']) {
-    const anchor = attrs['text-anchor'];
-    if (anchor === 'middle') styles.push('text-align: center');
-    else if (anchor === 'end') styles.push('text-align: right');
-    else styles.push('text-align: left');
-  }
-  
-  // Opacity
-  if (attrs.opacity) styles.push(`opacity: ${attrs.opacity}`);
-  if (attrs['fill-opacity']) styles.push(`opacity: ${attrs['fill-opacity']}`);
-  
-  return styles.join('; ');
 }
 
 function detectPlaceholders(content: string): string[] {
   const placeholders: string[] = [];
   
-  // Look for placeholder patterns
+  // Look for placeholder patterns in text content
   const patterns = [
     /\{\{(\w+)\}\}/g,           // {{placeholder}}
     /\$\{(\w+)\}/g,             // ${placeholder}
     /%(\w+)%/g,                  // %placeholder%
     /\[(\w+)\]/g,                // [placeholder]
-  ];
-  
-  // Also detect common placeholder text
-  const commonPlaceholders = [
-    'title', 'subtitle', 'date', 'author', 'version', 'content',
-    'page_number', 'total_pages', 'prepared_for', 'category',
-    'toc_items', 'confidential', 'chapter_title', 'section_content'
   ];
   
   patterns.forEach(pattern => {
@@ -160,69 +44,73 @@ function detectPlaceholders(content: string): string[] {
   return placeholders;
 }
 
-function elementToHTML(element: SVGElement, viewBox: { width: number; height: number }): string {
-  const { tag, attrs, content, children } = element;
-  const css = convertToCSS(element, viewBox);
-  
-  switch (tag) {
-    case 'rect':
-      return `<div class="svg-rect" style="position: absolute; ${css}"></div>`;
-    
-    case 'text':
-    case 'tspan':
-      const textContent = content || '{{content}}';
-      const colorStyle = attrs.fill ? `color: ${attrs.fill};` : '';
-      return `<div class="svg-text" style="position: absolute; ${css}; ${colorStyle}">${textContent}</div>`;
-    
-    case 'path':
-      // Keep paths as inline SVG for complex shapes
-      const pathAttrs = Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(' ');
-      return `<svg class="svg-path" style="position: absolute; ${css}"><path ${pathAttrs}/></svg>`;
-    
-    case 'image':
-      const src = attrs['xlink:href'] || attrs.href || '';
-      return `<img class="svg-image" src="${src}" style="position: absolute; ${css}" />`;
-    
-    case 'circle':
-      const cx = parseFloat(attrs.cx || '0');
-      const cy = parseFloat(attrs.cy || '0');
-      const r = parseFloat(attrs.r || '0');
-      return `<div class="svg-circle" style="position: absolute; left: ${((cx - r) / viewBox.width * 100).toFixed(2)}%; top: ${((cy - r) / viewBox.height * 100).toFixed(2)}%; width: ${(r * 2 / viewBox.width * 100).toFixed(2)}%; height: ${(r * 2 / viewBox.height * 100).toFixed(2)}%; border-radius: 50%; background-color: ${attrs.fill || 'transparent'}; border: ${attrs.stroke ? `${attrs['stroke-width'] || 1}px solid ${attrs.stroke}` : 'none'};"></div>`;
-    
-    case 'g':
-      const groupContent = children?.map(child => elementToHTML(child, viewBox)).join('\n') || '';
-      return `<div class="svg-group" style="${css}">${groupContent}</div>`;
-    
-    default:
-      return '';
-  }
-}
-
 function convertSVGToHTML(svgContent: string, pageType: string): { html: string; css: string; placeholders: string[] } {
-  const viewBox = getSVGViewBox(svgContent);
-  const elements = extractSVGElements(svgContent);
+  const dimensions = getSVGDimensions(svgContent);
   const placeholders = detectPlaceholders(svgContent);
+  const aspectRatio = dimensions.width / dimensions.height;
   
+  // Clean up SVG for embedding - make it responsive
+  let responsiveSvg = svgContent
+    // Remove fixed width/height from root SVG, keep viewBox
+    .replace(/<svg([^>]*)\swidth=["'][^"']*["']/g, '<svg$1')
+    .replace(/<svg([^>]*)\sheight=["'][^"']*["']/g, '<svg$1')
+    // Add preserveAspectRatio if not present
+    .replace(/<svg(?![^>]*preserveAspectRatio)/g, '<svg preserveAspectRatio="xMidYMid meet"');
+  
+  // Ensure SVG has width/height 100%
+  responsiveSvg = responsiveSvg.replace(/<svg/, '<svg width="100%" height="100%"');
+  
+  // Encode SVG for safe embedding
+  const encodedSvg = responsiveSvg
+    .replace(/"/g, "'")
+    .replace(/#/g, '%23')
+    .replace(/</g, '%3C')
+    .replace(/>/g, '%3E');
+
   // Generate CSS
   const css = `
 .page-container {
   position: relative;
   width: 100%;
-  max-width: 612px;
-  aspect-ratio: 612 / 792;
+  max-width: ${dimensions.width}px;
+  aspect-ratio: ${aspectRatio.toFixed(4)};
   margin: 0 auto;
   overflow: hidden;
   background: white;
   box-sizing: border-box;
 }
 
-.svg-rect, .svg-text, .svg-path, .svg-image, .svg-circle, .svg-group {
-  box-sizing: border-box;
+.page-container.page-${pageType} {
+  /* Page type specific styles */
 }
 
-.svg-text {
-  white-space: nowrap;
-  overflow: visible;
+.svg-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.svg-background svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.content-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.content-overlay > * {
+  pointer-events: auto;
 }
 
 @media print {
@@ -236,11 +124,14 @@ function convertSVGToHTML(svgContent: string, pageType: string): { html: string;
 }
 `;
 
-  // Generate HTML elements
-  const htmlElements = elements.map(el => elementToHTML(el, viewBox)).join('\n  ');
-  
+  // Generate HTML with embedded SVG
   const html = `<div class="page-container page-${pageType}">
-  ${htmlElements}
+  <div class="svg-background">
+    ${responsiveSvg}
+  </div>
+  <div class="content-overlay">
+    <!-- Add dynamic content placeholders here -->
+  </div>
 </div>`;
 
   return { html, css, placeholders };
@@ -276,6 +167,7 @@ serve(async (req) => {
     }
 
     console.log(`Converting SVG to HTML for page type: ${pageType}`);
+    console.log(`SVG dimensions detected, content length: ${svgString.length}`);
     
     const result = convertSVGToHTML(svgString, pageType);
 
