@@ -10,8 +10,9 @@ const corsHeaders = {
 
 // Brand colors matching the reference template exactly
 const COLORS = {
-  // Header bar - purple from SVG template
-  headerPurple: rgb(124/255, 58/255, 237/255),  // #7C3AED exact match
+  // Header bar - dark charcoal/black (matches cover page background)
+  headerDark: rgb(15/255, 15/255, 26/255),      // #0F0F1A - dark navy/black
+  headerAccent: rgb(124/255, 58/255, 237/255),  // #7C3AED - purple accent line
   
   // Icon backgrounds - light purple from SVG
   iconPurple: rgb(243/255, 232/255, 255/255),   // #F3E8FF
@@ -275,32 +276,42 @@ function drawSentraLogoIcon(page: any, x: number, y: number, color: any, scale: 
   page.drawRectangle({ x: x + 12*s, y: y - 12*s, width: 4*s, height: 4*s, color });
 }
 
-// Draw content page header - FULL WIDTH PURPLE BAR with white logo
+// Draw content page header - DARK BAR (like cover page) with Sentra logo + purple accent line
 function drawContentHeader(page: any, fonts: any) {
   const width = page.getWidth();
   const height = page.getHeight();
-  const headerHeight = 50;
+  const headerHeight = 45;
+  const accentLineHeight = 4;
   const logoMargin = 35;
 
-  // Full-width purple bar at the very top
+  // Full-width dark charcoal header bar (matches cover page background)
   page.drawRectangle({
     x: 0,
     y: height - headerHeight,
     width: width,
     height: headerHeight,
-    color: COLORS.headerPurple,
+    color: COLORS.headerDark,
   });
 
-  // Draw sentra logo icon (white)
-  drawSentraLogoIcon(page, logoMargin, height - 18, COLORS.white, 1);
+  // Draw full Sentra logo (same as cover page - geometric with orange dot)
+  drawSentraLogo(page, logoMargin, height - 12, 0.55);
 
-  // "sentra" text in white, next to icon
+  // "sentra" text in white, next to logo
   page.drawText('sentra', {
-    x: logoMargin + 48,
-    y: height - 33,
-    size: 18,
+    x: logoMargin + 25,
+    y: height - 30,
+    size: 16,
     font: fonts.bold,
-    color: COLORS.white,
+    color: COLORS.lightText,
+  });
+
+  // Thin purple accent line below the header bar
+  page.drawRectangle({
+    x: 0,
+    y: height - headerHeight - accentLineHeight,
+    width: width,
+    height: accentLineHeight,
+    color: COLORS.headerAccent,
   });
 }
 
@@ -542,8 +553,8 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
   const margin = 35; // Match SVG template margin
   const contentWidth = pageWidth - margin * 2;
   
-  // Start content below the purple header bar (50px header + 30px gap)
-  let y = pageHeight - 90;
+  // Start content below the dark header bar (45px) + purple accent line (4px) + gap
+  let y = pageHeight - 75;
   const minY = 55; // Leave room for footer
   let pageNumber = 2;
   let hasContent = false;
@@ -556,7 +567,7 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
     drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 814]);
-    y = pageHeight - 90;
+    y = pageHeight - 75; // Below header (45px) + accent line (4px) + padding
     drawContentHeader(currentPage, fonts);
     hasContent = false;
   };
