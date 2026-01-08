@@ -945,7 +945,8 @@ serve(async (req) => {
         return result;
       };
       
-      // Build combined HTML document
+      // Build combined HTML document with CSS-only styling (SVGs don't render well in html2pdf)
+      // Use Sentra brand colors: black background for cover, white for content pages
       let combinedHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -954,24 +955,62 @@ serve(async (req) => {
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-    .page { width: 595px; min-height: 842px; page-break-after: always; position: relative; overflow: hidden; background: white; }
+    .page { width: 595px; min-height: 842px; page-break-after: always; position: relative; overflow: hidden; }
     .page:last-child { page-break-after: auto; }
-    .cover-page { position: relative; }
-    .cover-page .svg-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
-    .cover-page .svg-background svg { width: 100%; height: 100%; }
-    .cover-title-overlay { position: absolute; bottom: 180px; left: 50px; right: 50px; z-index: 10; }
-    .cover-title-overlay h1 { font-size: 28px; font-weight: bold; color: #66FF66; margin: 0 0 16px 0; line-height: 1.3; }
-    .cover-title-overlay p { font-size: 14px; color: #9CA3AF; margin: 0; }
-    .text-page { position: relative; }
-    .text-page .svg-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
-    .text-page .svg-background svg { width: 100%; height: 100%; }
-    .content-overlay { position: relative; z-index: 10; padding: 100px 50px 60px 50px; min-height: 842px; }
+    
+    /* Cover page - Sentra dark theme */
+    .cover-page { 
+      background: linear-gradient(180deg, #000000 0%, #1a1a2e 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 60px 50px;
+    }
+    .cover-header { display: flex; align-items: center; gap: 12px; }
+    .cover-logo { width: 32px; height: 32px; }
+    .cover-logo-text { color: white; font-size: 20px; font-weight: bold; }
+    .cover-content { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .cover-title { font-size: 32px; font-weight: bold; color: #66FF66; margin: 0 0 16px 0; line-height: 1.3; }
+    .cover-subtitle { font-size: 16px; color: #9CA3AF; margin: 0; }
+    .cover-footer { display: flex; gap: 0; height: 8px; border-radius: 4px; overflow: hidden; }
+    .cover-footer-seg { flex: 1; }
+    .seg-green { background: #66FF66; }
+    .seg-cyan { background: #00D4FF; }
+    .seg-pink { background: #FF66B2; }
+    .seg-purple { background: #8B5CF6; }
+    
+    /* Content pages - clean white with header */
+    .text-page { background: #ffffff; }
+    .page-header { 
+      background: #1a1a2e; 
+      padding: 16px 50px; 
+      display: flex; 
+      align-items: center; 
+      gap: 12px;
+    }
+    .header-logo { width: 24px; height: 24px; }
+    .header-logo-text { color: white; font-size: 16px; font-weight: 600; }
+    .content-area { padding: 40px 50px 60px 50px; }
     .section-heading { font-size: 20px; font-weight: bold; color: #000; margin: 24px 0 12px 0; }
-    .subsection-heading { font-size: 14px; font-weight: bold; color: #000; margin: 16px 0 8px 0; }
-    .subsubsection-heading { font-size: 12px; font-weight: bold; color: #374151; margin: 12px 0 6px 0; }
-    .body-text { font-size: 10px; line-height: 1.6; color: #374151; margin: 0 0 8px 0; }
-    .bullet-list { margin: 6px 0; padding-left: 20px; }
-    .bullet-list li { font-size: 10px; color: #374151; margin-bottom: 3px; line-height: 1.5; }
+    .section-heading:first-child { margin-top: 0; }
+    .subsection-heading { font-size: 14px; font-weight: bold; color: #1a1a2e; margin: 20px 0 10px 0; }
+    .subsubsection-heading { font-size: 12px; font-weight: bold; color: #374151; margin: 16px 0 8px 0; }
+    .body-text { font-size: 11px; line-height: 1.7; color: #374151; margin: 0 0 10px 0; }
+    .bullet-list { margin: 8px 0; padding-left: 24px; }
+    .bullet-list li { font-size: 11px; color: #374151; margin-bottom: 6px; line-height: 1.6; }
+    
+    /* Page footer */
+    .page-footer {
+      position: absolute;
+      bottom: 20px;
+      left: 50px;
+      right: 50px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: #9CA3AF;
+    }
+    
     ${coverTemplate?.css_content || ''}
     ${textTemplate?.css_content || ''}
   </style>
@@ -979,25 +1018,35 @@ serve(async (req) => {
 <body>
 `;
       
-      // Cover page with title overlay
-      if (coverTemplate) {
-        combinedHtml += `<div class="page cover-page">
-  <div class="svg-background">${coverTemplate.html_content}</div>
-  <div class="cover-title-overlay">
-    <h1>${placeholderData.title}</h1>
-    ${placeholderData.subtitle ? `<p>${placeholderData.subtitle}</p>` : ''}
+      // Cover page with Sentra branding (CSS-based, no SVG)
+      combinedHtml += `<div class="page cover-page">
+  <div class="cover-header">
+    <div class="cover-logo-text">SENTRA</div>
+  </div>
+  <div class="cover-content">
+    <h1 class="cover-title">${placeholderData.title}</h1>
+    ${placeholderData.subtitle ? `<p class="cover-subtitle">${placeholderData.subtitle}</p>` : ''}
+  </div>
+  <div class="cover-footer">
+    <div class="cover-footer-seg seg-green"></div>
+    <div class="cover-footer-seg seg-cyan"></div>
+    <div class="cover-footer-seg seg-pink"></div>
+    <div class="cover-footer-seg seg-purple"></div>
   </div>
 </div>\n`;
-      }
       
-      // Text pages with content overlay on template background
-      if (textTemplate) {
+      // Content pages with header and footer
+      if (extractedDoc.sections.length > 0) {
         combinedHtml += `<div class="page text-page">
-  <div class="svg-background">${textTemplate.html_content}</div>
-  <div class="content-overlay">${contentHtml}</div>
+  <div class="page-header">
+    <span class="header-logo-text">SENTRA</span>
+  </div>
+  <div class="content-area">${contentHtml}</div>
+  <div class="page-footer">
+    <span>© ${placeholderData.year} Sentra</span>
+    <span>${placeholderData.confidential}</span>
+  </div>
 </div>\n`;
-      } else if (extractedDoc.sections.length > 0) {
-        combinedHtml += `<div class="page text-page"><div class="content-overlay">${contentHtml}</div></div>\n`;
       }
       
       combinedHtml += `</body></html>`;

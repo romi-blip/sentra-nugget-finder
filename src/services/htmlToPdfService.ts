@@ -182,34 +182,54 @@ export function renderTemplateToHtml(options: TemplateRenderOptions): string {
 
 /**
  * Convert HTML to PDF using html2pdf.js
+ * Note: Complex SVGs with patterns and clip-paths may not render correctly
  */
 export async function convertHtmlToPdf(html: string, filename: string): Promise<void> {
-  // Create an iframe for proper HTML document rendering
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'absolute';
-  iframe.style.left = '-9999px';
-  iframe.style.top = '0';
-  iframe.style.width = '595px';
-  iframe.style.height = '842px';
-  iframe.style.border = 'none';
-  document.body.appendChild(iframe);
+  console.log('[htmlToPdfService] Starting PDF conversion, HTML length:', html.length);
+  
+  // Create a container for rendering
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '0';
+  container.style.top = '0';
+  container.style.width = '595px';
+  container.style.backgroundColor = 'white';
+  container.style.zIndex = '-9999';
+  container.style.overflow = 'visible';
+  document.body.appendChild(container);
 
   try {
-    // Write the full HTML document to the iframe
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!iframeDoc) {
-      throw new Error('Could not access iframe document');
-    }
+    // Parse the HTML and extract body content
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
     
-    iframeDoc.open();
-    iframeDoc.write(html);
-    iframeDoc.close();
+    // Extract styles from head and inject them
+    const styles = doc.querySelectorAll('style');
+    const styleContent = Array.from(styles).map(s => s.textContent).join('\n');
+    
+    // Create style element
+    const styleEl = document.createElement('style');
+    styleEl.textContent = styleContent;
+    container.appendChild(styleEl);
+    
+    // Clone body content
+    const bodyContent = doc.body.innerHTML;
+    const contentDiv = document.createElement('div');
+    contentDiv.innerHTML = bodyContent;
+    container.appendChild(contentDiv);
+    
+    console.log('[htmlToPdfService] Content injected, pages found:', container.querySelectorAll('.page').length);
 
-    // Wait for content to render
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Wait for content and SVGs to render
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Get the body content for pdf conversion
-    const body = iframeDoc.body;
+    // Check if we have visible content
+    const pages = container.querySelectorAll('.page');
+    console.log('[htmlToPdfService] Rendering', pages.length, 'pages');
+    
+    if (pages.length === 0) {
+      console.warn('[htmlToPdfService] No .page elements found, rendering entire container');
+    }
     
     const opt = {
       margin: 0,
@@ -219,8 +239,20 @@ export async function convertHtmlToPdf(html: string, filename: string): Promise<
         scale: 2,
         useCORS: true,
         letterRendering: true,
-        logging: true, // Enable logging for debugging
+        logging: false,
         allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: 595,
+        windowWidth: 595,
+        // Ignore SVG backgrounds that may cause issues
+        ignoreElements: (element: Element) => {
+          // Skip complex SVG backgrounds but keep content
+          if (element.classList?.contains('svg-background')) {
+            console.log('[htmlToPdfService] Skipping svg-background for canvas rendering');
+            return true;
+          }
+          return false;
+        }
       },
       jsPDF: { 
         unit: 'pt', 
@@ -230,9 +262,13 @@ export async function convertHtmlToPdf(html: string, filename: string): Promise<
       pagebreak: { mode: ['css', 'legacy'] },
     };
 
-    await html2pdf().set(opt).from(body).save();
+    await html2pdf().set(opt).from(container).save();
+    console.log('[htmlToPdfService] PDF saved successfully');
+  } catch (error) {
+    console.error('[htmlToPdfService] PDF conversion error:', error);
+    throw error;
   } finally {
-    document.body.removeChild(iframe);
+    document.body.removeChild(container);
   }
 }
 
