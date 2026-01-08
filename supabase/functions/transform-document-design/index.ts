@@ -921,19 +921,176 @@ serve(async (req) => {
       console.log('[transform-document-design] Could not fetch logo:', e);
     }
 
-    // Fetch default element templates
-    const { data: elementTemplates } = await supabase
+    // Try to fetch from document profile system first
+    let elements: Record<string, ElementTemplate | null> = {
+      cover_background: null,
+      header: null,
+      footer: null,
+      logo: null,
+      title: null,
+      subtitle: null,
+      h1: null,
+      h2: null,
+      h3: null,
+      paragraph: null,
+      bullet: null,
+      toc_title: null,
+      toc_entry: null,
+    };
+
+    // First, try the new document profile system
+    const { data: defaultProfile } = await supabase
+      .from('document_profiles')
+      .select('id')
+      .eq('is_default', true)
+      .single();
+
+    if (defaultProfile) {
+      console.log(`[transform-document-design] Found default document profile: ${defaultProfile.id}`);
+      
+      // Fetch page layouts for this profile
+      const { data: pageLayouts } = await supabase
+        .from('page_layouts')
+        .select('*')
+        .eq('profile_id', defaultProfile.id);
+
+      console.log(`[transform-document-design] Found ${pageLayouts?.length || 0} page layouts`);
+
+      // Collect all element IDs we need to fetch
+      const elementIds = new Set<string>();
+      const layoutMap: Record<string, any> = {};
+      
+      if (pageLayouts) {
+        for (const layout of pageLayouts) {
+          layoutMap[layout.page_type] = layout;
+          if (layout.background_element_id) elementIds.add(layout.background_element_id);
+          if (layout.header_element_id) elementIds.add(layout.header_element_id);
+          if (layout.footer_element_id) elementIds.add(layout.footer_element_id);
+          if (layout.logo_element_id) elementIds.add(layout.logo_element_id);
+        }
+      }
+
+      // Fetch text styles for all layouts
+      const layoutIds = pageLayouts?.map(l => l.id) || [];
+      let textStylesMap: Record<string, Record<string, string>> = {};
+      
+      if (layoutIds.length > 0) {
+        const { data: textStyles } = await supabase
+          .from('page_text_styles')
+          .select('*')
+          .in('page_layout_id', layoutIds);
+
+        console.log(`[transform-document-design] Found ${textStyles?.length || 0} text styles`);
+
+        if (textStyles) {
+          for (const style of textStyles) {
+            if (style.element_template_id) {
+              elementIds.add(style.element_template_id);
+              
+              // Find which page type this layout belongs to
+              const layout = pageLayouts?.find(l => l.id === style.page_layout_id);
+              if (layout) {
+                if (!textStylesMap[layout.page_type]) {
+                  textStylesMap[layout.page_type] = {};
+                }
+                textStylesMap[layout.page_type][style.context] = style.element_template_id;
+              }
+            }
+          }
+        }
+      }
+
+      // Fetch all needed element templates
+      if (elementIds.size > 0) {
+        const { data: elementTemplates } = await supabase
+          .from('element_templates')
+          .select('*')
+          .in('id', Array.from(elementIds));
+
+        console.log(`[transform-document-design] Fetched ${elementTemplates?.length || 0} element templates`);
+
+        const templateById: Record<string, ElementTemplate> = {};
+        if (elementTemplates) {
+          for (const t of elementTemplates) {
+            templateById[t.id] = t;
+          }
+        }
+
+        // Map visual elements from layouts - use cover layout for cover-specific, content layout for rest
+        const coverLayout = layoutMap['cover'];
+        const contentLayout = layoutMap['content'];
+        const tocLayout = layoutMap['toc'];
+
+        // Cover page elements
+        if (coverLayout?.background_element_id && templateById[coverLayout.background_element_id]) {
+          elements.cover_background = templateById[coverLayout.background_element_id];
+        }
+        if (coverLayout?.logo_element_id && templateById[coverLayout.logo_element_id]) {
+          elements.logo = templateById[coverLayout.logo_element_id];
+        }
+
+        // Content page elements (header/footer for content pages)
+        if (contentLayout?.header_element_id && templateById[contentLayout.header_element_id]) {
+          elements.header = templateById[contentLayout.header_element_id];
+        }
+        if (contentLayout?.footer_element_id && templateById[contentLayout.footer_element_id]) {
+          elements.footer = templateById[contentLayout.footer_element_id];
+        }
+
+        // Text styles - prioritize content layout for body text
+        const contentStyles = textStylesMap['content'] || {};
+        const coverStyles = textStylesMap['cover'] || {};
+        const tocStyles = textStylesMap['toc'] || {};
+
+        // Title/subtitle from cover
+        if (coverStyles['title'] && templateById[coverStyles['title']]) {
+          elements.title = templateById[coverStyles['title']];
+        }
+        if (coverStyles['subtitle'] && templateById[coverStyles['subtitle']]) {
+          elements.subtitle = templateById[coverStyles['subtitle']];
+        }
+
+        // Heading/paragraph styles from content
+        if (contentStyles['h1'] && templateById[contentStyles['h1']]) {
+          elements.h1 = templateById[contentStyles['h1']];
+        }
+        if (contentStyles['h2'] && templateById[contentStyles['h2']]) {
+          elements.h2 = templateById[contentStyles['h2']];
+        }
+        if (contentStyles['h3'] && templateById[contentStyles['h3']]) {
+          elements.h3 = templateById[contentStyles['h3']];
+        }
+        if (contentStyles['paragraph'] && templateById[contentStyles['paragraph']]) {
+          elements.paragraph = templateById[contentStyles['paragraph']];
+        }
+        if (contentStyles['bullet'] && templateById[contentStyles['bullet']]) {
+          elements.bullet = templateById[contentStyles['bullet']];
+        }
+
+        // TOC styles
+        if (tocStyles['toc_title'] && templateById[tocStyles['toc_title']]) {
+          elements.toc_title = templateById[tocStyles['toc_title']];
+        }
+        if (tocStyles['toc_entry'] && templateById[tocStyles['toc_entry']]) {
+          elements.toc_entry = templateById[tocStyles['toc_entry']];
+        }
+      }
+    }
+
+    // Fallback: If no profile or missing elements, use default element templates
+    const { data: defaultElementTemplates } = await supabase
       .from('element_templates')
       .select('*')
       .eq('is_default', true);
 
-    console.log(`[transform-document-design] Found ${elementTemplates?.length || 0} default element templates`);
+    console.log(`[transform-document-design] Found ${defaultElementTemplates?.length || 0} fallback default element templates`);
 
-    // Create a map by element_type
-    const elements: Record<string, ElementTemplate> = {};
-    if (elementTemplates) {
-      for (const template of elementTemplates) {
-        elements[template.element_type] = template;
+    if (defaultElementTemplates) {
+      for (const template of defaultElementTemplates) {
+        // Only use defaults if not already set from profile
+        if (!elements[template.element_type]) {
+          elements[template.element_type] = template;
+        }
       }
     }
 
