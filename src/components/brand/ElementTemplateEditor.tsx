@@ -604,9 +604,15 @@ export function ElementTemplateEditor() {
       setNewTemplateName('');
       setUploadedImage(null);
       setSvgCode('');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to create template:', error);
-      toast({ title: 'Failed to create template: ' + (error instanceof Error ? error.message : 'Unknown error'), variant: 'destructive' });
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = String((error as { message: unknown }).message);
+      }
+      toast({ title: 'Failed to create template: ' + errorMessage, variant: 'destructive' });
     }
   };
 
