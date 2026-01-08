@@ -184,15 +184,33 @@ export function renderTemplateToHtml(options: TemplateRenderOptions): string {
  * Convert HTML to PDF using html2pdf.js
  */
 export async function convertHtmlToPdf(html: string, filename: string): Promise<void> {
-  // Create a temporary container
-  const container = document.createElement('div');
-  container.innerHTML = html;
-  container.style.position = 'absolute';
-  container.style.left = '-9999px';
-  container.style.top = '0';
-  document.body.appendChild(container);
+  // Create an iframe for proper HTML document rendering
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'absolute';
+  iframe.style.left = '-9999px';
+  iframe.style.top = '0';
+  iframe.style.width = '595px';
+  iframe.style.height = '842px';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
 
   try {
+    // Write the full HTML document to the iframe
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      throw new Error('Could not access iframe document');
+    }
+    
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
+
+    // Wait for content to render
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Get the body content for pdf conversion
+    const body = iframeDoc.body;
+    
     const opt = {
       margin: 0,
       filename: filename,
@@ -201,6 +219,8 @@ export async function convertHtmlToPdf(html: string, filename: string): Promise<
         scale: 2,
         useCORS: true,
         letterRendering: true,
+        logging: true, // Enable logging for debugging
+        allowTaint: true,
       },
       jsPDF: { 
         unit: 'pt', 
@@ -210,9 +230,9 @@ export async function convertHtmlToPdf(html: string, filename: string): Promise<
       pagebreak: { mode: ['css', 'legacy'] },
     };
 
-    await html2pdf().set(opt).from(container).save();
+    await html2pdf().set(opt).from(body).save();
   } finally {
-    document.body.removeChild(container);
+    document.body.removeChild(iframe);
   }
 }
 
