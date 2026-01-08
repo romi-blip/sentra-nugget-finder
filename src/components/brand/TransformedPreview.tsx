@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, FileText, CheckCircle, AlertCircle, Loader2, Eye } from 'lucide-react';
+import { Download, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { convertHtmlToPdf } from '@/services/htmlToPdfService';
 
 interface TransformedPreviewProps {
-  type: 'docx' | 'pdf' | 'html' | null;
+  type: 'docx' | 'pdf' | null;
   modifiedFile: string | null; // base64
   originalFileName: string;
   message?: string;
-  html?: string;
 }
 
 const TransformedPreview: React.FC<TransformedPreviewProps> = ({
@@ -18,31 +16,10 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
   modifiedFile,
   originalFileName,
   message,
-  html,
 }) => {
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  
   const getBaseFileName = () => originalFileName.replace(/\.(docx|pdf)$/i, '');
 
   const handleDownload = async () => {
-    // Handle HTML to PDF conversion
-    if (type === 'html' && html) {
-      setIsDownloading(true);
-      try {
-        const filename = `${getBaseFileName()}_branded.pdf`;
-        await convertHtmlToPdf(html, filename);
-        toast.success('PDF downloaded successfully');
-      } catch (error) {
-        console.error('PDF conversion error:', error);
-        toast.error('Failed to generate PDF');
-      } finally {
-        setIsDownloading(false);
-      }
-      return;
-    }
-    
-    // Handle base64 file download
     if (!modifiedFile || !type) return;
 
     try {
@@ -60,7 +37,7 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${getBaseFileName()}_styled.${type}`;
+      a.download = `${getBaseFileName()}_branded.${type}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -73,7 +50,7 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
     }
   };
 
-  if (!modifiedFile && !html) {
+  if (!modifiedFile) {
     return (
       <div className="border rounded-lg p-8 bg-muted/30 text-center">
         <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
@@ -84,30 +61,17 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
     );
   }
 
-  // Determine if this was a successful transformation
-  const isSuccess = message?.includes('has been') || message?.includes('transformed') || (type === 'html' && html);
+  const isSuccess = message?.includes('has been') || message?.includes('transformed') || message?.includes('successfully');
   const isWarning = message?.includes('requires') || message?.includes('failed') || message?.includes('cannot');
 
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between p-4 border-b bg-muted/30">
         <h3 className="font-semibold">Transformed Document</h3>
-        <div className="flex gap-2">
-          {type === 'html' && html && (
-            <Button size="sm" variant="outline" onClick={() => setShowPreview(!showPreview)}>
-              <Eye className="h-4 w-4 mr-2" />
-              {showPreview ? 'Hide' : 'Show'} Preview
-            </Button>
-          )}
-          <Button size="sm" onClick={handleDownload} disabled={isDownloading}>
-            {isDownloading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4 mr-2" />
-            )}
-            Download {type === 'html' ? 'PDF' : type?.toUpperCase()}
-          </Button>
-        </div>
+        <Button size="sm" onClick={handleDownload}>
+          <Download className="h-4 w-4 mr-2" />
+          Download {type?.toUpperCase()}
+        </Button>
       </div>
       
       <div className="p-6">
@@ -124,42 +88,22 @@ const TransformedPreview: React.FC<TransformedPreviewProps> = ({
           </Alert>
         )}
         
-        {/* HTML Preview */}
-        {showPreview && type === 'html' && html && (
-          <div className="mb-4 border rounded-lg overflow-hidden bg-white">
-            <iframe
-              srcDoc={html}
-              title="Document Preview"
-              className="w-full h-[600px] border-0"
-              sandbox="allow-same-origin"
-            />
-          </div>
-        )}
-        
         <div className="bg-muted/20 rounded-lg p-8 text-center">
           <FileText className={`h-20 w-20 mx-auto mb-4 ${isSuccess ? 'text-green-500' : type === 'pdf' ? 'text-red-500' : 'text-primary'}`} />
           <h4 className="text-lg font-medium mb-2">
-            {getBaseFileName()}_branded.{type === 'html' ? 'pdf' : type}
+            {getBaseFileName()}_branded.{type}
           </h4>
           <p className="text-sm text-muted-foreground mb-4">
-            {type === 'html' ? (
-              <>Your document has been transformed using your templates. Click Download PDF to save.</>
-            ) : type === 'pdf' ? (
+            {type === 'pdf' ? (
               <>Your document has been transformed into a branded PDF with Sentra styling.</>
             ) : (
               <>Your DOCX document has been styled with brand colors and fonts.</>
             )}
           </p>
-          <div className="flex gap-2 justify-center">
-            <Button onClick={handleDownload} variant="default" disabled={isDownloading}>
-              {isDownloading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
-              Download {type === 'html' ? 'PDF' : type?.toUpperCase()}
-            </Button>
-          </div>
+          <Button onClick={handleDownload} variant="default">
+            <Download className="h-4 w-4 mr-2" />
+            Download {type?.toUpperCase()}
+          </Button>
         </div>
       </div>
     </div>
