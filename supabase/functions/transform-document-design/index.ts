@@ -147,20 +147,29 @@ async function parseDocxRelationships(zip: JSZip): Promise<Map<string, string>> 
   }
   
   const relsXml = await relsFile.async('string');
+  console.log(`[transform-document-design] Relationships XML length: ${relsXml.length}`);
   
-  // Match relationship entries for images
-  const relRegex = /<Relationship[^>]*Id="(rId\d+)"[^>]*Target="([^"]+)"[^>]*Type="[^"]*\/image"[^>]*\/?>/gi;
-  const relRegex2 = /<Relationship[^>]*Type="[^"]*\/image"[^>]*Target="([^"]+)"[^>]*Id="(rId\d+)"[^>]*\/?>/gi;
+  // Find all Relationship elements
+  const relElementRegex = /<Relationship[^>]*\/?\s*>/gi;
+  let relMatch;
   
-  let match;
-  while ((match = relRegex.exec(relsXml)) !== null) {
-    relMap.set(match[1], match[2]);
+  while ((relMatch = relElementRegex.exec(relsXml)) !== null) {
+    const relElement = relMatch[0];
+    
+    // Check if it's an image type (the Type attribute contains "image")
+    if (!relElement.toLowerCase().includes('/image')) continue;
+    
+    // Extract Id and Target attributes
+    const idMatch = relElement.match(/Id\s*=\s*"([^"]+)"/i);
+    const targetMatch = relElement.match(/Target\s*=\s*"([^"]+)"/i);
+    
+    if (idMatch && targetMatch) {
+      relMap.set(idMatch[1], targetMatch[1]);
+      console.log(`[transform-document-design] Found image relationship: ${idMatch[1]} -> ${targetMatch[1]}`);
+    }
   }
-  while ((match = relRegex2.exec(relsXml)) !== null) {
-    relMap.set(match[2], match[1]);
-  }
   
-  console.log(`[transform-document-design] Found ${relMap.size} image relationships`);
+  console.log(`[transform-document-design] Total image relationships found: ${relMap.size}`);
   return relMap;
 }
 
