@@ -54,6 +54,7 @@
     "docx": "^9.5.1",
     "dompurify": "^3.3.0",
     "embla-carousel-react": "^8.6.0",
+    "html2pdf.js": "^0.10.2",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
     "marked": "^17.0.1",

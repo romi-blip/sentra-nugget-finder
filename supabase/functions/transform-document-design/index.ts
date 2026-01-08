@@ -48,6 +48,9 @@ interface RequestBody {
   fileName: string;
   fileType: string;
   settings: BrandSettings;
+  useTemplates?: boolean;
+  coverTemplateId?: string;
+  textTemplateId?: string;
 }
 
 interface StructuredSection {
@@ -852,9 +855,9 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { file, fileName, fileType } = body;
+    const { file, fileName, fileType, useTemplates, coverTemplateId, textTemplateId } = body;
 
-    console.log(`[transform-document-design] Processing ${fileName} (${fileType})`);
+    console.log(`[transform-document-design] Processing ${fileName} (${fileType}), useTemplates: ${useTemplates}`);
 
     if (fileType !== 'docx') {
       return new Response(
@@ -866,6 +869,131 @@ serve(async (req) => {
           message: 'Please upload a DOCX file.'
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // If using templates, fetch them and return HTML for client-side rendering
+    if (useTemplates && (coverTemplateId || textTemplateId)) {
+      console.log('[transform-document-design] Using template-based transformation');
+      
+      // Fetch templates from database
+      let coverTemplate = null;
+      let textTemplate = null;
+      
+      if (coverTemplateId) {
+        const { data } = await supabase
+          .from('document_templates')
+          .select('*')
+          .eq('id', coverTemplateId)
+          .single();
+        coverTemplate = data;
+      }
+      
+      if (textTemplateId) {
+        const { data } = await supabase
+          .from('document_templates')
+          .select('*')
+          .eq('id', textTemplateId)
+          .single();
+        textTemplate = data;
+      }
+      
+      // Extract content from DOCX
+      const extractedDoc = await extractDocxContent(file);
+      
+      // Build HTML response
+      const placeholderData: Record<string, string> = {
+        title: extractedDoc.title || 'Untitled Document',
+        subtitle: extractedDoc.subtitle || '',
+        date: new Date().toLocaleDateString(),
+        year: new Date().getFullYear().toString(),
+        confidential: extractedDoc.isConfidential ? 'Confidential' : '',
+      };
+      
+      // Generate content HTML
+      const contentHtml = extractedDoc.sections.map(section => {
+        const content = section.content || '';
+        switch (section.type) {
+          case 'h1':
+            return `<h1 class="section-heading">${content}</h1>`;
+          case 'h2':
+            return `<h2 class="subsection-heading">${content}</h2>`;
+          case 'h3':
+            return `<h3 class="subsubsection-heading">${content}</h3>`;
+          case 'paragraph':
+            return `<p class="body-text">${content}</p>`;
+          case 'bullet-list':
+            if (section.items && section.items.length > 0) {
+              return `<ul class="bullet-list">${section.items.map(item => `<li>${item}</li>`).join('')}</ul>`;
+            }
+            return '';
+          default:
+            return content ? `<p>${content}</p>` : '';
+        }
+      }).join('\n');
+      
+      placeholderData.content = contentHtml;
+      
+      // Replace placeholders in templates
+      const replacePlaceholders = (html: string, data: Record<string, string>): string => {
+        let result = html;
+        for (const [key, value] of Object.entries(data)) {
+          result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'gi'), value);
+          result = result.replace(new RegExp(`\\$\\{${key}\\}`, 'gi'), value);
+          result = result.replace(new RegExp(`%${key}%`, 'gi'), value);
+        }
+        return result;
+      };
+      
+      // Build combined HTML document
+      let combinedHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+    .page { width: 595px; min-height: 842px; page-break-after: always; position: relative; overflow: hidden; }
+    .page:last-child { page-break-after: auto; }
+    .section-heading { font-size: 22px; font-weight: bold; color: #000; margin: 0 0 16px 0; }
+    .subsection-heading { font-size: 16px; font-weight: bold; color: #000; margin: 16px 0 12px 0; }
+    .subsubsection-heading { font-size: 13px; font-weight: bold; color: #374151; margin: 12px 0 8px 0; }
+    .body-text { font-size: 10px; line-height: 1.5; color: #374151; margin: 0 0 10px 0; }
+    .bullet-list { margin: 8px 0; padding-left: 24px; }
+    .bullet-list li { font-size: 10px; color: #374151; margin-bottom: 4px; }
+    ${coverTemplate?.css_content || ''}
+    ${textTemplate?.css_content || ''}
+  </style>
+</head>
+<body>
+`;
+      
+      if (coverTemplate) {
+        const coverHtml = replacePlaceholders(coverTemplate.html_content, placeholderData);
+        combinedHtml += `<div class="page cover-page">${coverHtml}</div>\n`;
+      }
+      
+      if (textTemplate) {
+        const textHtml = replacePlaceholders(textTemplate.html_content, placeholderData);
+        combinedHtml += `<div class="page text-page">${textHtml}</div>\n`;
+      } else if (extractedDoc.sections.length > 0) {
+        combinedHtml += `<div class="page text-page" style="padding: 60px 40px;">${contentHtml}</div>\n`;
+      }
+      
+      combinedHtml += `</body></html>`;
+      
+      console.log('[transform-document-design] Template HTML generated successfully');
+      
+      return new Response(
+        JSON.stringify({
+          type: 'html',
+          html: combinedHtml,
+          modifiedFile: null,
+          originalFileName: fileName,
+          message: 'Document prepared for template-based rendering.',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

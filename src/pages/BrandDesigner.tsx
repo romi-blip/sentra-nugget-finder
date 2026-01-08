@@ -15,8 +15,11 @@ import ContentSectionEditor from '@/components/brand/ContentSectionEditor';
 import TemplatePreview from '@/components/brand/TemplatePreview';
 import { SVGToHTMLConverter } from '@/components/brand/SVGToHTMLConverter';
 import { TemplateManager } from '@/components/brand/TemplateManager';
-import { brandService, BrandSettings } from '@/services/brandService';
+import { TemplateSelector } from '@/components/brand/TemplateSelector';
+import { brandService, BrandSettings, TransformResult } from '@/services/brandService';
 import { documentService } from '@/services/documentService';
+import { useDocumentTemplates, DocumentTemplate } from '@/hooks/useDocumentTemplates';
+import { renderTemplateToHtml, convertHtmlToPdf } from '@/services/htmlToPdfService';
 import { 
   DocumentMetadata, 
   ContentSection, 
@@ -28,7 +31,7 @@ const BrandDesigner: React.FC = () => {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [transformResult, setTransformResult] = useState<{
-    type: 'docx' | 'pdf' | null;
+    type: 'docx' | 'pdf' | 'html' | null;
     modifiedFile: string | null;
     message?: string;
   }>({ type: null, modifiedFile: null });
@@ -38,6 +41,13 @@ const BrandDesigner: React.FC = () => {
   const [documentMetadata, setDocumentMetadata] = useState<DocumentMetadata>(DEFAULT_DOCUMENT_METADATA);
   const [contentSections, setContentSections] = useState<ContentSection[]>([]);
   const [tableOfContents, setTableOfContents] = useState<TOCItem[]>([]);
+  
+  // Template selection for transform
+  const [coverTemplateId, setCoverTemplateId] = useState<string | null>(null);
+  const [textTemplateId, setTextTemplateId] = useState<string | null>(null);
+  
+  // Fetch all templates
+  const { data: allTemplates } = useDocumentTemplates();
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['brand-settings'],
@@ -74,18 +84,53 @@ const BrandDesigner: React.FC = () => {
   const transformMutation = useMutation({
     mutationFn: async () => {
       if (!selectedFile || !settings) throw new Error('Missing file or settings');
+      
+      // Get selected templates
+      const coverTemplate = coverTemplateId ? allTemplates?.find(t => t.id === coverTemplateId) : null;
+      const textTemplate = textTemplateId ? allTemplates?.find(t => t.id === textTemplateId) : null;
+      
+      // If templates selected, use template-based transformation
+      if (coverTemplate || textTemplate) {
+        return brandService.transformDocumentWithTemplates(
+          selectedFile, 
+          settings, 
+          coverTemplateId || undefined, 
+          textTemplateId || undefined
+        );
+      }
+      
+      // Otherwise use the default PDF-lib transformation
       return brandService.transformDocument(selectedFile, settings);
     },
-    onSuccess: (result) => {
-      setTransformResult({
-        type: result.type,
-        modifiedFile: result.modifiedFile,
-        message: result.message,
-      });
-      toast({
-        title: 'Document transformed',
-        description: result.message || 'Your document has been styled with the brand settings.',
-      });
+    onSuccess: async (result) => {
+      // Check if result contains HTML for client-side rendering
+      if (result.html) {
+        try {
+          const filename = selectedFile?.name.replace(/\.(docx|pdf)$/i, '') + '_branded.pdf';
+          await convertHtmlToPdf(result.html, filename);
+          toast({
+            title: 'Document transformed',
+            description: 'Your branded document has been downloaded.',
+          });
+        } catch (error) {
+          console.error('PDF conversion error:', error);
+          toast({
+            title: 'PDF generation failed',
+            description: 'Could not convert HTML to PDF',
+            variant: 'destructive',
+          });
+        }
+      } else {
+        setTransformResult({
+          type: result.type,
+          modifiedFile: result.modifiedFile,
+          message: result.message,
+        });
+        toast({
+          title: 'Document transformed',
+          description: result.message || 'Your document has been styled with the brand settings.',
+        });
+      }
     },
     onError: (error) => {
       toast({
@@ -265,11 +310,28 @@ const BrandDesigner: React.FC = () => {
               <CardHeader>
                 <CardTitle className="font-poppins">Transform Existing Document</CardTitle>
                 <CardDescription>
-                  Upload a DOCX or PDF file to apply brand styling. The document will be
-                  transformed with your configured colors and fonts.
+                  Upload a DOCX file to apply brand styling. Select templates to use or use the default styling.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Template Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <TemplateSelector
+                    pageType="cover"
+                    label="Cover Page Template"
+                    value={coverTemplateId}
+                    onChange={setCoverTemplateId}
+                  />
+                  <TemplateSelector
+                    pageType="text"
+                    label="Content Page Template"
+                    value={textTemplateId}
+                    onChange={setTextTemplateId}
+                  />
+                </div>
+
+                <Separator />
+
                 <DocumentUploader
                   onFileSelect={setSelectedFile}
                   selectedFile={selectedFile}
