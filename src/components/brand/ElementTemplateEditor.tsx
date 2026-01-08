@@ -39,39 +39,79 @@ import {
 // Render SVG to PNG using canvas
 async function renderSvgToPng(svgContent: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      reject(new Error('Could not get canvas context'));
-      return;
+    try {
+      // Parse the SVG to extract/set dimensions
+      const parser = new DOMParser();
+      const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+      const svgElement = svgDoc.documentElement;
+      
+      // Check for parsing errors
+      const parserError = svgDoc.querySelector('parsererror');
+      if (parserError) {
+        reject(new Error('Invalid SVG: ' + parserError.textContent));
+        return;
+      }
+
+      // Get or set dimensions
+      let width = parseFloat(svgElement.getAttribute('width') || '0');
+      let height = parseFloat(svgElement.getAttribute('height') || '0');
+      
+      // If no dimensions, try viewBox
+      if (!width || !height) {
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+          const parts = viewBox.split(/\s+|,/).map(Number);
+          if (parts.length >= 4) {
+            width = parts[2];
+            height = parts[3];
+          }
+        }
+      }
+      
+      // Default dimensions if still not found
+      if (!width || !height) {
+        width = 595;
+        height = 100;
+      }
+
+      // Ensure SVG has proper namespace and dimensions
+      svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      svgElement.setAttribute('width', String(width));
+      svgElement.setAttribute('height', String(height));
+      
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgElement);
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      const img = new Image();
+      // Use base64 encoding to avoid blob URL issues
+      const base64 = btoa(unescape(encodeURIComponent(svgString)));
+      const dataUrl = `data:image/svg+xml;base64,${base64}`;
+
+      img.onload = () => {
+        canvas.width = img.width || width;
+        canvas.height = img.height || height;
+        ctx.drawImage(img, 0, 0);
+        const pngDataUrl = canvas.toDataURL('image/png');
+        resolve(pngDataUrl);
+      };
+
+      img.onerror = (e) => {
+        console.error('SVG load error:', e);
+        reject(new Error('Failed to load SVG - check if it is valid'));
+      };
+
+      img.src = dataUrl;
+    } catch (error) {
+      console.error('SVG parsing error:', error);
+      reject(error);
     }
-
-    const img = new Image();
-    const svgBlob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
-
-    img.onload = () => {
-      // A4 dimensions at 72 DPI
-      canvas.width = 595;
-      canvas.height = 842;
-
-      const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-      const scaledWidth = img.width * scale;
-      const scaledHeight = img.height * scale;
-
-      ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-      URL.revokeObjectURL(url);
-
-      const pngDataUrl = canvas.toDataURL('image/png');
-      resolve(pngDataUrl);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load SVG'));
-    };
-
-    img.src = url;
   });
 }
 
