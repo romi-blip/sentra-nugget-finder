@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, FileCode, Save, Eye } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Upload, FileCode, Save, Eye, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { templateService } from "@/services/templateService";
 import { useCreateTemplate } from "@/hooks/useDocumentTemplates";
@@ -20,6 +21,8 @@ const PAGE_TYPES = [
 
 export function SVGToHTMLConverter() {
   const [file, setFile] = useState<File | null>(null);
+  const [svgText, setSvgText] = useState('');
+  const [inputMode, setInputMode] = useState<'file' | 'text'>('file');
   const [pageType, setPageType] = useState<string>('text');
   const [templateName, setTemplateName] = useState('');
   const [isConverting, setIsConverting] = useState(false);
@@ -35,24 +38,58 @@ export function SVGToHTMLConverter() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile && selectedFile.type === 'image/svg+xml') {
-      setFile(selectedFile);
-      setTemplateName(selectedFile.name.replace('.svg', ''));
-    } else {
-      toast.error('Please select an SVG file');
+    if (selectedFile) {
+      const isSvg = selectedFile.type === 'image/svg+xml' || selectedFile.name.endsWith('.svg');
+      const isTxt = selectedFile.type === 'text/plain' || selectedFile.name.endsWith('.txt');
+      
+      if (isSvg || isTxt) {
+        setFile(selectedFile);
+        const baseName = selectedFile.name.replace(/\.(svg|txt)$/i, '');
+        setTemplateName(baseName);
+        
+        // If it's a txt file, read its content
+        if (isTxt) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const content = event.target?.result as string;
+            setSvgText(content);
+          };
+          reader.readAsText(selectedFile);
+        } else {
+          setSvgText('');
+        }
+      } else {
+        toast.error('Please select an SVG or TXT file');
+      }
     }
   };
 
   const handleConvert = async () => {
-    if (!file) {
-      toast.error('Please select an SVG file');
-      return;
+    let svgContent: string;
+    
+    if (inputMode === 'text') {
+      if (!svgText.trim()) {
+        toast.error('Please enter SVG code');
+        return;
+      }
+      svgContent = btoa(unescape(encodeURIComponent(svgText)));
+    } else {
+      if (!file) {
+        toast.error('Please select an SVG or TXT file');
+        return;
+      }
+      
+      // Check if file is txt (already read into svgText) or svg
+      if (file.name.endsWith('.txt') && svgText) {
+        svgContent = btoa(unescape(encodeURIComponent(svgText)));
+      } else {
+        svgContent = await templateService.fileToBase64(file);
+      }
     }
 
     setIsConverting(true);
     try {
-      const base64 = await templateService.fileToBase64(file);
-      const convertResult = await templateService.convertSVGToHTML(base64, pageType, templateName);
+      const convertResult = await templateService.convertSVGToHTML(svgContent, pageType, templateName);
       
       setResult({
         html: convertResult.html,
@@ -112,25 +149,56 @@ export function SVGToHTMLConverter() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="svg-file">SVG File</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="svg-file"
-                  type="file"
-                  accept=".svg,image/svg+xml"
-                  onChange={handleFileChange}
-                  className="flex-1"
+          <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as 'file' | 'text')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="file" className="flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                Upload File
+              </TabsTrigger>
+              <TabsTrigger value="text" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Paste SVG Code
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="file" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="svg-file">SVG or TXT File</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="svg-file"
+                    type="file"
+                    accept=".svg,.txt,image/svg+xml,text/plain"
+                    onChange={handleFileChange}
+                    className="flex-1"
+                  />
+                </div>
+                {file && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {file.name}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Upload an .svg file or a .txt file containing SVG code
+                </p>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="text" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="svg-text">SVG Code</Label>
+                <Textarea
+                  id="svg-text"
+                  value={svgText}
+                  onChange={(e) => setSvgText(e.target.value)}
+                  placeholder="Paste your SVG code here..."
+                  className="font-mono text-xs h-48"
                 />
               </div>
-              {file && (
-                <p className="text-sm text-muted-foreground">
-                  Selected: {file.name}
-                </p>
-              )}
-            </div>
+            </TabsContent>
+          </Tabs>
 
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="page-type">Page Type</Label>
               <Select value={pageType} onValueChange={setPageType}>
@@ -146,21 +214,22 @@ export function SVGToHTMLConverter() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="template-name">Template Name</Label>
+              <Input
+                id="template-name"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="Enter template name"
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="template-name">Template Name</Label>
-            <Input
-              id="template-name"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              placeholder="Enter template name"
-            />
-          </div>
 
           <Button 
             onClick={handleConvert} 
-            disabled={!file || isConverting}
+            disabled={(inputMode === 'file' ? !file : !svgText.trim()) || isConverting}
             className="w-full"
           >
             <Upload className="h-4 w-4 mr-2" />
