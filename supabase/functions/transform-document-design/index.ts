@@ -1177,7 +1177,14 @@ serve(async (req) => {
       bullet: elements['bullet'] || null,
     });
     
-    const pdfBase64 = btoa(String.fromCharCode(...pdfBytes));
+    // Convert to base64 in chunks to avoid stack overflow with large arrays
+    let pdfBase64 = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < pdfBytes.length; i += chunkSize) {
+      const chunk = pdfBytes.subarray(i, Math.min(i + chunkSize, pdfBytes.length));
+      pdfBase64 += String.fromCharCode.apply(null, chunk as unknown as number[]);
+    }
+    pdfBase64 = btoa(pdfBase64);
 
     return new Response(
       JSON.stringify({
