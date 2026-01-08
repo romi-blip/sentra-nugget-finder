@@ -954,14 +954,24 @@ serve(async (req) => {
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-    .page { width: 595px; min-height: 842px; page-break-after: always; position: relative; overflow: hidden; }
+    .page { width: 595px; min-height: 842px; page-break-after: always; position: relative; overflow: hidden; background: white; }
     .page:last-child { page-break-after: auto; }
-    .section-heading { font-size: 22px; font-weight: bold; color: #000; margin: 0 0 16px 0; }
-    .subsection-heading { font-size: 16px; font-weight: bold; color: #000; margin: 16px 0 12px 0; }
-    .subsubsection-heading { font-size: 13px; font-weight: bold; color: #374151; margin: 12px 0 8px 0; }
-    .body-text { font-size: 10px; line-height: 1.5; color: #374151; margin: 0 0 10px 0; }
-    .bullet-list { margin: 8px 0; padding-left: 24px; }
-    .bullet-list li { font-size: 10px; color: #374151; margin-bottom: 4px; }
+    .cover-page { position: relative; }
+    .cover-page .svg-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+    .cover-page .svg-background svg { width: 100%; height: 100%; }
+    .cover-title-overlay { position: absolute; bottom: 180px; left: 50px; right: 50px; z-index: 10; }
+    .cover-title-overlay h1 { font-size: 28px; font-weight: bold; color: #66FF66; margin: 0 0 16px 0; line-height: 1.3; }
+    .cover-title-overlay p { font-size: 14px; color: #9CA3AF; margin: 0; }
+    .text-page { position: relative; }
+    .text-page .svg-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+    .text-page .svg-background svg { width: 100%; height: 100%; }
+    .content-overlay { position: relative; z-index: 10; padding: 100px 50px 60px 50px; min-height: 842px; }
+    .section-heading { font-size: 20px; font-weight: bold; color: #000; margin: 24px 0 12px 0; }
+    .subsection-heading { font-size: 14px; font-weight: bold; color: #000; margin: 16px 0 8px 0; }
+    .subsubsection-heading { font-size: 12px; font-weight: bold; color: #374151; margin: 12px 0 6px 0; }
+    .body-text { font-size: 10px; line-height: 1.6; color: #374151; margin: 0 0 8px 0; }
+    .bullet-list { margin: 6px 0; padding-left: 20px; }
+    .bullet-list li { font-size: 10px; color: #374151; margin-bottom: 3px; line-height: 1.5; }
     ${coverTemplate?.css_content || ''}
     ${textTemplate?.css_content || ''}
   </style>
@@ -969,16 +979,25 @@ serve(async (req) => {
 <body>
 `;
       
+      // Cover page with title overlay
       if (coverTemplate) {
-        const coverHtml = replacePlaceholders(coverTemplate.html_content, placeholderData);
-        combinedHtml += `<div class="page cover-page">${coverHtml}</div>\n`;
+        combinedHtml += `<div class="page cover-page">
+  <div class="svg-background">${coverTemplate.html_content}</div>
+  <div class="cover-title-overlay">
+    <h1>${placeholderData.title}</h1>
+    ${placeholderData.subtitle ? `<p>${placeholderData.subtitle}</p>` : ''}
+  </div>
+</div>\n`;
       }
       
+      // Text pages with content overlay on template background
       if (textTemplate) {
-        const textHtml = replacePlaceholders(textTemplate.html_content, placeholderData);
-        combinedHtml += `<div class="page text-page">${textHtml}</div>\n`;
+        combinedHtml += `<div class="page text-page">
+  <div class="svg-background">${textTemplate.html_content}</div>
+  <div class="content-overlay">${contentHtml}</div>
+</div>\n`;
       } else if (extractedDoc.sections.length > 0) {
-        combinedHtml += `<div class="page text-page" style="padding: 60px 40px;">${contentHtml}</div>\n`;
+        combinedHtml += `<div class="page text-page"><div class="content-overlay">${contentHtml}</div></div>\n`;
       }
       
       combinedHtml += `</body></html>`;
