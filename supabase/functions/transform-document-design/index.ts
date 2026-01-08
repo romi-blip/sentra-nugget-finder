@@ -40,12 +40,15 @@ const COLORS = {
 };
 
 interface RequestBody {
-  file: string;
-  fileName: string;
-  fileType: string;
+  file?: string;
+  fileName?: string;
+  fileType?: string;
+  mode?: 'extract' | 'generate';
+  editedContent?: ExtractedDocument;
 }
 
 interface StructuredSection {
+  id?: string;
   type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'feature-grid' | 'page-break' | 'heading' | 'image';
   content?: string;
   text?: string;
@@ -1233,30 +1236,55 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { file, fileName, fileType } = body;
+    const { file, fileName, fileType, mode = 'extract', editedContent } = body;
 
-    console.log(`[transform-document-design] Processing ${fileName} (${fileType})`);
+    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}`);
 
-    // Now support both DOCX and PDF
-    if (fileType !== 'docx' && fileType !== 'pdf') {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Only DOCX and PDF files are supported for transformation',
-          type: null,
-          modifiedFile: null,
-          originalFileName: fileName,
-          message: 'Please upload a DOCX or PDF file.'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Extract document content based on file type
+    // Handle generate mode - use edited content directly
     let extractedDoc: ExtractedDocument;
-    if (fileType === 'docx') {
-      extractedDoc = await extractDocxContent(file);
+    
+    if (mode === 'generate' && editedContent) {
+      console.log(`[transform-document-design] Using edited content with ${editedContent.sections?.length || 0} sections`);
+      extractedDoc = editedContent;
     } else {
-      extractedDoc = await extractPdfContent(file);
+      // Extract mode - parse the file
+      if (!file || !fileName || !fileType) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'File, fileName, and fileType are required for extract mode',
+            type: null,
+            modifiedFile: null,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Now support both DOCX and PDF
+      if (fileType !== 'docx' && fileType !== 'pdf') {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Only DOCX and PDF files are supported for transformation',
+            type: null,
+            modifiedFile: null,
+            originalFileName: fileName,
+            message: 'Please upload a DOCX or PDF file.'
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Extract document content based on file type
+      if (fileType === 'docx') {
+        extractedDoc = await extractDocxContent(file);
+      } else {
+        extractedDoc = await extractPdfContent(file);
+      }
+      
+      // Add IDs to sections for editing
+      extractedDoc.sections = extractedDoc.sections.map((section, index) => ({
+        ...section,
+        id: `section-${index}`,
+      }));
     }
 
     // Fetch Sentra logo
@@ -1524,14 +1552,16 @@ serve(async (req) => {
     }
     pdfBase64 = btoa(pdfBase64);
 
-    const outputFileName = fileName.replace(/\.(docx|pdf)$/i, '_branded.pdf');
+    const outputFileName = (fileName || 'document').replace(/\.(docx|pdf)$/i, '_branded.pdf');
 
     return new Response(
       JSON.stringify({
         type: 'pdf',
         modifiedFile: pdfBase64,
         originalFileName: outputFileName,
-        message: `Document transformed successfully with Sentra branding. Extracted ${extractedDoc.sections.filter(s => s.type === 'image').length} images.`,
+        message: `Document transformed successfully with Sentra branding. ${mode === 'generate' ? 'Generated from edited content.' : `Extracted ${extractedDoc.sections.filter(s => s.type === 'image').length} images.`}`,
+        extractedContent: mode === 'extract' ? extractedDoc : undefined,
+        pageCount: pdfDoc?.getPageCount?.() || extractedDoc.sections.filter(s => s.type === 'h1' || s.type === 'page-break').length + 2,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

@@ -18,11 +18,29 @@ export interface BrandSettings {
   updated_at?: string;
 }
 
+export interface StructuredSection {
+  id: string;
+  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'page-break' | 'image';
+  content?: string;
+  items?: string[];
+  imageBase64?: string;
+  imageMimeType?: string;
+}
+
+export interface ExtractedDocument {
+  title: string;
+  subtitle: string;
+  sections: StructuredSection[];
+  isConfidential: boolean;
+}
+
 export interface TransformResult {
   type: 'docx' | 'pdf' | null;
   modifiedFile: string | null;
   originalFileName: string;
   message?: string;
+  extractedContent?: ExtractedDocument;
+  pageCount?: number;
 }
 
 export const brandService = {
@@ -53,7 +71,7 @@ export const brandService = {
     return data as BrandSettings;
   },
 
-  async transformDocument(file: File, settings: BrandSettings): Promise<TransformResult> {
+  async transformDocument(file: File, settings: BrandSettings, mode: 'extract' | 'generate' = 'extract'): Promise<TransformResult> {
     // Read file as base64
     const arrayBuffer = await file.arrayBuffer();
     const base64 = btoa(
@@ -67,6 +85,7 @@ export const brandService = {
         file: base64,
         fileName: file.name,
         fileType,
+        mode,
       },
     });
 
@@ -77,6 +96,28 @@ export const brandService = {
       type: data.type,
       modifiedFile: data.modifiedFile,
       originalFileName: data.originalFileName || file.name,
+      message: data.message,
+      extractedContent: data.extractedContent,
+      pageCount: data.pageCount,
+    };
+  },
+
+  async generateFromContent(editedContent: ExtractedDocument, originalFileName: string): Promise<TransformResult> {
+    const { data, error } = await supabase.functions.invoke('transform-document-design', {
+      body: {
+        mode: 'generate',
+        editedContent,
+        fileName: originalFileName,
+      },
+    });
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+
+    return {
+      type: data.type,
+      modifiedFile: data.modifiedFile,
+      originalFileName: data.originalFileName || originalFileName,
       message: data.message,
     };
   },
