@@ -5,83 +5,284 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function getSVGDimensions(svgContent: string): { width: number; height: number } {
+interface SVGDimensions {
+  width: number;
+  height: number;
+  viewBoxWidth: number;
+  viewBoxHeight: number;
+}
+
+interface TextElement {
+  id: string;
+  content: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: string;
+  fill: string;
+  textAnchor: string;
+  isPlaceholder: boolean;
+  placeholderName?: string;
+}
+
+interface IconElement {
+  id: string;
+  type: string;
+  svgContent: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function getSVGDimensions(svgContent: string): SVGDimensions {
   const viewBoxMatch = svgContent.match(/viewBox=["']([^"']*)["']/);
+  let viewBoxWidth = 595, viewBoxHeight = 842;
+  
   if (viewBoxMatch) {
     const parts = viewBoxMatch[1].split(/\s+/).map(Number);
-    return { width: parts[2] || 595, height: parts[3] || 842 };
+    viewBoxWidth = parts[2] || 595;
+    viewBoxHeight = parts[3] || 842;
   }
   
   const widthMatch = svgContent.match(/width=["'](\d+)/);
   const heightMatch = svgContent.match(/height=["'](\d+)/);
   
   return {
-    width: widthMatch ? parseInt(widthMatch[1]) : 595,
-    height: heightMatch ? parseInt(heightMatch[1]) : 842
+    width: widthMatch ? parseInt(widthMatch[1]) : viewBoxWidth,
+    height: heightMatch ? parseInt(heightMatch[1]) : viewBoxHeight,
+    viewBoxWidth,
+    viewBoxHeight
   };
 }
 
-function detectPlaceholders(content: string): string[] {
-  const placeholders: string[] = [];
+function extractTextElements(svgContent: string, dimensions: SVGDimensions): TextElement[] {
+  const textElements: TextElement[] = [];
   
-  // Look for placeholder patterns in text content
-  const patterns = [
-    /\{\{(\w+)\}\}/g,           // {{placeholder}}
-    /\$\{(\w+)\}/g,             // ${placeholder}
-    /%(\w+)%/g,                  // %placeholder%
-    /\[(\w+)\]/g,                // [placeholder]
-  ];
+  // Match <text> elements with their content
+  const textRegex = /<text([^>]*)>([\s\S]*?)<\/text>/gi;
+  let match;
+  let idCounter = 0;
   
-  patterns.forEach(pattern => {
-    let match;
-    while ((match = pattern.exec(content)) !== null) {
-      if (!placeholders.includes(match[1])) {
-        placeholders.push(match[1]);
+  while ((match = textRegex.exec(svgContent)) !== null) {
+    const attrs = match[1];
+    let content = match[2];
+    
+    // Extract tspan content if present
+    const tspanMatch = content.match(/<tspan[^>]*>([\s\S]*?)<\/tspan>/gi);
+    if (tspanMatch) {
+      content = tspanMatch.map(t => t.replace(/<\/?tspan[^>]*>/gi, '')).join(' ');
+    }
+    content = content.replace(/<[^>]*>/g, '').trim();
+    
+    if (!content) continue;
+    
+    // Parse attributes
+    const x = parseFloat(attrs.match(/x=["']([^"']*)["']/)?.[1] || '0');
+    const y = parseFloat(attrs.match(/y=["']([^"']*)["']/)?.[1] || '0');
+    const fontSize = parseFloat(attrs.match(/font-size=["']([^"']*)["']/)?.[1] || '16');
+    const fontFamily = attrs.match(/font-family=["']([^"']*)["']/)?.[1] || 'sans-serif';
+    const fontWeight = attrs.match(/font-weight=["']([^"']*)["']/)?.[1] || 'normal';
+    const fill = attrs.match(/fill=["']([^"']*)["']/)?.[1] || '#000000';
+    const textAnchor = attrs.match(/text-anchor=["']([^"']*)["']/)?.[1] || 'start';
+    
+    // Check for placeholder patterns
+    const placeholderPatterns = [
+      /\{\{(\w+)\}\}/,
+      /\$\{(\w+)\}/,
+      /%(\w+)%/,
+      /\[(\w+)\]/,
+    ];
+    
+    let isPlaceholder = false;
+    let placeholderName: string | undefined;
+    
+    for (const pattern of placeholderPatterns) {
+      const placeholderMatch = content.match(pattern);
+      if (placeholderMatch) {
+        isPlaceholder = true;
+        placeholderName = placeholderMatch[1];
+        break;
       }
     }
-  });
+    
+    textElements.push({
+      id: `text-${idCounter++}`,
+      content,
+      x,
+      y,
+      fontSize,
+      fontFamily,
+      fontWeight,
+      fill,
+      textAnchor,
+      isPlaceholder,
+      placeholderName
+    });
+  }
   
-  return placeholders;
+  return textElements;
 }
 
-function convertSVGToHTML(svgContent: string, pageType: string): { html: string; css: string; placeholders: string[] } {
-  const dimensions = getSVGDimensions(svgContent);
-  const placeholders = detectPlaceholders(svgContent);
-  const aspectRatio = dimensions.width / dimensions.height;
+function extractIconElements(svgContent: string, dimensions: SVGDimensions): IconElement[] {
+  const icons: IconElement[] = [];
+  let idCounter = 0;
   
-  // Clean up SVG for embedding - make it responsive
-  let responsiveSvg = svgContent
-    // Remove fixed width/height from root SVG, keep viewBox
+  // Extract image elements
+  const imageRegex = /<image([^>]*)\/?>/gi;
+  let match;
+  
+  while ((match = imageRegex.exec(svgContent)) !== null) {
+    const attrs = match[1];
+    const x = parseFloat(attrs.match(/x=["']([^"']*)["']/)?.[1] || '0');
+    const y = parseFloat(attrs.match(/y=["']([^"']*)["']/)?.[1] || '0');
+    const width = parseFloat(attrs.match(/width=["']([^"']*)["']/)?.[1] || '50');
+    const height = parseFloat(attrs.match(/height=["']([^"']*)["']/)?.[1] || '50');
+    
+    icons.push({
+      id: `icon-${idCounter++}`,
+      type: 'image',
+      svgContent: match[0],
+      x,
+      y,
+      width,
+      height
+    });
+  }
+  
+  // Extract circle elements (often used for icons/bullets)
+  const circleRegex = /<circle([^>]*)\/?>/gi;
+  while ((match = circleRegex.exec(svgContent)) !== null) {
+    const attrs = match[1];
+    const cx = parseFloat(attrs.match(/cx=["']([^"']*)["']/)?.[1] || '0');
+    const cy = parseFloat(attrs.match(/cy=["']([^"']*)["']/)?.[1] || '0');
+    const r = parseFloat(attrs.match(/r=["']([^"']*)["']/)?.[1] || '10');
+    
+    icons.push({
+      id: `icon-${idCounter++}`,
+      type: 'circle',
+      svgContent: match[0],
+      x: cx - r,
+      y: cy - r,
+      width: r * 2,
+      height: r * 2
+    });
+  }
+  
+  // Extract path elements that look like icons (small, self-contained)
+  const pathRegex = /<path([^>]*)\/?>(?:<\/path>)?/gi;
+  while ((match = pathRegex.exec(svgContent)) !== null) {
+    const attrs = match[1];
+    const d = attrs.match(/d=["']([^"']*)["']/)?.[1] || '';
+    
+    // Try to get bounds from transform or calculate from path
+    const transform = attrs.match(/transform=["']([^"']*)["']/)?.[1] || '';
+    const translateMatch = transform.match(/translate\(([^,]+),?\s*([^)]*)\)/);
+    
+    let x = 0, y = 0;
+    if (translateMatch) {
+      x = parseFloat(translateMatch[1]) || 0;
+      y = parseFloat(translateMatch[2]) || 0;
+    }
+    
+    // Estimate size from path data (simplified)
+    const numbers = d.match(/[\d.]+/g)?.map(Number) || [];
+    const maxX = Math.max(...numbers.filter((_, i) => i % 2 === 0), 50);
+    const maxY = Math.max(...numbers.filter((_, i) => i % 2 === 1), 50);
+    
+    icons.push({
+      id: `icon-${idCounter++}`,
+      type: 'path',
+      svgContent: match[0],
+      x,
+      y,
+      width: Math.min(maxX, 200),
+      height: Math.min(maxY, 200)
+    });
+  }
+  
+  return icons;
+}
+
+function generateHTML(
+  svgContent: string,
+  textElements: TextElement[],
+  iconElements: IconElement[],
+  dimensions: SVGDimensions,
+  pageType: string
+): { html: string; css: string } {
+  const { viewBoxWidth, viewBoxHeight } = dimensions;
+  
+  // Create a version of SVG without text for background
+  let backgroundSvg = svgContent;
+  // Keep the SVG as-is for now, we'll overlay text on top
+  
+  // Make SVG responsive
+  backgroundSvg = backgroundSvg
     .replace(/<svg([^>]*)\swidth=["'][^"']*["']/g, '<svg$1')
     .replace(/<svg([^>]*)\sheight=["'][^"']*["']/g, '<svg$1')
-    // Add preserveAspectRatio if not present
-    .replace(/<svg(?![^>]*preserveAspectRatio)/g, '<svg preserveAspectRatio="xMidYMid meet"');
-  
-  // Ensure SVG has width/height 100%
-  responsiveSvg = responsiveSvg.replace(/<svg/, '<svg width="100%" height="100%"');
-  
-  // Encode SVG for safe embedding
-  const encodedSvg = responsiveSvg
-    .replace(/"/g, "'")
-    .replace(/#/g, '%23')
-    .replace(/</g, '%3C')
-    .replace(/>/g, '%3E');
+    .replace(/<svg(?![^>]*preserveAspectRatio)/g, '<svg preserveAspectRatio="xMidYMid meet"')
+    .replace(/<svg/, '<svg width="100%" height="100%"');
 
-  // Generate CSS
+  // Generate text overlay HTML
+  const textOverlays = textElements.map(text => {
+    const leftPercent = (text.x / viewBoxWidth) * 100;
+    const topPercent = (text.y / viewBoxHeight) * 100;
+    const fontSizeVw = (text.fontSize / viewBoxWidth) * 100;
+    
+    const dataAttrs = text.isPlaceholder 
+      ? `data-placeholder="${text.placeholderName}" data-editable="true"`
+      : 'data-editable="true"';
+    
+    const textAlign = text.textAnchor === 'middle' ? 'center' : 
+                      text.textAnchor === 'end' ? 'right' : 'left';
+    
+    return `    <div class="text-element" ${dataAttrs} style="
+      position: absolute;
+      left: ${leftPercent.toFixed(2)}%;
+      top: ${topPercent.toFixed(2)}%;
+      font-size: ${fontSizeVw.toFixed(3)}vw;
+      font-family: ${text.fontFamily};
+      font-weight: ${text.fontWeight};
+      color: ${text.fill};
+      text-align: ${textAlign};
+      transform: translateY(-100%);
+      white-space: nowrap;
+    ">${text.content}</div>`;
+  }).join('\n');
+
+  // Generate icon info (for reference)
+  const iconInfo = iconElements.map(icon => {
+    const leftPercent = (icon.x / viewBoxWidth) * 100;
+    const topPercent = (icon.y / viewBoxHeight) * 100;
+    const widthPercent = (icon.width / viewBoxWidth) * 100;
+    const heightPercent = (icon.height / viewBoxHeight) * 100;
+    
+    return `    <!-- Icon: ${icon.id} (${icon.type}) at ${leftPercent.toFixed(1)}%, ${topPercent.toFixed(1)}% size: ${widthPercent.toFixed(1)}% x ${heightPercent.toFixed(1)}% -->`;
+  }).join('\n');
+
+  const html = `<div class="page-container page-${pageType}">
+  <div class="svg-background">
+    ${backgroundSvg}
+  </div>
+  <div class="content-overlay">
+${textOverlays}
+  </div>
+  <!-- Icon Elements (${iconElements.length} found) -->
+${iconInfo}
+</div>`;
+
   const css = `
 .page-container {
   position: relative;
   width: 100%;
-  max-width: ${dimensions.width}px;
-  aspect-ratio: ${aspectRatio.toFixed(4)};
+  max-width: ${viewBoxWidth}px;
+  aspect-ratio: ${(viewBoxWidth / viewBoxHeight).toFixed(4)};
   margin: 0 auto;
   overflow: hidden;
   background: white;
   box-sizing: border-box;
-}
-
-.page-container.page-${pageType} {
-  /* Page type specific styles */
 }
 
 .svg-background {
@@ -109,8 +310,23 @@ function convertSVGToHTML(svgContent: string, pageType: string): { html: string;
   pointer-events: none;
 }
 
-.content-overlay > * {
+.text-element {
   pointer-events: auto;
+  cursor: text;
+  transition: outline 0.2s ease;
+}
+
+.text-element:hover {
+  outline: 1px dashed rgba(57, 255, 20, 0.5);
+}
+
+.text-element[data-editable="true"]:focus {
+  outline: 2px solid #39FF14;
+  outline-offset: 2px;
+}
+
+.text-element[data-placeholder] {
+  background: rgba(57, 255, 20, 0.1);
 }
 
 @media print {
@@ -124,17 +340,7 @@ function convertSVGToHTML(svgContent: string, pageType: string): { html: string;
 }
 `;
 
-  // Generate HTML with embedded SVG
-  const html = `<div class="page-container page-${pageType}">
-  <div class="svg-background">
-    ${responsiveSvg}
-  </div>
-  <div class="content-overlay">
-    <!-- Add dynamic content placeholders here -->
-  </div>
-</div>`;
-
-  return { html, css, placeholders };
+  return { html, css };
 }
 
 serve(async (req) => {
@@ -158,7 +364,6 @@ serve(async (req) => {
       const base64Part = svgContent.split(',')[1];
       svgString = atob(base64Part);
     } else if (!svgContent.includes('<svg')) {
-      // Assume it's base64 without data URL prefix
       try {
         svgString = atob(svgContent);
       } catch {
@@ -167,16 +372,31 @@ serve(async (req) => {
     }
 
     console.log(`Converting SVG to HTML for page type: ${pageType}`);
-    console.log(`SVG dimensions detected, content length: ${svgString.length}`);
     
-    const result = convertSVGToHTML(svgString, pageType);
+    const dimensions = getSVGDimensions(svgString);
+    console.log(`SVG dimensions: ${dimensions.viewBoxWidth}x${dimensions.viewBoxHeight}`);
+    
+    const textElements = extractTextElements(svgString, dimensions);
+    console.log(`Found ${textElements.length} text elements`);
+    
+    const iconElements = extractIconElements(svgString, dimensions);
+    console.log(`Found ${iconElements.length} icon elements`);
+    
+    const { html, css } = generateHTML(svgString, textElements, iconElements, dimensions, pageType);
+    
+    // Collect placeholders from text elements
+    const placeholders = textElements
+      .filter(t => t.isPlaceholder && t.placeholderName)
+      .map(t => t.placeholderName!);
 
     return new Response(
       JSON.stringify({
         success: true,
-        html: result.html,
-        css: result.css,
-        placeholders: result.placeholders,
+        html,
+        css,
+        placeholders,
+        textElements: textElements.length,
+        iconElements: iconElements.length,
         pageType,
         name: name || `Template - ${pageType}`
       }),
