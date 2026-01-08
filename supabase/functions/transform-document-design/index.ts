@@ -568,7 +568,8 @@ function drawHeaderElement(
   page: any, 
   embeddedHeaderImage: any | null,
   headerHeight: number,
-  logoImage: any
+  logoImage: any,
+  logoConfig: { show: boolean; x: number; y: number; } | null = null
 ) {
   const width = page.getWidth();
   const height = page.getHeight();
@@ -580,6 +581,18 @@ function drawHeaderElement(
       width: width,
       height: headerHeight,
     });
+    
+    // Draw logo on top of header if configured
+    if (logoConfig?.show && logoImage) {
+      const logoHeight = 24;
+      const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
+      page.drawImage(logoImage, {
+        x: logoConfig.x,
+        y: height - logoConfig.y - logoHeight,
+        width: logoWidth,
+        height: logoHeight,
+      });
+    }
     return headerHeight;
   }
   
@@ -593,7 +606,18 @@ function drawHeaderElement(
     color: COLORS.headerDark,
   });
 
-  if (logoImage) {
+  // Draw logo at configured position or default
+  if (logoConfig?.show && logoImage) {
+    const logoHeight = 24;
+    const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
+    page.drawImage(logoImage, {
+      x: logoConfig.x,
+      y: height - logoConfig.y - logoHeight,
+      width: logoWidth,
+      height: logoHeight,
+    });
+  } else if (logoImage) {
+    // Fallback default position
     const logoHeight = 24;
     const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
     page.drawImage(logoImage, {
@@ -672,7 +696,9 @@ async function createCoverPageWithElements(
   fonts: any, 
   data: ExtractedDocument,
   coverTemplate: ElementTemplate | null,
-  titleStyle: ElementTemplate | null
+  titleStyle: ElementTemplate | null,
+  logoImage: any,
+  logoConfig: { show: boolean; x: number; y: number; } | null
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
@@ -712,6 +738,20 @@ async function createCoverPageWithElements(
     drawFooterBar(page);
   }
 
+  // Draw logo on cover page if configured
+  if (logoConfig?.show && logoImage) {
+    const logoHeight = 40;
+    const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
+    // Convert from top-based to bottom-based coordinates
+    page.drawImage(logoImage, {
+      x: logoConfig.x,
+      y: height - logoConfig.y - logoHeight,
+      width: logoWidth,
+      height: logoHeight,
+    });
+    console.log(`[transform-document-design] Drew logo on cover at x=${logoConfig.x}, y=${logoConfig.y}`);
+  }
+
   // Draw title with element style
   const titleY = coverTemplate?.image_base64 ? 400 : height - 440;
   const titleFontSize = titleStyle?.font_size || 28;
@@ -742,14 +782,15 @@ function createTOCPage(
   embeddedHeaderImage: any | null,
   headerHeight: number,
   embeddedFooterImage: any | null,
-  footerHeight: number
+  footerHeight: number,
+  logoConfig: { show: boolean; x: number; y: number; } | null = null
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
 
-  const actualHeaderHeight = drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage);
+  const actualHeaderHeight = drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
 
   const titleY = height - actualHeaderHeight - 40;
   page.drawText('Table of ', {
@@ -867,7 +908,8 @@ async function createContentPages(
     h3?: ElementTemplate | null;
     paragraph?: ElementTemplate | null;
     bullet?: ElementTemplate | null;
-  }
+  },
+  logoConfig: { show: boolean; x: number; y: number; } | null = null
 ) {
   let currentPage = pdfDoc.addPage([595, 842]);
   const pageWidth = currentPage.getWidth();
@@ -883,14 +925,14 @@ async function createContentPages(
   // Cache for embedded images to avoid re-embedding duplicates
   const embeddedImageCache = new Map<string, any>();
 
-  // Draw header on first page
-  drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage);
+  // Draw header on first page with logo config
+  drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
 
   const addNewPage = () => {
     drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 842]);
-    drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage);
+    drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
     y = pageHeight - headerHeight - 25;
     hasContent = false;
   };
@@ -1121,12 +1163,18 @@ async function generatePDF(
     cover_background?: ElementTemplate | null;
     header?: ElementTemplate | null;
     footer?: ElementTemplate | null;
+    logo?: ElementTemplate | null;
     title?: ElementTemplate | null;
     h1?: ElementTemplate | null;
     h2?: ElementTemplate | null;
     h3?: ElementTemplate | null;
     paragraph?: ElementTemplate | null;
     bullet?: ElementTemplate | null;
+  },
+  layoutConfig: {
+    cover?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
+    content?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
+    toc?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
   }
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
@@ -1135,12 +1183,35 @@ async function generatePDF(
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fonts = { regular: regularFont, bold: boldFont };
 
-  let logoImage = null;
-  if (logoBytes) {
+  // Embed logo from element template if available
+  let logoImage: any = null;
+  if (elements.logo?.image_base64) {
+    try {
+      const base64Data = elements.logo.image_base64.split(',')[1] || elements.logo.image_base64;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      // Try PNG first, then JPG
+      try {
+        logoImage = await pdfDoc.embedPng(bytes);
+      } catch {
+        logoImage = await pdfDoc.embedJpg(bytes);
+      }
+      console.log('[transform-document-design] Embedded logo from element template');
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed logo from element template:', e);
+    }
+  }
+  
+  // Fallback to logoBytes if no element template logo
+  if (!logoImage && logoBytes) {
     try {
       logoImage = await pdfDoc.embedJpg(logoBytes);
+      console.log('[transform-document-design] Embedded logo from fallback bytes');
     } catch (e) {
-      console.log('[transform-document-design] Could not embed logo:', e);
+      console.log('[transform-document-design] Could not embed fallback logo:', e);
     }
   }
 
@@ -1184,20 +1255,39 @@ async function generatePDF(
 
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
-  // Create cover page
-  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null);
+  // Build logo configs for each page type
+  const coverLogoConfig = layoutConfig.cover ? {
+    show: layoutConfig.cover.show_logo,
+    x: layoutConfig.cover.logo_x,
+    y: layoutConfig.cover.logo_y,
+  } : null;
   
-  // Create TOC page
-  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight);
+  const contentLogoConfig = layoutConfig.content ? {
+    show: layoutConfig.content.show_logo,
+    x: layoutConfig.content.logo_x,
+    y: layoutConfig.content.logo_y,
+  } : null;
   
-  // Create content pages
+  const tocLogoConfig = layoutConfig.toc ? {
+    show: layoutConfig.toc.show_logo,
+    x: layoutConfig.toc.logo_x,
+    y: layoutConfig.toc.logo_y,
+  } : contentLogoConfig; // Fallback TOC to content config
+
+  // Create cover page with logo
+  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, logoImage, coverLogoConfig);
+  
+  // Create TOC page with logo
+  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, tocLogoConfig);
+  
+  // Create content pages with logo
   await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, {
     h1: elements.h1,
     h2: elements.h2,
     h3: elements.h3,
     paragraph: elements.paragraph,
     bullet: elements.bullet,
-  });
+  }, contentLogoConfig);
 
   return await pdfDoc.save();
 }
@@ -1315,6 +1405,13 @@ serve(async (req) => {
       toc_entry: null,
     };
 
+    // Store layout configs for PDF generation
+    let layoutConfigForPdf: {
+      cover?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
+      content?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
+      toc?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
+    } = {};
+
     // First, try the new document profile system
     const { data: defaultProfile, error: profileError } = await supabase
       .from('document_profiles')
@@ -1429,6 +1526,32 @@ serve(async (req) => {
 
         console.log(`[transform-document-design] Layout mapping: cover=${coverLayout?.id || 'none'}, content=${contentLayout?.id || 'none'}, toc=${tocLayout?.id || 'none'}`);
 
+        // Build layout config for PDF generation with logo positions
+        if (coverLayout) {
+          layoutConfigForPdf.cover = {
+            show_logo: coverLayout.show_logo ?? true,
+            logo_x: coverLayout.logo_position_x ?? 50,
+            logo_y: coverLayout.logo_position_y ?? 50,
+          };
+          console.log(`[transform-document-design] Cover logo config: show=${layoutConfigForPdf.cover.show_logo}, x=${layoutConfigForPdf.cover.logo_x}, y=${layoutConfigForPdf.cover.logo_y}`);
+        }
+        if (contentLayout) {
+          layoutConfigForPdf.content = {
+            show_logo: contentLayout.show_logo ?? true,
+            logo_x: contentLayout.logo_position_x ?? 25,
+            logo_y: contentLayout.logo_position_y ?? 8,
+          };
+          console.log(`[transform-document-design] Content logo config: show=${layoutConfigForPdf.content.show_logo}, x=${layoutConfigForPdf.content.logo_x}, y=${layoutConfigForPdf.content.logo_y}`);
+        }
+        if (tocLayout) {
+          layoutConfigForPdf.toc = {
+            show_logo: tocLayout.show_logo ?? true,
+            logo_x: tocLayout.logo_position_x ?? 25,
+            logo_y: tocLayout.logo_position_y ?? 8,
+          };
+          console.log(`[transform-document-design] TOC logo config: show=${layoutConfigForPdf.toc.show_logo}, x=${layoutConfigForPdf.toc.logo_x}, y=${layoutConfigForPdf.toc.logo_y}`);
+        }
+
         // Cover page elements
         if (coverLayout?.background_element_id && templateById[coverLayout.background_element_id]) {
           elements.cover_background = templateById[coverLayout.background_element_id];
@@ -1437,6 +1560,11 @@ serve(async (req) => {
         if (coverLayout?.logo_element_id && templateById[coverLayout.logo_element_id]) {
           elements.logo = templateById[coverLayout.logo_element_id];
           console.log(`[transform-document-design] ✓ logo from profile: "${elements.logo.name}"`);
+        }
+        // Also check content layout for logo if cover doesn't have one
+        if (!elements.logo && contentLayout?.logo_element_id && templateById[contentLayout.logo_element_id]) {
+          elements.logo = templateById[contentLayout.logo_element_id];
+          console.log(`[transform-document-design] ✓ logo from content layout: "${elements.logo.name}"`);
         }
 
         // Content page elements (header/footer for content pages)
@@ -1530,18 +1658,22 @@ serve(async (req) => {
       }
     }
 
-    // Generate PDF with element templates
+    // Build layout config from stored layoutMap (need to extract from if block)
+    // We need to store layoutMap outside, so let's define it at the top
+    
+    // Generate PDF with element templates and layout config
     const pdfBytes = await generatePDF(extractedDoc, logoBytes, {
       cover_background: elements['cover_background'] || null,
       header: elements['header'] || null,
       footer: elements['footer'] || null,
+      logo: elements['logo'] || null,
       title: elements['title'] || null,
       h1: elements['h1'] || null,
       h2: elements['h2'] || null,
       h3: elements['h3'] || null,
       paragraph: elements['paragraph'] || null,
       bullet: elements['bullet'] || null,
-    });
+    }, layoutConfigForPdf);
     
     // Convert to base64 in chunks to avoid stack overflow with large arrays
     let pdfBase64 = '';
