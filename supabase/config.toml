@@ -145,3 +145,6 @@ verify_jwt = true
 
 [functions.scheduled-llm-ranking]
 verify_jwt = false
+
+[functions.structure-content]
+verify_jwt = true

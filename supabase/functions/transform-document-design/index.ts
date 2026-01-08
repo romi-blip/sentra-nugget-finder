@@ -8,38 +8,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Brand colors from the exact SVG template (RGB 0-1 scale)
+// Brand colors matching the reference template
 const COLORS = {
-  // Primary neon green from template #66FF66
-  primary: rgb(102/255, 255/255, 102/255),
-  // Orange accent from logo #FFAE1A
-  orange: rgb(255/255, 174/255, 26/255),
+  // Primary brand colors
+  primary: rgb(102/255, 255/255, 102/255),     // Neon green #66FF66
+  purple: rgb(138/255, 43/255, 226/255),        // Purple for header bar #8A2BE2
+  lightPurple: rgb(240/255, 234/255, 255/255),  // Light purple bg for icons #F0EAFF
+  orange: rgb(255/255, 174/255, 26/255),        // Orange accent #FFAE1A
+  
   // Footer bar colors
-  pink: rgb(255/255, 20/255, 147/255),        // #FF1493
-  cyan: rgb(0/255, 255/255, 255/255),         // #00FFFF
-  yellow: rgb(255/255, 215/255, 0/255),       // #FFD700
+  pink: rgb(255/255, 20/255, 147/255),
+  cyan: rgb(0/255, 255/255, 255/255),
+  yellow: rgb(255/255, 215/255, 0/255),
+  
   // Backgrounds
-  black: rgb(0, 0, 0),                        // #000000 Pure black
+  black: rgb(0, 0, 0),
   white: rgb(1, 1, 1),
-  // Text colors - from template #F0F0F0
-  lightText: rgb(240/255, 240/255, 240/255),  // #F0F0F0
-  gray: rgb(107/255, 114/255, 128/255),       // #6B7280
-  lightGray: rgb(156/255, 163/255, 175/255),  // #9CA3AF
-  darkGray: rgb(31/255, 41/255, 55/255),      // #1F2937
-  textGray: rgb(55/255, 65/255, 81/255),      // #374151
+  
+  // Text colors
+  lightText: rgb(240/255, 240/255, 240/255),
+  gray: rgb(107/255, 114/255, 128/255),
+  lightGray: rgb(156/255, 163/255, 175/255),
+  darkGray: rgb(31/255, 41/255, 55/255),
+  textGray: rgb(55/255, 65/255, 81/255),
+  bodyText: rgb(75/255, 85/255, 99/255),       // #4B5563
 };
 
 interface BrandSettings {
   primaryColor: string;
   secondaryColor: string;
-  accentPink: string;
-  accentCyan: string;
-  backgroundColor: string;
-  textColor: string;
-  headingFont: string;
-  headingWeight: string;
-  bodyFont: string;
-  bodyWeight: string;
 }
 
 interface RequestBody {
@@ -49,16 +46,19 @@ interface RequestBody {
   settings: BrandSettings;
 }
 
-interface ExtractedSection {
-  type: 'heading' | 'paragraph';
-  text: string;
+interface StructuredSection {
+  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'feature-grid' | 'page-break' | 'heading';
+  content?: string;
+  text?: string;
   level?: number;
+  items?: string[];
+  features?: Array<{ title: string; description: string }>;
 }
 
 interface ExtractedDocument {
   title: string;
   subtitle: string;
-  sections: ExtractedSection[];
+  sections: StructuredSection[];
   isConfidential: boolean;
 }
 
@@ -82,7 +82,7 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&apos;/g, "'");
 }
 
-// Sanitize text for WinAnsi encoding (replace non-ASCII characters with ASCII equivalents)
+// Sanitize text for WinAnsi encoding
 function sanitizeForPdf(text: string): string {
   return text
     .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
@@ -114,7 +114,7 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
 
   const zip = await JSZip.loadAsync(bytes);
   
-  const sections: ExtractedSection[] = [];
+  const sections: StructuredSection[] = [];
   let title = '';
   let subtitle = '';
   let isConfidential = false;
@@ -155,12 +155,10 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       const styleMatch = styleRegex.exec(paragraphContent);
       const styleName = styleMatch ? styleMatch[1] : '';
       
-      let isHeading = false;
-      let headingLevel = 0;
+      let sectionType: StructuredSection['type'] = 'paragraph';
       
       if (styleName.match(/Heading1|Title/i) || paragraphContent.includes('w:outlineLvl w:val="0"')) {
-        isHeading = true;
-        headingLevel = 1;
+        sectionType = 'h1';
         if (!foundTitle && paragraphText.length > 10 && 
             !paragraphText.toUpperCase().includes('WHITEPAPER') &&
             !paragraphText.toUpperCase().includes('WHITE PAPER')) {
@@ -168,15 +166,13 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
           foundTitle = true;
         }
       } else if (styleName.match(/Heading2|Subtitle/i) || paragraphContent.includes('w:outlineLvl w:val="1"')) {
-        isHeading = true;
-        headingLevel = 2;
+        sectionType = 'h2';
         if (!foundTitle && paragraphText.length > 15) {
           title = paragraphText;
           foundTitle = true;
         }
       } else if (styleName.match(/Heading3/i) || paragraphContent.includes('w:outlineLvl w:val="2"')) {
-        isHeading = true;
-        headingLevel = 3;
+        sectionType = 'h3';
       }
       
       if (paragraphText.length < 2) continue;
@@ -185,41 +181,41 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
           paragraphText.toUpperCase() === 'WHITE PAPER' ||
           paragraphText.toUpperCase() === 'TECHNICAL WHITEPAPER') continue;
       
-      sections.push({
-        type: isHeading ? 'heading' : 'paragraph',
-        text: paragraphText,
-        level: isHeading ? headingLevel : undefined,
-      });
+      // Check if it's a bullet point
+      if (paragraphText.startsWith('•') || paragraphText.startsWith('-') || paragraphText.startsWith('*')) {
+        const cleanText = paragraphText.replace(/^[•\-*]\s*/, '');
+        // Try to add to existing bullet list or create new one
+        const lastSection = sections[sections.length - 1];
+        if (lastSection && lastSection.type === 'bullet-list' && lastSection.items) {
+          lastSection.items.push(cleanText);
+        } else {
+          sections.push({
+            type: 'bullet-list',
+            items: [cleanText],
+          });
+        }
+      } else {
+        sections.push({
+          type: sectionType,
+          content: paragraphText,
+        });
+      }
     }
   }
 
   if (!title && sections.length > 0) {
-    const firstHeading = sections.find(s => s.type === 'heading' && s.text.length > 10);
-    if (firstHeading) {
-      title = firstHeading.text;
+    const firstHeading = sections.find(s => s.type === 'h1' && s.content && s.content.length > 10);
+    if (firstHeading && firstHeading.content) {
+      title = firstHeading.content;
     }
   }
 
-  let filteredSections = sections;
-  if (title) {
-    const titleLower = title.toLowerCase().trim();
-    filteredSections = sections.filter((s, i) => {
-      if (i === 0 && s.type === 'heading' && s.level === 1) {
-        const sectionLower = s.text.toLowerCase().trim();
-        if (sectionLower === titleLower || titleLower.includes(sectionLower) || sectionLower.includes(titleLower)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }
-
-  console.log(`[transform-document-design] Extracted ${filteredSections.length} sections, title: "${title}"`);
+  console.log(`[transform-document-design] Extracted ${sections.length} sections, title: "${title}"`);
   
-  return { title, subtitle, sections: filteredSections, isConfidential };
+  return { title, subtitle, sections, isConfidential };
 }
 
-// Helper to wrap text into lines (with sanitization)
+// Helper to wrap text into lines
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
   const sanitized = sanitizeForPdf(text);
   const words = sanitized.split(' ');
@@ -245,21 +241,7 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   return lines;
 }
 
-// Truncate title with ellipsis if too long
-function truncateTitle(text: string, font: any, fontSize: number, maxWidth: number): string {
-  const sanitized = sanitizeForPdf(text);
-  if (font.widthOfTextAtSize(sanitized, fontSize) <= maxWidth) {
-    return sanitized;
-  }
-  
-  let truncated = sanitized;
-  while (truncated.length > 0 && font.widthOfTextAtSize(truncated + '...', fontSize) > maxWidth) {
-    truncated = truncated.slice(0, -1);
-  }
-  return truncated + '...';
-}
-
-// Draw the colored footer bar (4 segments: green, pink, yellow, cyan)
+// Draw the colored footer bar (4 segments)
 function drawFooterBar(page: any) {
   const width = page.getWidth();
   const barHeight = 8;
@@ -272,85 +254,83 @@ function drawFooterBar(page: any) {
   page.drawRectangle({ x: segmentWidth * 3, y, width: segmentWidth, height: barHeight, color: COLORS.cyan });
 }
 
-// Draw header with green underline (content pages)
-function drawHeader(page: any, fonts: any) {
+// Draw content page header with purple bar (matching reference)
+function drawContentHeader(page: any, fonts: any) {
   const width = page.getWidth();
   const height = page.getHeight();
-  const margin = 50;
-  const headerY = height - 40;
+  const margin = 40;
+  const headerY = height - 35;
 
-  // sentra text in black
+  // Sentra logo text
   page.drawText('sentra', {
     x: margin,
     y: headerY,
-    size: 14,
+    size: 16,
     font: fonts.bold,
     color: COLORS.black,
   });
 
-  // | WHITEPAPER in gray
-  const sentraWidth = fonts.bold.widthOfTextAtSize('sentra', 14);
-  page.drawText(' | WHITEPAPER', {
-    x: margin + sentraWidth,
-    y: headerY,
-    size: 14,
+  // Purple bar underneath the header
+  page.drawRectangle({
+    x: 0,
+    y: height - 50,
+    width: width,
+    height: 4,
+    color: COLORS.purple,
+  });
+}
+
+// Draw content page footer with copyright, confidential, and page number
+function drawContentFooter(page: any, fonts: any, pageNumber: number, isConfidential: boolean) {
+  const width = page.getWidth();
+  const margin = 40;
+  const footerY = 25;
+
+  // Copyright left
+  page.drawText(`(c) Sentra ${new Date().getFullYear()}. All rights reserved.`, {
+    x: margin,
+    y: footerY,
+    size: 8,
     font: fonts.regular,
     color: COLORS.gray,
   });
 
-  // Green underline
-  page.drawRectangle({
-    x: margin,
-    y: headerY - 8,
-    width: width - margin * 2,
-    height: 2,
-    color: COLORS.primary,
+  // Confidential center
+  if (isConfidential) {
+    const confText = 'Confidential';
+    const confWidth = fonts.regular.widthOfTextAtSize(confText, 8);
+    page.drawText(confText, {
+      x: (width - confWidth) / 2,
+      y: footerY,
+      size: 8,
+      font: fonts.regular,
+      color: COLORS.gray,
+    });
+  }
+
+  // Page number right
+  const pageNumText = pageNumber.toString();
+  page.drawText(pageNumText, {
+    x: width - margin - fonts.regular.widthOfTextAtSize(pageNumText, 8),
+    y: footerY,
+    size: 8,
+    font: fonts.regular,
+    color: COLORS.gray,
   });
 }
 
-// Draw footer with copyright
-function drawFooter(page: any, fonts: any) {
-  const width = page.getWidth();
-  const margin = 50;
-  const footerY = 30;
-
-  page.drawText('(c) 2025 Sentra Inc. All rights reserved.', {
-    x: margin,
-    y: footerY,
-    size: 9,
-    font: fonts.regular,
-    color: COLORS.lightGray,
-  });
-
-  page.drawText('www.sentra.io', {
-    x: width - margin - fonts.regular.widthOfTextAtSize('www.sentra.io', 9),
-    y: footerY,
-    size: 9,
-    font: fonts.regular,
-    color: COLORS.primary,
-  });
-}
-
-// Draw Sentra logo (geometric design matching SVG template)
+// Draw Sentra logo (geometric design)
 function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
   const s = scale;
-  
-  // White/light gray squares pattern (simplified geometric logo)
   const lightColor = COLORS.lightText;
   
-  // Top row rectangles
   page.drawRectangle({ x: x, y: y, width: 8 * s, height: 8 * s, color: lightColor });
   page.drawRectangle({ x: x + 12 * s, y: y, width: 20 * s, height: 8 * s, color: lightColor });
-  
-  // Bottom row rectangles  
   page.drawRectangle({ x: x, y: y - 24 * s, width: 20 * s, height: 8 * s, color: lightColor });
   page.drawRectangle({ x: x + 24 * s, y: y - 24 * s, width: 8 * s, height: 8 * s, color: lightColor });
-  
-  // Middle row rectangles
   page.drawRectangle({ x: x, y: y - 12 * s, width: 8 * s, height: 8 * s, color: lightColor });
   page.drawRectangle({ x: x + 24 * s, y: y - 12 * s, width: 8 * s, height: 8 * s, color: lightColor });
   
-  // Orange circle in center
   page.drawCircle({
     x: x + 16 * s,
     y: y - 8 * s,
@@ -359,14 +339,25 @@ function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
   });
 }
 
-// Create cover page (BLACK background, matching SVG template exactly)
+// Draw icon circle (purple background with icon placeholder)
+function drawIconCircle(page: any, x: number, y: number, size: number = 40) {
+  // Light purple circle background
+  page.drawCircle({
+    x: x + size / 2,
+    y: y + size / 2,
+    size: size / 2,
+    color: COLORS.lightPurple,
+  });
+}
+
+// Create cover page (BLACK background)
 function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
-  const page = pdfDoc.addPage([595, 814]); // A4 size matching SVG dimensions
+  const page = pdfDoc.addPage([595, 814]);
   const width = page.getWidth();
   const height = page.getHeight();
-  const margin = 56;
+  const margin = 50;
 
-  // Black background (matching template)
+  // Black background
   page.drawRectangle({
     x: 0,
     y: 0,
@@ -375,7 +366,7 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
     color: COLORS.black,
   });
 
-  // Draw Sentra logo at top left (matching position from SVG)
+  // Draw Sentra logo at top left
   drawSentraLogo(page, margin, height - 60, 1);
 
   // "Sentra" text next to logo
@@ -387,19 +378,7 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
     color: COLORS.lightText,
   });
 
-  // Confidential badge (top right) if applicable
-  if (data.isConfidential) {
-    const confText = sanitizeForPdf('CONFIDENTIAL - Internal Use Only');
-    page.drawText(confText, {
-      x: width - margin - fonts.regular.widthOfTextAtSize(confText, 10),
-      y: height - 75,
-      size: 10,
-      font: fonts.regular,
-      color: COLORS.gray,
-    });
-  }
-
-  // Title in neon green (matching template position ~y=355)
+  // Title in neon green
   const titleY = height - 440;
   const titleLines = wrapText(data.title || 'Document Title', fonts.bold, 32, width - margin * 2);
   let currentY = titleY;
@@ -414,20 +393,18 @@ function createCoverPage(pdfDoc: any, fonts: any, data: ExtractedDocument) {
     currentY -= 40;
   }
 
-  // Colored footer bar at bottom
+  // Colored footer bar
   drawFooterBar(page);
 }
 
-// Create TOC page (White background with header/footer)
-function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
+// Create TOC page
+function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[], isConfidential: boolean) {
   const page = pdfDoc.addPage([595, 814]);
   const width = page.getWidth();
   const height = page.getHeight();
-  const margin = 56;
+  const margin = 50;
 
-  // White background (default)
-
-  drawHeader(page, fonts);
+  drawContentHeader(page, fonts);
 
   // TOC Title
   const titleY = height - 100;
@@ -448,27 +425,30 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
   });
 
   // TOC entries
-  let y = titleY - 60;
-  const lineHeight = 28;
+  let y = titleY - 50;
 
   for (let i = 0; i < tocEntries.length; i++) {
     const entry = tocEntries[i];
-    const textFont = fonts.bold;
     const fontSize = 11;
-
-    const pageNumReserve = 60;
+    const pageNumReserve = 50;
     const maxTitleWidth = width - margin * 2 - pageNumReserve;
-    const displayTitle = truncateTitle(entry.title, textFont, fontSize, maxTitleWidth);
+    
+    let displayTitle = sanitizeForPdf(entry.title);
+    if (fonts.bold.widthOfTextAtSize(displayTitle, fontSize) > maxTitleWidth) {
+      while (displayTitle.length > 0 && fonts.bold.widthOfTextAtSize(displayTitle + '...', fontSize) > maxTitleWidth) {
+        displayTitle = displayTitle.slice(0, -1);
+      }
+      displayTitle += '...';
+    }
     
     page.drawText(displayTitle, {
       x: margin,
       y: y,
       size: fontSize,
-      font: textFont,
+      font: fonts.bold,
       color: COLORS.black,
     });
 
-    // Page number
     const pageNumText = entry.page.toString();
     const pageNumX = width - margin - fonts.regular.widthOfTextAtSize(pageNumText, fontSize);
     page.drawText(pageNumText, {
@@ -480,11 +460,10 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
     });
 
     // Dot leader
-    const titleWidth = textFont.widthOfTextAtSize(displayTitle, fontSize);
-    const dotsStartX = margin + titleWidth + 10;
-    const dotsEndX = pageNumX - 10;
-    const dotSpacing = 4;
-    for (let dotX = dotsStartX; dotX < dotsEndX; dotX += dotSpacing) {
+    const titleWidth = fonts.bold.widthOfTextAtSize(displayTitle, fontSize);
+    const dotsStartX = margin + titleWidth + 8;
+    const dotsEndX = pageNumX - 8;
+    for (let dotX = dotsStartX; dotX < dotsEndX; dotX += 4) {
       page.drawText('.', {
         x: dotX,
         y: y,
@@ -494,233 +473,281 @@ function createTOCPage(pdfDoc: any, fonts: any, tocEntries: TOCEntry[]) {
       });
     }
 
-    y -= lineHeight;
-
-    // Separator line between entries
-    if (i < tocEntries.length - 1) {
-      page.drawRectangle({
-        x: margin,
-        y: y + lineHeight / 2,
-        width: width - margin * 2,
-        height: 0.5,
-        color: COLORS.lightGray,
-      });
-    }
+    y -= 26;
   }
 
-  drawFooter(page, fonts);
+  drawContentFooter(page, fonts, 1, isConfidential);
 }
 
-// Generate TOC entries - Only H1 chapters with accurate page numbers
-function generateTOCEntries(sections: ExtractedSection[], fonts: any): TOCEntry[] {
+// Generate TOC entries
+function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry[] {
   const entries: TOCEntry[] = [];
-  
-  const pageHeight = 814;
-  const margin = 56;
-  const minY = 100;
-  const startY = pageHeight - 100;
-  const bodyFontSize = 11;
-  const lineHeight = 16;
-  const contentWidth = 595 - margin * 2;
-  
-  let simulatedY = startY;
-  let simulatedPage = 3;
-  let hasContentOnPage = false;
+  let currentPage = 3;
+  let hasContent = false;
 
   for (const section of sections) {
-    if (section.type === 'heading') {
-      if (section.level === 1) {
-        if (hasContentOnPage) {
-          simulatedPage++;
-          simulatedY = startY;
-          hasContentOnPage = false;
-        }
-        
+    if (section.type === 'h1' || section.type === 'page-break') {
+      if (hasContent) {
+        currentPage++;
+        hasContent = false;
+      }
+      
+      if (section.type === 'h1' && section.content) {
         entries.push({
-          title: section.text,
-          page: simulatedPage,
+          title: section.content,
+          page: currentPage,
           level: 1,
         });
-        
-        simulatedY -= 40;
-        hasContentOnPage = true;
-      } else if (section.level === 2) {
-        if (simulatedY < minY + 80) {
-          simulatedPage++;
-          simulatedY = startY;
-        }
-        simulatedY -= 35;
-        hasContentOnPage = true;
-      } else if (section.level === 3) {
-        if (simulatedY < minY + 50) {
-          simulatedPage++;
-          simulatedY = startY;
-        }
-        simulatedY -= 28;
-        hasContentOnPage = true;
       }
+      hasContent = true;
     } else {
-      const lines = wrapText(section.text, fonts.regular, bodyFontSize, contentWidth);
-      
-      for (const _line of lines) {
-        if (simulatedY < minY) {
-          simulatedPage++;
-          simulatedY = startY;
-        }
-        simulatedY -= lineHeight;
-      }
-      simulatedY -= 12;
-      hasContentOnPage = true;
+      hasContent = true;
     }
   }
 
   return entries;
 }
 
-// Create content pages - standardized spacing, smart page breaks
-function createContentPages(pdfDoc: any, fonts: any, sections: ExtractedSection[]) {
+// Create content pages with proper styling
+function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection[], isConfidential: boolean) {
   let currentPage = pdfDoc.addPage([595, 814]);
-  let y = currentPage.getHeight() - 100;
-  const margin = 56;
-  const contentWidth = currentPage.getWidth() - margin * 2;
-  const bodyFontSize = 11;
-  const lineHeight = 16;
-  const minY = 100;
+  const pageWidth = currentPage.getWidth();
+  const pageHeight = currentPage.getHeight();
+  const margin = 40;
+  const contentWidth = pageWidth - margin * 2;
+  let y = pageHeight - 80;
+  const minY = 60;
+  let pageNumber = 2;
+  let hasContent = false;
 
-  const SPACING = {
-    afterH1: 20,
-    afterH2: 16,
-    afterH3: 12,
-    afterParagraph: 12,
+  drawContentHeader(currentPage, fonts);
+
+  const addNewPage = () => {
+    drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
+    pageNumber++;
+    currentPage = pdfDoc.addPage([595, 814]);
+    y = pageHeight - 80;
+    drawContentHeader(currentPage, fonts);
+    hasContent = false;
   };
-
-  drawHeader(currentPage, fonts);
-
-  let hasContentOnPage = false;
 
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
+    const content = section.content || section.text || '';
 
-    if (y < minY + 60) {
-      drawFooter(currentPage, fonts);
-      currentPage = pdfDoc.addPage([595, 814]);
-      y = currentPage.getHeight() - 100;
-      drawHeader(currentPage, fonts);
-      hasContentOnPage = false;
+    // Handle page breaks
+    if (section.type === 'page-break') {
+      if (hasContent) {
+        addNewPage();
+      }
+      continue;
     }
 
-    if (section.type === 'heading') {
-      if (section.level === 1) {
-        if (hasContentOnPage) {
-          drawFooter(currentPage, fonts);
-          currentPage = pdfDoc.addPage([595, 814]);
-          y = currentPage.getHeight() - 100;
-          drawHeader(currentPage, fonts);
-          hasContentOnPage = false;
-        }
+    // Check if we need a new page
+    if (y < minY + 80) {
+      addNewPage();
+    }
 
-        const headingLines = wrapText(section.text, fonts.bold, 20, contentWidth);
+    // H1 - Main section headings (start new page, bold black text)
+    if (section.type === 'h1') {
+      if (hasContent && i > 0) {
+        addNewPage();
+      }
+
+      const lines = wrapText(content, fonts.bold, 22, contentWidth);
+      for (const line of lines) {
+        page.drawText(line, {
+          x: margin,
+          y: y,
+          size: 22,
+          font: fonts.bold,
+          color: COLORS.black,
+        });
+        y -= 28;
+      }
+      y -= 15;
+      hasContent = true;
+    }
+    // H2 - Subsection headings
+    else if (section.type === 'h2') {
+      if (y < minY + 60) addNewPage();
+
+      const lines = wrapText(content, fonts.bold, 16, contentWidth);
+      for (const line of lines) {
+        currentPage.drawText(line, {
+          x: margin,
+          y: y,
+          size: 16,
+          font: fonts.bold,
+          color: COLORS.black,
+        });
+        y -= 22;
+      }
+      y -= 10;
+      hasContent = true;
+    }
+    // H3 - Sub-subsection headings
+    else if (section.type === 'h3') {
+      if (y < minY + 40) addNewPage();
+
+      const lines = wrapText(content, fonts.bold, 13, contentWidth);
+      for (const line of lines) {
+        currentPage.drawText(line, {
+          x: margin,
+          y: y,
+          size: 13,
+          font: fonts.bold,
+          color: COLORS.darkGray,
+        });
+        y -= 18;
+      }
+      y -= 8;
+      hasContent = true;
+    }
+    // Feature grid - 2 column layout with icons
+    else if (section.type === 'feature-grid' && section.features) {
+      const colWidth = (contentWidth - 30) / 2;
+      const features = section.features;
+      
+      for (let j = 0; j < features.length; j += 2) {
+        if (y < minY + 100) addNewPage();
+
+        const leftFeature = features[j];
+        const rightFeature = features[j + 1];
+
+        // Left column
+        drawIconCircle(currentPage, margin, y - 35, 36);
         
-        for (let j = 0; j < headingLines.length; j++) {
-          currentPage.drawText(headingLines[j], {
-            x: margin,
-            y: y,
-            size: 20,
-            font: fonts.bold,
-            color: COLORS.primary,
-          });
-          
-          if (j === 0) {
-            const headingWidth = Math.min(fonts.bold.widthOfTextAtSize(headingLines[j], 20), 200);
-            currentPage.drawRectangle({
-              x: margin,
-              y: y - 6,
-              width: headingWidth,
-              height: 2,
-              color: COLORS.primary,
-            });
-          }
-          y -= 24;
-        }
-        y -= SPACING.afterH1;
-        hasContentOnPage = true;
-      } else if (section.level === 2) {
-        const subHeadingLines = wrapText(section.text, fonts.bold, 15, contentWidth);
-        
-        for (const line of subHeadingLines) {
+        const leftTitleLines = wrapText(leftFeature.title, fonts.bold, 12, colWidth - 50);
+        let leftY = y;
+        for (const line of leftTitleLines) {
           currentPage.drawText(line, {
-            x: margin,
-            y: y,
-            size: 15,
-            font: fonts.bold,
-            color: COLORS.darkGray,
-          });
-          y -= 18;
-        }
-        y -= SPACING.afterH2;
-        hasContentOnPage = true;
-      } else if (section.level === 3) {
-        const h3Lines = wrapText(section.text, fonts.bold, 13, contentWidth);
-        
-        for (const line of h3Lines) {
-          currentPage.drawText(line, {
-            x: margin,
-            y: y,
-            size: 13,
+            x: margin + 45,
+            y: leftY,
+            size: 12,
             font: fonts.bold,
             color: COLORS.black,
           });
-          y -= 16;
+          leftY -= 16;
         }
-        y -= SPACING.afterH3;
-        hasContentOnPage = true;
+        
+        const leftDescLines = wrapText(leftFeature.description, fonts.regular, 10, colWidth - 50);
+        for (const line of leftDescLines) {
+          currentPage.drawText(line, {
+            x: margin + 45,
+            y: leftY,
+            size: 10,
+            font: fonts.regular,
+            color: COLORS.bodyText,
+          });
+          leftY -= 14;
+        }
+
+        // Right column
+        if (rightFeature) {
+          const rightX = margin + colWidth + 30;
+          drawIconCircle(currentPage, rightX, y - 35, 36);
+          
+          const rightTitleLines = wrapText(rightFeature.title, fonts.bold, 12, colWidth - 50);
+          let rightY = y;
+          for (const line of rightTitleLines) {
+            currentPage.drawText(line, {
+              x: rightX + 45,
+              y: rightY,
+              size: 12,
+              font: fonts.bold,
+              color: COLORS.black,
+            });
+            rightY -= 16;
+          }
+          
+          const rightDescLines = wrapText(rightFeature.description, fonts.regular, 10, colWidth - 50);
+          for (const line of rightDescLines) {
+            currentPage.drawText(line, {
+              x: rightX + 45,
+              y: rightY,
+              size: 10,
+              font: fonts.regular,
+              color: COLORS.bodyText,
+            });
+            rightY -= 14;
+          }
+        }
+
+        y -= 80;
       }
-    } else {
-      const lines = wrapText(section.text, fonts.regular, bodyFontSize, contentWidth);
+      y -= 15;
+      hasContent = true;
+    }
+    // Bullet list
+    else if (section.type === 'bullet-list' && section.items) {
+      for (const item of section.items) {
+        if (y < minY + 20) addNewPage();
+
+        // Bullet point
+        currentPage.drawText('-', {
+          x: margin,
+          y: y,
+          size: 11,
+          font: fonts.regular,
+          color: COLORS.black,
+        });
+
+        const lines = wrapText(item, fonts.regular, 11, contentWidth - 15);
+        let isFirst = true;
+        for (const line of lines) {
+          currentPage.drawText(line, {
+            x: margin + (isFirst ? 15 : 15),
+            y: y,
+            size: 11,
+            font: fonts.regular,
+            color: COLORS.bodyText,
+          });
+          y -= 16;
+          isFirst = false;
+        }
+      }
+      y -= 10;
+      hasContent = true;
+    }
+    // Regular paragraph
+    else if (section.type === 'paragraph' && content) {
+      const lines = wrapText(content, fonts.regular, 11, contentWidth);
       
       for (const line of lines) {
-        if (y < minY) {
-          drawFooter(currentPage, fonts);
-          currentPage = pdfDoc.addPage([595, 814]);
-          y = currentPage.getHeight() - 100;
-          drawHeader(currentPage, fonts);
-        }
+        if (y < minY) addNewPage();
 
         currentPage.drawText(line, {
           x: margin,
           y: y,
-          size: bodyFontSize,
+          size: 11,
           font: fonts.regular,
-          color: COLORS.textGray,
+          color: COLORS.bodyText,
         });
-        y -= lineHeight;
+        y -= 16;
       }
-      
-      y -= SPACING.afterParagraph;
-      hasContentOnPage = true;
+      y -= 10;
+      hasContent = true;
     }
   }
 
-  drawFooter(currentPage, fonts);
+  drawContentFooter(currentPage, fonts, pageNumber, isConfidential);
 }
 
-// Main PDF generation function
+// Main PDF generation
 async function generatePDF(extractedDoc: ExtractedDocument): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   
   const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   
-  const fonts = {
-    regular: regularFont,
-    bold: boldFont,
-  };
+  const fonts = { regular: regularFont, bold: boldFont };
 
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
   createCoverPage(pdfDoc, fonts, extractedDoc);
-  createTOCPage(pdfDoc, fonts, tocEntries);
-  createContentPages(pdfDoc, fonts, extractedDoc.sections);
+  createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential);
+  createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential);
 
   return await pdfDoc.save();
 }
@@ -771,7 +798,31 @@ serve(async (req) => {
       );
     }
 
-    const extractedDoc = await extractDocxContent(file);
+    // First, structure the content using the structure-content function
+    let extractedDoc = await extractDocxContent(file);
+    
+    // Call structure-content to get properly formatted sections
+    try {
+      const structureResponse = await supabase.functions.invoke('structure-content', {
+        body: { 
+          content: extractedDoc.sections.map(s => s.content || '').join('\n\n'),
+          documentTitle: extractedDoc.title 
+        }
+      });
+
+      if (structureResponse.data?.success && structureResponse.data?.structured) {
+        const structured = structureResponse.data.structured;
+        extractedDoc = {
+          ...extractedDoc,
+          title: structured.title || extractedDoc.title,
+          subtitle: structured.subtitle || extractedDoc.subtitle,
+          sections: structured.sections || extractedDoc.sections,
+        };
+        console.log('[transform-document-design] Content structured successfully via AI');
+      }
+    } catch (structureError) {
+      console.log('[transform-document-design] Structure function unavailable, using basic extraction:', structureError);
+    }
     
     console.log(`[transform-document-design] Generating PDF from extracted content`);
 
