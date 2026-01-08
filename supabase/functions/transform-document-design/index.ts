@@ -556,7 +556,7 @@ function createContentPages(pdfDoc: any, fonts: any, sections: StructuredSection
 
       const lines = wrapText(content, fonts.bold, 22, contentWidth);
       for (const line of lines) {
-        page.drawText(line, {
+        currentPage.drawText(line, {
           x: margin,
           y: y,
           size: 22,
