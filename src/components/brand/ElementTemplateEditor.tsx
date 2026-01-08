@@ -554,12 +554,15 @@ export function ElementTemplateEditor() {
       return;
     }
     try {
+      console.log('Converting SVG to PNG, SVG length:', svgCode.length);
       const pngDataUrl = await renderSvgToPng(svgCode);
+      console.log('SVG conversion successful, PNG length:', pngDataUrl.length);
       setUploadedImage(pngDataUrl);
       // Keep svgCode so it gets saved with the template
       toast({ title: 'SVG converted to PNG successfully' });
     } catch (error) {
-      toast({ title: 'Failed to convert SVG', variant: 'destructive' });
+      console.error('SVG conversion failed:', error);
+      toast({ title: 'Failed to convert SVG: ' + (error instanceof Error ? error.message : 'Unknown error'), variant: 'destructive' });
     }
   };
 
@@ -600,7 +603,8 @@ export function ElementTemplateEditor() {
       setUploadedImage(null);
       setSvgCode('');
     } catch (error) {
-      toast({ title: 'Failed to create template', variant: 'destructive' });
+      console.error('Failed to create template:', error);
+      toast({ title: 'Failed to create template: ' + (error instanceof Error ? error.message : 'Unknown error'), variant: 'destructive' });
     }
   };
 
