@@ -34,6 +34,7 @@ const BrandDesigner: React.FC = () => {
     type: 'docx' | 'pdf' | 'html' | null;
     modifiedFile: string | null;
     message?: string;
+    html?: string;
   }>({ type: null, modifiedFile: null });
   const [localSettings, setLocalSettings] = useState<Partial<BrandSettings>>({});
 
@@ -105,21 +106,17 @@ const BrandDesigner: React.FC = () => {
     onSuccess: async (result) => {
       // Check if result contains HTML for client-side rendering
       if (result.html) {
-        try {
-          const filename = selectedFile?.name.replace(/\.(docx|pdf)$/i, '') + '_branded.pdf';
-          await convertHtmlToPdf(result.html, filename);
-          toast({
-            title: 'Document transformed',
-            description: 'Your branded document has been downloaded.',
-          });
-        } catch (error) {
-          console.error('PDF conversion error:', error);
-          toast({
-            title: 'PDF generation failed',
-            description: 'Could not convert HTML to PDF',
-            variant: 'destructive',
-          });
-        }
+        // Store HTML for preview
+        setTransformResult({
+          type: 'html',
+          modifiedFile: null,
+          message: result.message || 'Document transformed with templates. Click Download to save as PDF.',
+          html: result.html,
+        });
+        toast({
+          title: 'Document transformed',
+          description: 'Click Download PDF to save your branded document.',
+        });
       } else {
         setTransformResult({
           type: result.type,
@@ -364,6 +361,7 @@ const BrandDesigner: React.FC = () => {
                   modifiedFile={transformResult.modifiedFile}
                   originalFileName={selectedFile?.name || ''}
                   message={transformResult.message}
+                  html={transformResult.html}
                 />
               </CardContent>
             </Card>
