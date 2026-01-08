@@ -145,7 +145,7 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
   const [marginTop, setMarginTop] = useState(template.margin_top || 0);
   const [marginBottom, setMarginBottom] = useState(template.margin_bottom || 8);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [svgCode, setSvgCode] = useState('');
+  const [svgCode, setSvgCode] = useState(template.svg_content || '');
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -177,7 +177,7 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
     try {
       const pngDataUrl = await renderSvgToPng(svgCode);
       setUploadedImage(pngDataUrl);
-      setSvgCode('');
+      // Keep svgCode so it gets saved
       toast({ title: 'SVG converted to PNG successfully' });
     } catch (error) {
       toast({ title: 'Failed to convert SVG', variant: 'destructive' });
@@ -190,6 +190,7 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
     if (isVisual) {
       updates.image_height = imageHeight;
       updates.image_width = imageWidth;
+      updates.svg_content = svgCode || null;
       if (uploadedImage) {
         updates.image_base64 = uploadedImage;
       }
@@ -555,7 +556,7 @@ export function ElementTemplateEditor() {
     try {
       const pngDataUrl = await renderSvgToPng(svgCode);
       setUploadedImage(pngDataUrl);
-      setSvgCode('');
+      // Keep svgCode so it gets saved with the template
       toast({ title: 'SVG converted to PNG successfully' });
     } catch (error) {
       toast({ title: 'Failed to convert SVG', variant: 'destructive' });
@@ -577,6 +578,7 @@ export function ElementTemplateEditor() {
         image_base64: isVisual ? uploadedImage : null,
         image_height: isVisual ? imageHeight : null,
         image_width: isVisual ? imageWidth : null,
+        svg_content: isVisual ? svgCode || null : null,
         font_family: !isVisual ? fontFamily : null,
         font_size: !isVisual ? fontSize : null,
         font_weight: !isVisual ? fontWeight : null,
