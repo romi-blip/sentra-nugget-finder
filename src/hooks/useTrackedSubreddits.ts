@@ -49,23 +49,14 @@ export function useTrackedSubreddits() {
       
       if (error) throw error;
       
-      // Trigger immediate fetch for this subreddit
-      try {
-        await supabase.functions.invoke('fetch-reddit-posts', {
-          body: { subreddit_id: data.id }
-        });
-      } catch (fetchError) {
-        console.error('Error triggering fetch:', fetchError);
-        // Don't fail the whole operation if fetch fails
-      }
-      
+      // No automatic fetch - user will click refresh manually to save Apify credits
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tracked-subreddits'] });
       toast({
         title: "Subreddit added",
-        description: "Successfully tracking new subreddit.",
+        description: "Click the refresh button to fetch posts.",
       });
     },
     onError: (error: any) => {

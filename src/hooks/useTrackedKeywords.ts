@@ -49,18 +49,12 @@ export function useTrackedKeywords() {
 
       if (error) throw error;
 
-      // Trigger immediate fetch for this keyword
-      const { error: fetchError } = await supabase.functions.invoke('fetch-keyword-posts');
-      if (fetchError) {
-        console.error('Error triggering keyword fetch:', fetchError);
-      }
-
+      // No automatic fetch - user will click refresh manually to save Apify credits
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tracked-keywords'] });
-      queryClient.invalidateQueries({ queryKey: ['reddit-posts'] });
-      toast.success('Keyword added and posts are being fetched');
+      toast.success('Keyword added. Click refresh to fetch posts.');
     },
     onError: (error: Error) => {
       toast.error(`Failed to add keyword: ${error.message}`);
