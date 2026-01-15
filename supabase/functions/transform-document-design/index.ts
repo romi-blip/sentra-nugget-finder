@@ -918,6 +918,13 @@ async function createContentPages(
   embeddedContentPageImage: any | null = null,
   logoOriginalHeight: number = 32
 ) {
+  // Limit sections to prevent CPU timeout
+  const MAX_SECTIONS = 100;
+  const limitedSections = sections.slice(0, MAX_SECTIONS);
+  if (sections.length > MAX_SECTIONS) {
+    console.log(`[transform-document-design] WARNING: Limiting sections from ${sections.length} to ${MAX_SECTIONS}`);
+  }
+  
   let currentPage = pdfDoc.addPage([595, 842]);
   const pageWidth = currentPage.getWidth();
   const pageHeight = currentPage.getHeight();
@@ -932,6 +939,9 @@ async function createContentPages(
   const minY = effectiveFooterHeight + 20;
   let pageNumber = 2;
   let hasContent = false;
+  
+  // Limit pages to prevent CPU timeout
+  const MAX_PAGES = 20;
 
   // Cache for embedded images to avoid re-embedding duplicates
   const embeddedImageCache = new Map<string, any>();
@@ -969,6 +979,12 @@ async function createContentPages(
   drawPageBackground(currentPage);
 
   const addNewPage = () => {
+    // Limit pages to prevent CPU timeout
+    if (pageNumber >= MAX_PAGES) {
+      console.log(`[transform-document-design] WARNING: Max pages (${MAX_PAGES}) reached, stopping`);
+      return false;
+    }
+    
     // Draw footer on current page (only if not using full page design)
     if (!embeddedContentPageImage) {
       drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
@@ -978,6 +994,7 @@ async function createContentPages(
     drawPageBackground(currentPage);
     y = pageHeight - effectiveHeaderHeight - 25;
     hasContent = false;
+    return true;
   };
 
   // Get text style properties
@@ -994,23 +1011,31 @@ async function createContentPages(
     };
   };
 
-  for (let i = 0; i < sections.length; i++) {
-    const section = sections[i];
+  for (let i = 0; i < limitedSections.length; i++) {
+    // Check page limit
+    if (pageNumber >= MAX_PAGES) break;
+    
+    const section = limitedSections[i];
     const content = section.content || section.text || '';
 
     if (section.type === 'page-break') {
       if (hasContent) {
-        addNewPage();
+        if (!addNewPage()) break;
       }
       continue;
     }
 
     if (y < minY + 80) {
-      addNewPage();
+      if (!addNewPage()) break;
     }
 
-    // Handle image sections
+    // Handle image sections - limit to 5 embedded images to prevent timeout
     if (section.type === 'image' && section.imageBase64 && section.imageMimeType) {
+      if (embeddedImageCache.size >= 5) {
+        console.log('[transform-document-design] Skipping image - max embedded images reached');
+        continue;
+      }
+      
       try {
         // Check cache first
         const cacheKey = section.imageBase64.substring(0, 100);
@@ -1050,7 +1075,7 @@ async function createContentPages(
         
         // Check page break
         if (y - imgHeight < minY + 50) {
-          addNewPage();
+          if (!addNewPage()) break;
         }
         
         // Center image horizontally
@@ -1075,7 +1100,7 @@ async function createContentPages(
 
     if (section.type === 'h1') {
       if (hasContent && i > 0) {
-        addNewPage();
+        if (!addNewPage()) break;
       }
 
       const style = getTextStyle('h1');
@@ -1097,7 +1122,9 @@ async function createContentPages(
       hasContent = true;
     }
     else if (section.type === 'h2') {
-      if (y < minY + 60) addNewPage();
+      if (y < minY + 60) {
+        if (!addNewPage()) break;
+      }
       
       const style = getTextStyle('h2');
       y -= style.marginTop;
@@ -1118,7 +1145,9 @@ async function createContentPages(
       hasContent = true;
     }
     else if (section.type === 'h3') {
-      if (y < minY + 40) addNewPage();
+      if (y < minY + 40) {
+        if (!addNewPage()) break;
+      }
       
       const style = getTextStyle('h3');
       y -= style.marginTop;
@@ -1142,7 +1171,10 @@ async function createContentPages(
       const style = getTextStyle('bullet');
       
       for (const item of section.items) {
-        if (y < minY + 30) addNewPage();
+        if (pageNumber >= MAX_PAGES) break;
+        if (y < minY + 30) {
+          if (!addNewPage()) break;
+        }
 
         const bulletX = margin + 8;
         
@@ -1175,7 +1207,10 @@ async function createContentPages(
       const lines = wrapText(content, fonts.regular, style.fontSize, contentWidth);
       
       for (const line of lines) {
-        if (y < minY) addNewPage();
+        if (pageNumber >= MAX_PAGES) break;
+        if (y < minY) {
+          if (!addNewPage()) break;
+        }
 
         currentPage.drawText(line, {
           x: margin,
