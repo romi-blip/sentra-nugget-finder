@@ -167,7 +167,7 @@ const PageThumbnail: React.FC<PageThumbnailProps> = ({
         </div>
 
         {/* Action buttons */}
-        <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-1 right-1 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             variant="secondary"
             size="icon"
