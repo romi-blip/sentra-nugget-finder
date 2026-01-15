@@ -48,12 +48,15 @@ interface SvgConversionResult {
 const FULL_PAGE_ELEMENT_TYPES = ['cover_background', 'content_page'];
 
 // Get appropriate scale factor based on element type
-// Full-page backgrounds use 1x (lower resolution is fine), small elements use 3x for crispness
+// Full-page backgrounds use 1x (lower resolution is fine), logos use 6x for maximum crispness
 function getScaleForElementType(elementType: string): number {
   if (FULL_PAGE_ELEMENT_TYPES.includes(elementType)) {
     return 1; // 1x for full-page backgrounds
   }
-  return 3; // 3x for logos, headers, etc.
+  if (elementType === 'logo') {
+    return 6; // 6x for logos to ensure crystal-clear rendering at any display size
+  }
+  return 3; // 3x for headers, footers, etc.
 }
 
 // Max recommended file size for images (warn user if exceeded)

@@ -1,5 +1,7 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { ElementTemplate } from '@/hooks/useElementTemplates';
 
 interface PageLayoutEditorProps {
@@ -9,7 +11,11 @@ interface PageLayoutEditorProps {
   logoElement?: ElementTemplate | null;
   backgroundElement?: ElementTemplate | null;
   logoPosition?: { x: number; y: number };
+  logoHeight?: number;
   showLogo?: boolean;
+  onLogoHeightChange?: (height: number) => void;
+  onLogoPositionChange?: (position: { x: number; y: number }) => void;
+  editable?: boolean;
 }
 
 // Helper to get image source from element template
@@ -43,7 +49,11 @@ export function PageLayoutEditor({
   logoElement,
   backgroundElement,
   logoPosition = { x: 50, y: 50 },
+  logoHeight = 32,
   showLogo = true,
+  onLogoHeightChange,
+  onLogoPositionChange,
+  editable = false,
 }: PageLayoutEditorProps) {
   // A4 aspect ratio for preview (595 x 842 points, scaled down)
   const PREVIEW_WIDTH = 280;
@@ -54,6 +64,15 @@ export function PageLayoutEditor({
   const footerSrc = getImageSrc(footerElement);
   const logoSrc = getImageSrc(logoElement);
   const backgroundSrc = getImageSrc(backgroundElement);
+
+  // Default heights for different page types
+  const defaultHeights = {
+    cover: 40,
+    toc: 24,
+    content: 24,
+  };
+
+  const effectiveLogoHeight = logoHeight || defaultHeights[pageType];
 
   return (
     <Card className="overflow-hidden">
@@ -140,8 +159,7 @@ export function PageLayoutEditor({
               style={{
                 left: logoPosition.x * SCALE,
                 top: logoPosition.y * SCALE,
-                width: (logoElement?.image_width || 100) * SCALE,
-                height: (logoElement?.image_height || 50) * SCALE,
+                height: effectiveLogoHeight * SCALE,
                 objectFit: 'contain',
               }}
             />
@@ -168,6 +186,60 @@ export function PageLayoutEditor({
             {pageType.toUpperCase()}
           </div>
         </div>
+
+        {/* Logo Size Controls - Only show if editable */}
+        {editable && showLogo && logoElement && (
+          <div className="p-4 space-y-4 border-t">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label className="text-sm">Logo Height</Label>
+                <span className="text-sm text-muted-foreground">{effectiveLogoHeight}px</span>
+              </div>
+              <Slider
+                value={[effectiveLogoHeight]}
+                onValueChange={(value) => onLogoHeightChange?.(value[0])}
+                min={16}
+                max={64}
+                step={2}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground">
+                Adjust the display height of the logo in the PDF. The logo is stored at high resolution for crisp rendering at any size.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label className="text-sm">X Position</Label>
+                  <span className="text-sm text-muted-foreground">{logoPosition.x}pt</span>
+                </div>
+                <Slider
+                  value={[logoPosition.x]}
+                  onValueChange={(value) => onLogoPositionChange?.({ ...logoPosition, x: value[0] })}
+                  min={10}
+                  max={500}
+                  step={5}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label className="text-sm">Y Position</Label>
+                  <span className="text-sm text-muted-foreground">{logoPosition.y}pt</span>
+                </div>
+                <Slider
+                  value={[logoPosition.y]}
+                  onValueChange={(value) => onLogoPositionChange?.({ ...logoPosition, y: value[0] })}
+                  min={5}
+                  max={100}
+                  step={2}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
