@@ -1320,10 +1320,28 @@ async function generatePDF(
     console.log('[transform-document-design] SKIPPED footer image (too CPU intensive) - using default footer');
   }
 
-  // DISABLED: Full content page images cause CPU timeout due to large size
-  const embeddedContentPageImage: any = null;
+  // Content page background image - now enabled with size check (optimized images are ~8-100KB)
+  let embeddedContentPageImage: any = null;
   if (elements.content_page?.image_base64) {
-    console.log('[transform-document-design] SKIPPED content_page full design (too CPU intensive)');
+    const base64Size = elements.content_page.image_base64.length * 0.75;
+    console.log(`[transform-document-design] Content page image size: ~${Math.round(base64Size / 1024)}KB`);
+    
+    if (base64Size > MAX_COVER_IMAGE_SIZE) {
+      console.log(`[transform-document-design] Content page image too large - skipping`);
+    } else {
+      try {
+        const bytes = fastBase64ToBytes(elements.content_page.image_base64);
+        // Try PNG first, fallback to JPG
+        try {
+          embeddedContentPageImage = await pdfDoc.embedPng(bytes);
+        } catch {
+          embeddedContentPageImage = await pdfDoc.embedJpg(bytes);
+        }
+        console.log('[transform-document-design] ✓ Embedded content page background');
+      } catch (e) {
+        console.log('[transform-document-design] Could not embed content page image:', e);
+      }
+    }
   }
 
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
