@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { useToast } from "@/hooks/use-toast";
-import { Lightbulb, MessageSquare, MessageSquarePlus, BookOpen, List, PenTool, UserSearch } from "lucide-react";
+import { Lightbulb, MessageSquare, MessageSquarePlus, BookOpen, List, PenTool, UserSearch, Palette, BarChart3 } from "lucide-react";
 
 const PointerGlow = () => {
   useEffect(() => {
@@ -162,6 +162,30 @@ const Index = () => {
                     <UserSearch className="h-8 w-8 text-primary mb-2" />
                     <CardTitle>Lead Research</CardTitle>
                     <CardDescription>Research leads from Salesforce, LinkedIn, or manual input.</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+
+            {(hasRole('admin') || hasRole('super_admin') || hasRole('marketing')) && (
+              <Link to="/brand" className="block">
+                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardHeader>
+                    <Palette className="h-8 w-8 text-primary mb-2" />
+                    <CardTitle>Brand Designer</CardTitle>
+                    <CardDescription>Create branded documents with custom templates and styling.</CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            )}
+
+            {(hasRole('admin') || hasRole('super_admin') || hasRole('marketing')) && (
+              <Link to="/llm-ranking" className="block">
+                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardHeader>
+                    <BarChart3 className="h-8 w-8 text-primary mb-2" />
+                    <CardTitle>LLM Ranking</CardTitle>
+                    <CardDescription>Track Sentra's visibility and positioning across AI models.</CardDescription>
                   </CardHeader>
                 </Card>
               </Link>
