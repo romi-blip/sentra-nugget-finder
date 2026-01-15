@@ -713,17 +713,34 @@ async function createCoverPageWithElements(
   const height = page.getHeight();
   const margin = 50;
 
-  // DISABLED: Full page cover images cause CPU timeout due to large size
-  // Skip cover background image to avoid CPU limits - use simple black background
+  // Draw cover background if template has image (only used once, so OK for CPU)
   if (coverTemplate?.image_base64) {
-    console.log('[transform-document-design] SKIPPED cover_background full design (too CPU intensive) - using simple background');
+    try {
+      const bytes = fastBase64ToBytes(coverTemplate.image_base64);
+      const coverImage = await pdfDoc.embedPng(bytes);
+      
+      page.drawImage(coverImage, {
+        x: 0,
+        y: 0,
+        width: width,
+        height: height,
+      });
+      console.log('[transform-document-design] Embedded cover background');
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed cover image:', e);
+      // Fallback to black background
+      page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
+      drawSentraLogo(page, margin, height - 60, 1);
+      page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
+      drawFooterBar(page);
+    }
+  } else {
+    // Default black cover
+    page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
+    drawSentraLogo(page, margin, height - 60, 1);
+    page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
+    drawFooterBar(page);
   }
-  
-  // Always use simple black cover for performance
-  page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
-  drawSentraLogo(page, margin, height - 60, 1);
-  page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
-  drawFooterBar(page);
 
   // Draw logo on cover page if configured - use original dimensions for crisp rendering
   if (logoConfig?.show && logoImage) {
