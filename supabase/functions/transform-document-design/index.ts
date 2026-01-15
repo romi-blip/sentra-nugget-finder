@@ -713,33 +713,17 @@ async function createCoverPageWithElements(
   const height = page.getHeight();
   const margin = 50;
 
-  // Draw cover background if template has image
+  // DISABLED: Full page cover images cause CPU timeout due to large size
+  // Skip cover background image to avoid CPU limits - use simple black background
   if (coverTemplate?.image_base64) {
-    try {
-      const bytes = fastBase64ToBytes(coverTemplate.image_base64);
-      const coverImage = await pdfDoc.embedPng(bytes);
-      
-      page.drawImage(coverImage, {
-        x: 0,
-        y: 0,
-        width: width,
-        height: height,
-      });
-    } catch (e) {
-      console.log('[transform-document-design] Could not embed cover image:', e);
-      // Fallback to black background
-      page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
-      drawSentraLogo(page, margin, height - 60, 1);
-      page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
-      drawFooterBar(page);
-    }
-  } else {
-    // Default black cover
-    page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
-    drawSentraLogo(page, margin, height - 60, 1);
-    page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
-    drawFooterBar(page);
+    console.log('[transform-document-design] SKIPPED cover_background full design (too CPU intensive) - using simple background');
   }
+  
+  // Always use simple black cover for performance
+  page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
+  drawSentraLogo(page, margin, height - 60, 1);
+  page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
+  drawFooterBar(page);
 
   // Draw logo on cover page if configured - use original dimensions for crisp rendering
   if (logoConfig?.show && logoImage) {
@@ -1288,40 +1272,24 @@ async function generatePDF(
     }
   }
 
-  // Embed header image ONCE if template has one
-  let embeddedHeaderImage: any = null;
+  // DISABLED: Header/footer images cause CPU timeout due to size
+  // Skip embedding header/footer images to avoid CPU limits
+  const embeddedHeaderImage: any = null;
   let headerHeight = 40;
   if (elements.header?.image_base64) {
-    try {
-      const bytes = fastBase64ToBytes(elements.header.image_base64);
-      embeddedHeaderImage = await pdfDoc.embedPng(bytes);
-      headerHeight = elements.header.image_height || 40;
-      console.log('[transform-document-design] Embedded header image once');
-    } catch (e) {
-      console.log('[transform-document-design] Could not embed header image:', e);
-    }
+    console.log('[transform-document-design] SKIPPED header image (too CPU intensive) - using default header');
   }
 
-  // Embed footer image ONCE if template has one
-  let embeddedFooterImage: any = null;
+  const embeddedFooterImage: any = null;
   let footerHeight = 40;
   if (elements.footer?.image_base64) {
-    try {
-      const bytes = fastBase64ToBytes(elements.footer.image_base64);
-      embeddedFooterImage = await pdfDoc.embedPng(bytes);
-      footerHeight = elements.footer.image_height || 30;
-      console.log('[transform-document-design] Embedded footer image once');
-    } catch (e) {
-      console.log('[transform-document-design] Could not embed footer image:', e);
-    }
+    console.log('[transform-document-design] SKIPPED footer image (too CPU intensive) - using default footer');
   }
 
   // DISABLED: Full content page images cause CPU timeout due to large size
-  // Skip embedding content_page background to avoid CPU limits
-  // Users should use separate header/footer elements instead
   const embeddedContentPageImage: any = null;
   if (elements.content_page?.image_base64) {
-    console.log('[transform-document-design] SKIPPED content_page full design (too CPU intensive) - use header/footer instead');
+    console.log('[transform-document-design] SKIPPED content_page full design (too CPU intensive)');
   }
 
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
