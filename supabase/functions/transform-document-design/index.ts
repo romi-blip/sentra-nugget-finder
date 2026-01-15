@@ -1316,16 +1316,12 @@ async function generatePDF(
     }
   }
 
-  // Embed content page image if template has one (full page design with header/footer included)
-  let embeddedContentPageImage: any = null;
+  // DISABLED: Full content page images cause CPU timeout due to large size
+  // Skip embedding content_page background to avoid CPU limits
+  // Users should use separate header/footer elements instead
+  const embeddedContentPageImage: any = null;
   if (elements.content_page?.image_base64) {
-    try {
-      const bytes = fastBase64ToBytes(elements.content_page.image_base64);
-      embeddedContentPageImage = await pdfDoc.embedPng(bytes);
-      console.log('[transform-document-design] Embedded content_page full design image');
-    } catch (e) {
-      console.log('[transform-document-design] Could not embed content_page image:', e);
-    }
+    console.log('[transform-document-design] SKIPPED content_page full design (too CPU intensive) - use header/footer instead');
   }
 
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
