@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Button } from '@/components/ui/button';
 import { ElementTemplate } from '@/hooks/useElementTemplates';
 
 interface PageLayoutEditorProps {
@@ -42,23 +43,36 @@ const getImageSrc = (element: ElementTemplate | null | undefined): string | null
   return null;
 };
 
+// Preset logo positions for common layouts
+const LOGO_PRESETS = {
+  headerLeft: { x: 15, y: 12, height: 24, label: 'Header Left' },
+  headerCenter: { x: 250, y: 12, height: 24, label: 'Header Center' },
+  topLeft: { x: 30, y: 30, height: 32, label: 'Top Left' },
+  coverCenter: { x: 50, y: 50, height: 40, label: 'Cover Center' },
+} as const;
+
 export function PageLayoutEditor({
   pageType,
   headerElement,
   footerElement,
   logoElement,
   backgroundElement,
-  logoPosition = { x: 50, y: 50 },
-  logoHeight = 32,
+  logoPosition = { x: 15, y: 12 },
+  logoHeight = 24,
   showLogo = true,
   onLogoHeightChange,
   onLogoPositionChange,
   editable = false,
 }: PageLayoutEditorProps) {
-  // A4 aspect ratio for preview (595 x 842 points, scaled down)
+  // A4 dimensions: 595 x 842 points
+  const PDF_WIDTH = 595;
+  const PDF_HEIGHT = 842;
   const PREVIEW_WIDTH = 280;
   const PREVIEW_HEIGHT = 396;
-  const SCALE = PREVIEW_WIDTH / 595;
+  const SCALE = PREVIEW_WIDTH / PDF_WIDTH;
+  
+  // Header zone height in PDF points (typical header area)
+  const HEADER_ZONE_PT = 42;
 
   const headerSrc = getImageSrc(headerElement);
   const footerSrc = getImageSrc(footerElement);
@@ -73,6 +87,20 @@ export function PageLayoutEditor({
   };
 
   const effectiveLogoHeight = logoHeight || defaultHeights[pageType];
+  
+  // Calculate logo aspect ratio from element template dimensions
+  const logoAspectRatio = logoElement?.image_width && logoElement?.image_height 
+    ? logoElement.image_width / logoElement.image_height 
+    : 4; // Default fallback aspect ratio
+  
+  const calculatedLogoWidth = Math.round(effectiveLogoHeight * logoAspectRatio);
+
+  // Apply preset position
+  const applyPreset = (preset: keyof typeof LOGO_PRESETS) => {
+    const p = LOGO_PRESETS[preset];
+    onLogoPositionChange?.({ x: p.x, y: p.y });
+    onLogoHeightChange?.(p.height);
+  };
 
   return (
     <Card className="overflow-hidden">
@@ -93,19 +121,19 @@ export function PageLayoutEditor({
             />
           )}
 
-          {/* Header Zone */}
+          {/* Header Zone Reference - shows where header bar is */}
           <div 
-            className="absolute top-0 left-0 right-0 border-b border-dashed border-muted-foreground/30 flex items-center justify-center"
-            style={{ height: 40 }}
+            className="absolute top-0 left-0 right-0 border-b border-dashed border-primary/40 flex items-center justify-center"
+            style={{ height: HEADER_ZONE_PT * SCALE }}
           >
             {headerSrc ? (
               <img
                 src={headerSrc}
                 alt="Header"
-                className="h-full object-contain"
+                className="h-full w-full object-cover"
               />
             ) : (
-              <span className="text-xs text-muted-foreground">Header Zone</span>
+              <span className="text-[9px] text-primary/60 font-medium">Header Zone ({HEADER_ZONE_PT}pt)</span>
             )}
           </div>
 
@@ -150,7 +178,7 @@ export function PageLayoutEditor({
             )}
           </div>
 
-          {/* Logo */}
+          {/* Logo - positioned using same coordinate system as PDF */}
           {showLogo && logoSrc && (
             <img
               src={logoSrc}
@@ -160,6 +188,7 @@ export function PageLayoutEditor({
                 left: logoPosition.x * SCALE,
                 top: logoPosition.y * SCALE,
                 height: effectiveLogoHeight * SCALE,
+                width: calculatedLogoWidth * SCALE,
                 objectFit: 'contain',
               }}
             />
@@ -190,10 +219,31 @@ export function PageLayoutEditor({
         {/* Logo Size Controls - Only show if editable */}
         {editable && showLogo && logoElement && (
           <div className="p-4 space-y-4 border-t">
+            {/* Preset Positions */}
+            <div className="space-y-2">
+              <Label className="text-sm">Quick Positions</Label>
+              <div className="flex flex-wrap gap-1">
+                {Object.entries(LOGO_PRESETS).map(([key, preset]) => (
+                  <Button
+                    key={key}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyPreset(key as keyof typeof LOGO_PRESETS)}
+                    className="text-xs h-7"
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Logo Size */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <Label className="text-sm">Logo Height</Label>
-                <span className="text-sm text-muted-foreground">{effectiveLogoHeight}px</span>
+                <span className="text-sm text-muted-foreground">
+                  {effectiveLogoHeight}pt → {calculatedLogoWidth}pt wide
+                </span>
               </div>
               <Slider
                 value={[effectiveLogoHeight]}
@@ -203,11 +253,9 @@ export function PageLayoutEditor({
                 step={2}
                 className="w-full"
               />
-              <p className="text-xs text-muted-foreground">
-                Adjust the display height of the logo in the PDF. The logo is stored at high resolution for crisp rendering at any size.
-              </p>
             </div>
             
+            {/* Position Controls */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
@@ -218,26 +266,30 @@ export function PageLayoutEditor({
                   value={[logoPosition.x]}
                   onValueChange={(value) => onLogoPositionChange?.({ ...logoPosition, x: value[0] })}
                   min={10}
-                  max={500}
+                  max={450}
                   step={5}
                   className="w-full"
                 />
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <Label className="text-sm">Y Position</Label>
+                  <Label className="text-sm">Y Position (from top)</Label>
                   <span className="text-sm text-muted-foreground">{logoPosition.y}pt</span>
                 </div>
                 <Slider
                   value={[logoPosition.y]}
                   onValueChange={(value) => onLogoPositionChange?.({ ...logoPosition, y: value[0] })}
                   min={5}
-                  max={100}
+                  max={80}
                   step={2}
                   className="w-full"
                 />
               </div>
             </div>
+            
+            <p className="text-xs text-muted-foreground">
+              Position is in PDF points from top-left. For header bar placement, use Y ≈ 10-15pt.
+            </p>
           </div>
         )}
       </CardContent>

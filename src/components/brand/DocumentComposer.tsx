@@ -407,10 +407,24 @@ export function DocumentComposer() {
                       {currentLayout?.show_logo !== false && currentLayout?.logo_element_id && (
                         <>
                           <div>
+                            <Label>Logo Height (pt)</Label>
+                            <Input
+                              type="number"
+                              defaultValue={currentLayout?.logo_height ?? 24}
+                              key={`logo-height-${currentLayout?.id}`}
+                              min={16}
+                              max={64}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val) && val >= 16 && val <= 64) handleLayoutChange('logo_height', val);
+                              }}
+                            />
+                          </div>
+                          <div>
                             <Label>Logo X Position (pt)</Label>
                             <Input
                               type="number"
-                              defaultValue={currentLayout?.logo_position_x ?? 50}
+                              defaultValue={currentLayout?.logo_position_x ?? 15}
                               key={`logo-x-${currentLayout?.id}`}
                               onBlur={(e) => {
                                 const val = parseInt(e.target.value);
@@ -419,10 +433,10 @@ export function DocumentComposer() {
                             />
                           </div>
                           <div>
-                            <Label>Logo Y Position (pt)</Label>
+                            <Label>Logo Y Position (pt from top)</Label>
                             <Input
                               type="number"
-                              defaultValue={currentLayout?.logo_position_y ?? 50}
+                              defaultValue={currentLayout?.logo_position_y ?? 12}
                               key={`logo-y-${currentLayout?.id}`}
                               onBlur={(e) => {
                                 const val = parseInt(e.target.value);
