@@ -10,10 +10,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Memory limits for images - severely reduced to prevent CPU timeout
-const MAX_IMAGE_SIZE = 300 * 1024; // 300KB per image (was 1MB)
-const MAX_TOTAL_IMAGE_SIZE = 1 * 1024 * 1024; // 1MB total (was 5MB)
-const MAX_COVER_IMAGE_SIZE = 500 * 1024; // 500KB max for cover background
+// Memory limits for images
+const MAX_IMAGE_SIZE = 500 * 1024; // 500KB per image
+const MAX_TOTAL_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB total
+const MAX_COVER_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB max for cover background (increased for optimized images)
 
 // Fast base64 to Uint8Array conversion using Deno's built-in decoder
 function fastBase64ToBytes(base64: string): Uint8Array {

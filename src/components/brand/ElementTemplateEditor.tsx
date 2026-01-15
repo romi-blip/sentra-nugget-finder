@@ -41,14 +41,33 @@ interface SvgConversionResult {
   pngDataUrl: string;
   width: number;
   height: number;
+  fileSizeKB: number;
 }
 
-// High-resolution scale factor for crisp PDF rendering
-const SVG_RENDER_SCALE = 3;
+// Full-page element types that don't need high resolution (saves ~75% file size)
+const FULL_PAGE_ELEMENT_TYPES = ['cover_background', 'content_page'];
 
-// Render SVG to PNG using canvas and extract dimensions
-// Uses 3x scale factor to ensure crisp rendering in PDFs
-async function renderSvgToPng(svgContent: string): Promise<SvgConversionResult> {
+// Get appropriate scale factor based on element type
+// Full-page backgrounds use 1x (lower resolution is fine), small elements use 3x for crispness
+function getScaleForElementType(elementType: string): number {
+  if (FULL_PAGE_ELEMENT_TYPES.includes(elementType)) {
+    return 1; // 1x for full-page backgrounds
+  }
+  return 3; // 3x for logos, headers, etc.
+}
+
+// Max recommended file size for images (warn user if exceeded)
+const MAX_RECOMMENDED_SIZE_KB = 800;
+
+// Render SVG to PNG (or JPEG for large backgrounds) using canvas and extract dimensions
+async function renderSvgToPng(
+  svgContent: string, 
+  elementType: string = 'header',
+  useJpegForLarge: boolean = true
+): Promise<SvgConversionResult> {
+  const scale = getScaleForElementType(elementType);
+  const isFullPage = FULL_PAGE_ELEMENT_TYPES.includes(elementType);
+  
   return new Promise((resolve, reject) => {
     try {
       // Parse the SVG to extract/set dimensions
@@ -106,20 +125,34 @@ async function renderSvgToPng(svgContent: string): Promise<SvgConversionResult> 
       const dataUrl = `data:image/svg+xml;base64,${base64}`;
 
       img.onload = () => {
-        // Render at 3x resolution for crisp PDF output
-        const renderWidth = Math.round((img.width || width) * SVG_RENDER_SCALE);
-        const renderHeight = Math.round((img.height || height) * SVG_RENDER_SCALE);
+        // Render at appropriate resolution based on element type
+        const renderWidth = Math.round((img.width || width) * scale);
+        const renderHeight = Math.round((img.height || height) * scale);
         
         canvas.width = renderWidth;
         canvas.height = renderHeight;
         
         // Scale the context to draw at higher resolution
-        ctx.scale(SVG_RENDER_SCALE, SVG_RENDER_SCALE);
+        ctx.scale(scale, scale);
         ctx.drawImage(img, 0, 0, img.width || width, img.height || height);
         
-        const pngDataUrl = canvas.toDataURL('image/png');
-        // Return original dimensions (not scaled) - the PNG is high-res but dimensions stay the same
-        resolve({ pngDataUrl, width, height });
+        // For full-page backgrounds, use JPEG with compression to reduce file size
+        let outputDataUrl: string;
+        if (isFullPage && useJpegForLarge) {
+          // Use JPEG with 85% quality for backgrounds - saves ~70% file size
+          outputDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        } else {
+          outputDataUrl = canvas.toDataURL('image/png');
+        }
+        
+        // Calculate approximate file size from base64
+        const base64Data = outputDataUrl.split(',')[1] || '';
+        const fileSizeKB = Math.round((base64Data.length * 0.75) / 1024);
+        
+        console.log(`[SVG Conversion] Type: ${elementType}, Scale: ${scale}x, Format: ${isFullPage ? 'JPEG' : 'PNG'}, Size: ${fileSizeKB}KB`);
+        
+        // Return original dimensions (not scaled) - the output is high-res but dimensions stay the same
+        resolve({ pngDataUrl: outputDataUrl, width, height, fileSizeKB });
       };
 
       img.onerror = (e) => {
@@ -174,12 +207,17 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
     try {
       if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
         const svgContent = await file.text();
-        const result = await renderSvgToPng(svgContent);
+        const result = await renderSvgToPng(svgContent, template.element_type);
         setUploadedImage(result.pngDataUrl);
         setExtractedWidth(result.width);
         setExtractedHeight(result.height);
         setSvgCode(svgContent);
-        toast({ title: `SVG converted (${result.width}x${result.height}px)` });
+        
+        // Show file size warning if large
+        const sizeMsg = result.fileSizeKB > MAX_RECOMMENDED_SIZE_KB 
+          ? ` ⚠️ Large file (${result.fileSizeKB}KB)` 
+          : ` (${result.fileSizeKB}KB)`;
+        toast({ title: `SVG converted (${result.width}x${result.height}px)${sizeMsg}` });
       } else if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -190,7 +228,7 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
     } catch (error) {
       toast({ title: 'Failed to process image', variant: 'destructive' });
     }
-  }, []);
+  }, [template.element_type]);
 
   const handleSvgPaste = async () => {
     if (!svgCode.trim()) {
@@ -198,11 +236,16 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
       return;
     }
     try {
-      const result = await renderSvgToPng(svgCode);
+      const result = await renderSvgToPng(svgCode, template.element_type);
       setUploadedImage(result.pngDataUrl);
       setExtractedWidth(result.width);
       setExtractedHeight(result.height);
-      toast({ title: `SVG converted (${result.width}x${result.height}px)` });
+      
+      // Show file size warning if large
+      const sizeMsg = result.fileSizeKB > MAX_RECOMMENDED_SIZE_KB 
+        ? ` ⚠️ Large file (${result.fileSizeKB}KB)` 
+        : ` (${result.fileSizeKB}KB)`;
+      toast({ title: `SVG converted (${result.width}x${result.height}px)${sizeMsg}` });
     } catch (error) {
       toast({ title: 'Failed to convert SVG', variant: 'destructive' });
     }
@@ -542,12 +585,17 @@ export function ElementTemplateEditor() {
     try {
       if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
         const svgContent = await file.text();
-        const result = await renderSvgToPng(svgContent);
+        const result = await renderSvgToPng(svgContent, selectedType);
         setUploadedImage(result.pngDataUrl);
         setExtractedWidth(result.width);
         setExtractedHeight(result.height);
         setSvgCode(svgContent);
-        toast({ title: `SVG converted (${result.width}x${result.height}px)` });
+        
+        // Show file size warning if large
+        const sizeMsg = result.fileSizeKB > MAX_RECOMMENDED_SIZE_KB 
+          ? ` ⚠️ Large file (${result.fileSizeKB}KB)` 
+          : ` (${result.fileSizeKB}KB)`;
+        toast({ title: `SVG converted (${result.width}x${result.height}px)${sizeMsg}` });
       } else if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -560,7 +608,7 @@ export function ElementTemplateEditor() {
     } catch (error) {
       toast({ title: 'Failed to process image', variant: 'destructive' });
     }
-  }, []);
+  }, [selectedType]);
 
   const handleSvgPaste = async () => {
     if (!svgCode.trim()) {
@@ -568,13 +616,18 @@ export function ElementTemplateEditor() {
       return;
     }
     try {
-      console.log('Converting SVG to PNG, SVG length:', svgCode.length);
-      const result = await renderSvgToPng(svgCode);
-      console.log('SVG conversion successful, dimensions:', result.width, 'x', result.height);
+      console.log('Converting SVG, type:', selectedType, ', SVG length:', svgCode.length);
+      const result = await renderSvgToPng(svgCode, selectedType);
+      console.log('SVG conversion successful, dimensions:', result.width, 'x', result.height, ', size:', result.fileSizeKB + 'KB');
       setUploadedImage(result.pngDataUrl);
       setExtractedWidth(result.width);
       setExtractedHeight(result.height);
-      toast({ title: `SVG converted (${result.width}x${result.height}px)` });
+      
+      // Show file size warning if large
+      const sizeMsg = result.fileSizeKB > MAX_RECOMMENDED_SIZE_KB 
+        ? ` ⚠️ Large file (${result.fileSizeKB}KB)` 
+        : ` (${result.fileSizeKB}KB)`;
+      toast({ title: `SVG converted (${result.width}x${result.height}px)${sizeMsg}` });
     } catch (error) {
       console.error('SVG conversion failed:', error);
       toast({ title: 'Failed to convert SVG: ' + (error instanceof Error ? error.message : 'Unknown error'), variant: 'destructive' });
