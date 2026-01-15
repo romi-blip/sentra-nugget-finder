@@ -305,8 +305,8 @@ export function DocumentComposer() {
                         </div>
                       )}
                       
-                      {/* Full Content Page Design - only for content pages */}
-                      {pageType === 'content' && (
+                      {/* Full Page Design - for TOC and content pages */}
+                      {(pageType === 'content' || pageType === 'toc') && (
                         <div className="col-span-full border-b pb-4 mb-2">
                           <Label className="text-base font-medium">Full Page Design</Label>
                           <p className="text-sm text-muted-foreground mb-2">
@@ -332,7 +332,7 @@ export function DocumentComposer() {
                       )}
 
                       {/* Only show header/footer selectors if no full page design is selected */}
-                      {!(pageType === 'content' && currentLayout?.content_page_element_id) && (
+                      {!((pageType === 'content' || pageType === 'toc') && currentLayout?.content_page_element_id) && (
                         <>
                           <div>
                             <Label>Header</Label>
