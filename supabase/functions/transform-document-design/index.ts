@@ -760,15 +760,22 @@ async function createCoverPageWithElements(
   // Draw logo on cover page if configured - use config height for sizing
   if (logoConfig?.show && logoImage) {
     const targetLogoHeight = logoConfig.height || 40;
-    const logoWidth = (logoImage.width / logoImage.height) * targetLogoHeight;
-    // Convert from top-based to bottom-based coordinates
+    const logoWidth = Math.round((logoImage.width / logoImage.height) * targetLogoHeight);
+    const logoX = Math.round(logoConfig.x);
+    const logoY = Math.round(height - logoConfig.y - targetLogoHeight);
+    
+    console.log(`[transform-document-design] COVER LOGO DEBUG:`);
+    console.log(`  - Logo image dimensions: ${logoImage.width}x${logoImage.height}`);
+    console.log(`  - Target height: ${targetLogoHeight}pt, Calculated width: ${logoWidth}pt`);
+    console.log(`  - Config position: x=${logoConfig.x}, y=${logoConfig.y} (from top)`);
+    console.log(`  - PDF position: x=${logoX}, y=${logoY} (from bottom)`);
+    
     page.drawImage(logoImage, {
-      x: logoConfig.x,
-      y: height - logoConfig.y - targetLogoHeight,
+      x: logoX,
+      y: logoY,
       width: logoWidth,
       height: targetLogoHeight,
     });
-    console.log(`[transform-document-design] Drew logo on cover at x=${logoConfig.x}, y=${logoConfig.y}, height=${targetLogoHeight}`);
   }
 
   // Draw title with element style
@@ -972,10 +979,17 @@ async function createContentPages(
       });
       // Logo can still be drawn on top if configured - use config height for sizing
       if (logoConfig?.show && logoImage) {
-        const targetLogoHeight = logoConfig.height || 32;
+        const targetLogoHeight = logoConfig.height || 24;
         const logoWidth = Math.round((logoImage.width / logoImage.height) * targetLogoHeight);
         const logoX = Math.round(logoConfig.x);
         const logoY = Math.round(pageHeight - logoConfig.y - targetLogoHeight);
+        
+        console.log(`[transform-document-design] CONTENT PAGE LOGO DEBUG:`);
+        console.log(`  - Logo image dimensions: ${logoImage.width}x${logoImage.height}`);
+        console.log(`  - Target height: ${targetLogoHeight}pt, Calculated width: ${logoWidth}pt`);
+        console.log(`  - Config position: x=${logoConfig.x}, y=${logoConfig.y} (from top)`);
+        console.log(`  - PDF position: x=${logoX}, y=${logoY} (from bottom)`);
+        
         page.drawImage(logoImage, {
           x: logoX,
           y: logoY,
