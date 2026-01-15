@@ -1793,6 +1793,7 @@ export type Database = {
           header_element_id: string | null
           id: string
           logo_element_id: string | null
+          logo_height: number | null
           logo_position_x: number | null
           logo_position_y: number | null
           page_type: string
@@ -1808,6 +1809,7 @@ export type Database = {
           header_element_id?: string | null
           id?: string
           logo_element_id?: string | null
+          logo_height?: number | null
           logo_position_x?: number | null
           logo_position_y?: number | null
           page_type: string
@@ -1823,6 +1825,7 @@ export type Database = {
           header_element_id?: string | null
           id?: string
           logo_element_id?: string | null
+          logo_height?: number | null
           logo_position_x?: number | null
           logo_position_y?: number | null
           page_type?: string

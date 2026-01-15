@@ -30,6 +30,7 @@ export interface PageLayout {
   logo_element_id: string | null;
   logo_position_x: number;
   logo_position_y: number;
+  logo_height: number;
   created_at: string;
   updated_at: string;
 }

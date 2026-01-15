@@ -569,20 +569,19 @@ function drawSentraLogo(page: any, x: number, y: number, scale: number = 1) {
 }
 
 // Draw header using pre-embedded image or default
-// logoOriginalHeight: The original height of the logo from the element template (used for proper scaling)
+// logoConfig.height: The target display height for the logo (from page layout settings)
 function drawHeaderElement(
   page: any, 
   embeddedHeaderImage: any | null,
   headerHeight: number,
   logoImage: any,
-  logoConfig: { show: boolean; x: number; y: number; } | null = null,
-  logoOriginalHeight: number = 24
+  logoConfig: { show: boolean; x: number; y: number; height?: number; } | null = null
 ) {
   const width = page.getWidth();
   const height = page.getHeight();
   
-  // Use original height from element template or default to 24
-  const targetLogoHeight = Math.min(logoOriginalHeight || 24, headerHeight - 8);
+  // Use config height or default to 24, capped by header height
+  const targetLogoHeight = Math.min(logoConfig?.height || 24, headerHeight - 8);
   
   if (embeddedHeaderImage) {
     page.drawImage(embeddedHeaderImage, {
@@ -698,7 +697,7 @@ function drawFooterElement(
 }
 
 // Create cover page with element templates
-// logoOriginalHeight: The original height of the logo from the element template (used for proper scaling)
+// logoConfig.height: The target display height for the logo (from page layout settings)
 async function createCoverPageWithElements(
   pdfDoc: any, 
   fonts: any, 
@@ -706,8 +705,7 @@ async function createCoverPageWithElements(
   coverTemplate: ElementTemplate | null,
   titleStyle: ElementTemplate | null,
   logoImage: any,
-  logoConfig: { show: boolean; x: number; y: number; } | null,
-  logoOriginalHeight: number = 40
+  logoConfig: { show: boolean; x: number; y: number; height?: number; } | null
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
@@ -759,9 +757,9 @@ async function createCoverPageWithElements(
     drawFooterBar(page);
   }
 
-  // Draw logo on cover page if configured - use original dimensions for crisp rendering
+  // Draw logo on cover page if configured - use config height for sizing
   if (logoConfig?.show && logoImage) {
-    const targetLogoHeight = logoOriginalHeight || 40;
+    const targetLogoHeight = logoConfig.height || 40;
     const logoWidth = (logoImage.width / logoImage.height) * targetLogoHeight;
     // Convert from top-based to bottom-based coordinates
     page.drawImage(logoImage, {
@@ -804,15 +802,14 @@ function createTOCPage(
   headerHeight: number,
   embeddedFooterImage: any | null,
   footerHeight: number,
-  logoConfig: { show: boolean; x: number; y: number; } | null = null,
-  logoOriginalHeight: number = 24
+  logoConfig: { show: boolean; x: number; y: number; height?: number; } | null = null
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
   const height = page.getHeight();
   const margin = 50;
 
-  const actualHeaderHeight = drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage, logoConfig, logoOriginalHeight);
+  const actualHeaderHeight = drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
 
   const titleY = height - actualHeaderHeight - 40;
   page.drawText('Table of ', {
@@ -914,7 +911,7 @@ function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry
 }
 
 // Create content pages with element templates - now with image support
-// logoOriginalHeight: The original height of the logo from the element template (used for proper scaling)
+// logoConfig.height: The target display height for the logo (from page layout settings)
 async function createContentPages(
   pdfDoc: any, 
   fonts: any, 
@@ -932,9 +929,8 @@ async function createContentPages(
     paragraph?: ElementTemplate | null;
     bullet?: ElementTemplate | null;
   },
-  logoConfig: { show: boolean; x: number; y: number; } | null = null,
-  embeddedContentPageImage: any | null = null,
-  logoOriginalHeight: number = 32
+  logoConfig: { show: boolean; x: number; y: number; height?: number; } | null = null,
+  embeddedContentPageImage: any | null = null
 ) {
   // Limit sections to prevent CPU timeout
   const MAX_SECTIONS = 100;
@@ -974,9 +970,9 @@ async function createContentPages(
         width: pageWidth,
         height: pageHeight,
       });
-      // Logo can still be drawn on top if configured - use original dimensions for crisp rendering
+      // Logo can still be drawn on top if configured - use config height for sizing
       if (logoConfig?.show && logoImage) {
-        const targetLogoHeight = logoOriginalHeight || 32;
+        const targetLogoHeight = logoConfig.height || 32;
         const logoWidth = Math.round((logoImage.width / logoImage.height) * targetLogoHeight);
         const logoX = Math.round(logoConfig.x);
         const logoY = Math.round(pageHeight - logoConfig.y - targetLogoHeight);
@@ -989,7 +985,7 @@ async function createContentPages(
       }
     } else {
       // Draw separate header element
-      drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage, logoConfig, logoOriginalHeight);
+      drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
     }
   };
 
@@ -1268,9 +1264,9 @@ async function generatePDF(
     bullet?: ElementTemplate | null;
   },
   layoutConfig: {
-    cover?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
-    content?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
-    toc?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
+    cover?: { show_logo: boolean; logo_x: number; logo_y: number; logo_height?: number; } | null;
+    content?: { show_logo: boolean; logo_x: number; logo_y: number; logo_height?: number; } | null;
+    toc?: { show_logo: boolean; logo_x: number; logo_y: number; logo_height?: number; } | null;
   }
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
@@ -1351,29 +1347,31 @@ async function generatePDF(
     show: layoutConfig.cover.show_logo,
     x: layoutConfig.cover.logo_x,
     y: layoutConfig.cover.logo_y,
+    height: layoutConfig.cover.logo_height || 40,
   } : null;
   
   const contentLogoConfig = layoutConfig.content ? {
     show: layoutConfig.content.show_logo,
     x: layoutConfig.content.logo_x,
     y: layoutConfig.content.logo_y,
+    height: layoutConfig.content.logo_height || 24,
   } : null;
   
   const tocLogoConfig = layoutConfig.toc ? {
     show: layoutConfig.toc.show_logo,
     x: layoutConfig.toc.logo_x,
     y: layoutConfig.toc.logo_y,
+    height: layoutConfig.toc.logo_height || 24,
   } : contentLogoConfig; // Fallback TOC to content config
 
   // Get logo original height from element template for proper scaling
-  const logoOriginalHeight = elements.logo?.image_height || 32;
-  console.log(`[transform-document-design] Logo original height from template: ${logoOriginalHeight}`);
+  console.log(`[transform-document-design] Logo configs - cover: ${JSON.stringify(coverLogoConfig)}, content: ${JSON.stringify(contentLogoConfig)}, toc: ${JSON.stringify(tocLogoConfig)}`);
 
-  // Create cover page with logo (use larger height for cover)
-  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, logoImage, coverLogoConfig, Math.max(logoOriginalHeight, 40));
+  // Create cover page with logo (height comes from config)
+  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, logoImage, coverLogoConfig);
   
   // Create TOC page with logo
-  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, tocLogoConfig, logoOriginalHeight);
+  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, tocLogoConfig);
   
   // Create content pages with logo (pass content_page image if using full page design)
   await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, {
@@ -1382,7 +1380,7 @@ async function generatePDF(
     h3: elements.h3,
     paragraph: elements.paragraph,
     bullet: elements.bullet,
-  }, contentLogoConfig, embeddedContentPageImage, logoOriginalHeight);
+  }, contentLogoConfig, embeddedContentPageImage);
 
   return await pdfDoc.save();
 }
@@ -1623,30 +1621,33 @@ serve(async (req) => {
 
         console.log(`[transform-document-design] Layout mapping: cover=${coverLayout?.id || 'none'}, content=${contentLayout?.id || 'none'}, toc=${tocLayout?.id || 'none'}`);
 
-        // Build layout config for PDF generation with logo positions
+        // Build layout config for PDF generation with logo positions and heights
         if (coverLayout) {
           layoutConfigForPdf.cover = {
             show_logo: coverLayout.show_logo ?? true,
             logo_x: coverLayout.logo_position_x ?? 50,
             logo_y: coverLayout.logo_position_y ?? 50,
+            logo_height: coverLayout.logo_height ?? 40, // Larger default for cover
           };
-          console.log(`[transform-document-design] Cover logo config: show=${layoutConfigForPdf.cover.show_logo}, x=${layoutConfigForPdf.cover.logo_x}, y=${layoutConfigForPdf.cover.logo_y}`);
+          console.log(`[transform-document-design] Cover logo config: show=${layoutConfigForPdf.cover.show_logo}, x=${layoutConfigForPdf.cover.logo_x}, y=${layoutConfigForPdf.cover.logo_y}, height=${layoutConfigForPdf.cover.logo_height}`);
         }
         if (contentLayout) {
           layoutConfigForPdf.content = {
             show_logo: contentLayout.show_logo ?? true,
             logo_x: contentLayout.logo_position_x ?? 25,
             logo_y: contentLayout.logo_position_y ?? 8,
+            logo_height: contentLayout.logo_height ?? 24, // Smaller for content pages
           };
-          console.log(`[transform-document-design] Content logo config: show=${layoutConfigForPdf.content.show_logo}, x=${layoutConfigForPdf.content.logo_x}, y=${layoutConfigForPdf.content.logo_y}`);
+          console.log(`[transform-document-design] Content logo config: show=${layoutConfigForPdf.content.show_logo}, x=${layoutConfigForPdf.content.logo_x}, y=${layoutConfigForPdf.content.logo_y}, height=${layoutConfigForPdf.content.logo_height}`);
         }
         if (tocLayout) {
           layoutConfigForPdf.toc = {
             show_logo: tocLayout.show_logo ?? true,
             logo_x: tocLayout.logo_position_x ?? 25,
             logo_y: tocLayout.logo_position_y ?? 8,
+            logo_height: tocLayout.logo_height ?? 24,
           };
-          console.log(`[transform-document-design] TOC logo config: show=${layoutConfigForPdf.toc.show_logo}, x=${layoutConfigForPdf.toc.logo_x}, y=${layoutConfigForPdf.toc.logo_y}`);
+          console.log(`[transform-document-design] TOC logo config: show=${layoutConfigForPdf.toc.show_logo}, x=${layoutConfigForPdf.toc.logo_x}, y=${layoutConfigForPdf.toc.logo_y}, height=${layoutConfigForPdf.toc.logo_height}`);
         }
 
         // Cover page elements
