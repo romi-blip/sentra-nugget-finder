@@ -473,7 +473,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
         <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Left sidebar - Page thumbnails */}
-          <div className="w-64 min-w-64 border-r flex flex-col shrink-0 overflow-hidden">
+          <div className="w-72 min-w-72 border-r flex flex-col shrink-0">
             <div className="p-3 border-b bg-muted/30">
               <h3 className="font-semibold text-sm">Pages</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
