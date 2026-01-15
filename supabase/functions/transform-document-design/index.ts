@@ -10,9 +10,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Memory limits for images - reduced for faster processing
-const MAX_IMAGE_SIZE = 1 * 1024 * 1024; // 1MB per image
-const MAX_TOTAL_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB total
+// Memory limits for images - severely reduced to prevent CPU timeout
+const MAX_IMAGE_SIZE = 300 * 1024; // 300KB per image (was 1MB)
+const MAX_TOTAL_IMAGE_SIZE = 1 * 1024 * 1024; // 1MB total (was 5MB)
+const MAX_COVER_IMAGE_SIZE = 500 * 1024; // 500KB max for cover background
 
 // Fast base64 to Uint8Array conversion using Deno's built-in decoder
 function fastBase64ToBytes(base64: string): Uint8Array {
@@ -713,26 +714,42 @@ async function createCoverPageWithElements(
   const height = page.getHeight();
   const margin = 50;
 
-  // Draw cover background if template has image (only used once, so OK for CPU)
+  // Draw cover background if template has image - check size first to prevent CPU timeout
   if (coverTemplate?.image_base64) {
-    try {
-      const bytes = fastBase64ToBytes(coverTemplate.image_base64);
-      const coverImage = await pdfDoc.embedPng(bytes);
-      
-      page.drawImage(coverImage, {
-        x: 0,
-        y: 0,
-        width: width,
-        height: height,
-      });
-      console.log('[transform-document-design] Embedded cover background');
-    } catch (e) {
-      console.log('[transform-document-design] Could not embed cover image:', e);
-      // Fallback to black background
+    const base64Size = coverTemplate.image_base64.length * 0.75; // Approximate bytes from base64
+    console.log(`[transform-document-design] Cover image size: ~${Math.round(base64Size / 1024)}KB`);
+    
+    if (base64Size > MAX_COVER_IMAGE_SIZE) {
+      console.log(`[transform-document-design] Cover image too large (${Math.round(base64Size / 1024)}KB > ${MAX_COVER_IMAGE_SIZE / 1024}KB) - using fallback`);
       page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
       drawSentraLogo(page, margin, height - 60, 1);
       page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
       drawFooterBar(page);
+    } else {
+      try {
+        const bytes = fastBase64ToBytes(coverTemplate.image_base64);
+        // Try PNG first, fallback to JPG
+        let coverImage;
+        try {
+          coverImage = await pdfDoc.embedPng(bytes);
+        } catch {
+          coverImage = await pdfDoc.embedJpg(bytes);
+        }
+        
+        page.drawImage(coverImage, {
+          x: 0,
+          y: 0,
+          width: width,
+          height: height,
+        });
+        console.log('[transform-document-design] Embedded cover background');
+      } catch (e) {
+        console.log('[transform-document-design] Could not embed cover image:', e);
+        page.drawRectangle({ x: 0, y: 0, width, height, color: COLORS.black });
+        drawSentraLogo(page, margin, height - 60, 1);
+        page.drawText('Sentra', { x: margin + 50, y: height - 75, size: 20, font: fonts.bold, color: COLORS.lightText });
+        drawFooterBar(page);
+      }
     }
   } else {
     // Default black cover
