@@ -305,45 +305,76 @@ export function DocumentComposer() {
                         </div>
                       )}
                       
-                      <div>
-                        <Label>Header</Label>
-                        <Select
-                          value={currentLayout?.header_element_id || 'none'}
-                          onValueChange={(v) => handleLayoutChange('header_element_id', v === 'none' ? null : v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select header" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {visualElements
-                              .filter(e => e.element_type === 'header')
-                              .map(e => (
-                                <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div>
-                        <Label>Footer</Label>
-                        <Select
-                          value={currentLayout?.footer_element_id || 'none'}
-                          onValueChange={(v) => handleLayoutChange('footer_element_id', v === 'none' ? null : v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select footer" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {visualElements
-                              .filter(e => e.element_type === 'footer')
-                              .map(e => (
-                                <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {/* Full Content Page Design - only for content pages */}
+                      {pageType === 'content' && (
+                        <div className="col-span-full border-b pb-4 mb-2">
+                          <Label className="text-base font-medium">Full Page Design</Label>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Use a pre-designed page that includes header and footer
+                          </p>
+                          <Select
+                            value={currentLayout?.content_page_element_id || 'none'}
+                            onValueChange={(v) => handleLayoutChange('content_page_element_id', v === 'none' ? null : v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select full page design" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None (use separate header/footer)</SelectItem>
+                              {visualElements
+                                .filter(e => e.element_type === 'content_page')
+                                .map(e => (
+                                  <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {/* Only show header/footer selectors if no full page design is selected */}
+                      {!(pageType === 'content' && currentLayout?.content_page_element_id) && (
+                        <>
+                          <div>
+                            <Label>Header</Label>
+                            <Select
+                              value={currentLayout?.header_element_id || 'none'}
+                              onValueChange={(v) => handleLayoutChange('header_element_id', v === 'none' ? null : v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select header" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {visualElements
+                                  .filter(e => e.element_type === 'header')
+                                  .map(e => (
+                                    <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label>Footer</Label>
+                            <Select
+                              value={currentLayout?.footer_element_id || 'none'}
+                              onValueChange={(v) => handleLayoutChange('footer_element_id', v === 'none' ? null : v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select footer" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {visualElements
+                                  .filter(e => e.element_type === 'footer')
+                                  .map(e => (
+                                    <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
                       
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">

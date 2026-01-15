@@ -25,6 +25,7 @@ export interface PageLayout {
   background_element_id: string | null;
   header_element_id: string | null;
   footer_element_id: string | null;
+  content_page_element_id: string | null;
   show_logo: boolean;
   logo_element_id: string | null;
   logo_position_x: number;
