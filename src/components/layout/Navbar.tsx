@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Settings, LogOut, Palette, BarChart3 } from 'lucide-react';
+import { Settings, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   onOpenSettings: () => void;
@@ -55,24 +55,6 @@ const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
                   Settings
                 </Link>
               </div>
-            )}
-            {user && (hasRole('admin') || hasRole('super_admin') || hasRole('marketing')) && (
-              <>
-                <Link 
-                  to="/brand-designer" 
-                  className="flex items-center gap-1.5 text-sm font-medium transition-colors hover:text-primary"
-                >
-                  <Palette className="h-4 w-4" />
-                  Brand Designer
-                </Link>
-                <Link 
-                  to="/llm-ranking" 
-                  className="flex items-center gap-1.5 text-sm font-medium transition-colors hover:text-primary"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  LLM Ranking
-                </Link>
-              </>
             )}
           </div>
 
