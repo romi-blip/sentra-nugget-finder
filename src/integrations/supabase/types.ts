@@ -1787,6 +1787,7 @@ export type Database = {
       page_layouts: {
         Row: {
           background_element_id: string | null
+          content_page_element_id: string | null
           created_at: string | null
           footer_element_id: string | null
           header_element_id: string | null
@@ -1801,6 +1802,7 @@ export type Database = {
         }
         Insert: {
           background_element_id?: string | null
+          content_page_element_id?: string | null
           created_at?: string | null
           footer_element_id?: string | null
           header_element_id?: string | null
@@ -1815,6 +1817,7 @@ export type Database = {
         }
         Update: {
           background_element_id?: string | null
+          content_page_element_id?: string | null
           created_at?: string | null
           footer_element_id?: string | null
           header_element_id?: string | null
@@ -1831,6 +1834,13 @@ export type Database = {
           {
             foreignKeyName: "page_layouts_background_element_id_fkey"
             columns: ["background_element_id"]
+            isOneToOne: false
+            referencedRelation: "element_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_layouts_content_page_element_id_fkey"
+            columns: ["content_page_element_id"]
             isOneToOne: false
             referencedRelation: "element_templates"
             referencedColumns: ["id"]

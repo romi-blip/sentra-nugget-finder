@@ -909,7 +909,8 @@ async function createContentPages(
     paragraph?: ElementTemplate | null;
     bullet?: ElementTemplate | null;
   },
-  logoConfig: { show: boolean; x: number; y: number; } | null = null
+  logoConfig: { show: boolean; x: number; y: number; } | null = null,
+  embeddedContentPageImage: any | null = null
 ) {
   let currentPage = pdfDoc.addPage([595, 842]);
   const pageWidth = currentPage.getWidth();
@@ -917,23 +918,57 @@ async function createContentPages(
   const margin = 50;
   const contentWidth = pageWidth - margin * 2;
   
-  let y = pageHeight - headerHeight - 25;
-  const minY = footerHeight + 20;
+  // If using full content page design, adjust header/footer heights to account for the design
+  const effectiveHeaderHeight = embeddedContentPageImage ? 42 : headerHeight; // Full page design has header included
+  const effectiveFooterHeight = embeddedContentPageImage ? 50 : footerHeight; // Full page design has footer included
+  
+  let y = pageHeight - effectiveHeaderHeight - 25;
+  const minY = effectiveFooterHeight + 20;
   let pageNumber = 2;
   let hasContent = false;
 
   // Cache for embedded images to avoid re-embedding duplicates
   const embeddedImageCache = new Map<string, any>();
 
-  // Draw header on first page with logo config
-  drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
+  // Helper to draw page background (either full content page design or separate header/footer)
+  const drawPageBackground = (page: any) => {
+    if (embeddedContentPageImage) {
+      // Draw full page design as background
+      page.drawImage(embeddedContentPageImage, {
+        x: 0,
+        y: 0,
+        width: pageWidth,
+        height: pageHeight,
+      });
+      // Logo can still be drawn on top if configured
+      if (logoConfig?.show && logoImage) {
+        const logoHeight = 24;
+        const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
+        page.drawImage(logoImage, {
+          x: logoConfig.x,
+          y: pageHeight - logoConfig.y - logoHeight,
+          width: logoWidth,
+          height: logoHeight,
+        });
+      }
+    } else {
+      // Draw separate header element
+      drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
+    }
+  };
+
+  // Draw background on first page
+  drawPageBackground(currentPage);
 
   const addNewPage = () => {
-    drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
+    // Draw footer on current page (only if not using full page design)
+    if (!embeddedContentPageImage) {
+      drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
+    }
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 842]);
-    drawHeaderElement(currentPage, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
-    y = pageHeight - headerHeight - 25;
+    drawPageBackground(currentPage);
+    y = pageHeight - effectiveHeaderHeight - 25;
     hasContent = false;
   };
 
@@ -1152,7 +1187,10 @@ async function createContentPages(
     }
   }
 
-  drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
+  // Draw footer on last page (only if not using full page design)
+  if (!embeddedContentPageImage) {
+    drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
+  }
 }
 
 // Main PDF generation
@@ -1164,6 +1202,7 @@ async function generatePDF(
     header?: ElementTemplate | null;
     footer?: ElementTemplate | null;
     logo?: ElementTemplate | null;
+    content_page?: ElementTemplate | null;
     title?: ElementTemplate | null;
     h1?: ElementTemplate | null;
     h2?: ElementTemplate | null;
@@ -1253,6 +1292,23 @@ async function generatePDF(
     }
   }
 
+  // Embed content page image if template has one (full page design with header/footer included)
+  let embeddedContentPageImage: any = null;
+  if (elements.content_page?.image_base64) {
+    try {
+      const base64Data = elements.content_page.image_base64.split(',')[1] || elements.content_page.image_base64;
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      embeddedContentPageImage = await pdfDoc.embedPng(bytes);
+      console.log('[transform-document-design] Embedded content_page full design image');
+    } catch (e) {
+      console.log('[transform-document-design] Could not embed content_page image:', e);
+    }
+  }
+
   const tocEntries = generateTOCEntries(extractedDoc.sections, fonts);
 
   // Build logo configs for each page type
@@ -1280,14 +1336,14 @@ async function generatePDF(
   // Create TOC page with logo
   await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, tocLogoConfig);
   
-  // Create content pages with logo
+  // Create content pages with logo (pass content_page image if using full page design)
   await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, {
     h1: elements.h1,
     h2: elements.h2,
     h3: elements.h3,
     paragraph: elements.paragraph,
     bullet: elements.bullet,
-  }, contentLogoConfig);
+  }, contentLogoConfig, embeddedContentPageImage);
 
   return await pdfDoc.save();
 }
@@ -1394,6 +1450,7 @@ serve(async (req) => {
       header: null,
       footer: null,
       logo: null,
+      content_page: null,
       title: null,
       subtitle: null,
       h1: null,
@@ -1454,6 +1511,7 @@ serve(async (req) => {
           if (layout.header_element_id) elementIds.add(layout.header_element_id);
           if (layout.footer_element_id) elementIds.add(layout.footer_element_id);
           if (layout.logo_element_id) elementIds.add(layout.logo_element_id);
+          if (layout.content_page_element_id) elementIds.add(layout.content_page_element_id);
         }
       }
 
@@ -1567,7 +1625,11 @@ serve(async (req) => {
           console.log(`[transform-document-design] ✓ logo from content layout: "${elements.logo.name}"`);
         }
 
-        // Content page elements (header/footer for content pages)
+        // Content page elements (header/footer for content pages, or full page design)
+        if (contentLayout?.content_page_element_id && templateById[contentLayout.content_page_element_id]) {
+          elements.content_page = templateById[contentLayout.content_page_element_id];
+          console.log(`[transform-document-design] ✓ content_page from profile: "${elements.content_page.name}"`);
+        }
         if (contentLayout?.header_element_id && templateById[contentLayout.header_element_id]) {
           elements.header = templateById[contentLayout.header_element_id];
           console.log(`[transform-document-design] ✓ header from profile: "${elements.header.name}"`);
@@ -1667,6 +1729,7 @@ serve(async (req) => {
       header: elements['header'] || null,
       footer: elements['footer'] || null,
       logo: elements['logo'] || null,
+      content_page: elements['content_page'] || null,
       title: elements['title'] || null,
       h1: elements['h1'] || null,
       h2: elements['h2'] || null,

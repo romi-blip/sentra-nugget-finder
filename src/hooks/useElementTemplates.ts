@@ -6,6 +6,7 @@ export type ElementType =
   | 'footer' 
   | 'cover_background' 
   | 'logo'
+  | 'content_page'
   | 'title' 
   | 'subtitle' 
   | 'h1' 
@@ -192,7 +193,7 @@ export function useSetDefaultElementTemplate() {
 }
 
 // Visual element types that use image_base64
-export const VISUAL_ELEMENT_TYPES: ElementType[] = ['header', 'footer', 'cover_background', 'logo'];
+export const VISUAL_ELEMENT_TYPES: ElementType[] = ['header', 'footer', 'cover_background', 'logo', 'content_page'];
 
 // Text style element types
 export const TEXT_ELEMENT_TYPES: ElementType[] = ['title', 'subtitle', 'h1', 'h2', 'h3', 'paragraph', 'bullet', 'toc_entry', 'page_number'];
@@ -203,6 +204,7 @@ export const ELEMENT_TYPE_LABELS: Record<ElementType, string> = {
   footer: 'Footer',
   cover_background: 'Cover Background',
   logo: 'Logo',
+  content_page: 'Full Content Page',
   title: 'Document Title',
   subtitle: 'Subtitle',
   h1: 'Heading 1',
