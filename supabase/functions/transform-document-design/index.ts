@@ -942,11 +942,14 @@ async function createContentPages(
       });
       // Logo can still be drawn on top if configured
       if (logoConfig?.show && logoImage) {
-        const logoHeight = 24;
-        const logoWidth = (logoImage.width / logoImage.height) * logoHeight;
+        // Use larger logo size for better quality rendering
+        const logoHeight = 32;
+        const logoWidth = Math.round((logoImage.width / logoImage.height) * logoHeight);
+        const logoX = Math.round(logoConfig.x);
+        const logoY = Math.round(pageHeight - logoConfig.y - logoHeight);
         page.drawImage(logoImage, {
-          x: logoConfig.x,
-          y: pageHeight - logoConfig.y - logoHeight,
+          x: logoX,
+          y: logoY,
           width: logoWidth,
           height: logoHeight,
         });
