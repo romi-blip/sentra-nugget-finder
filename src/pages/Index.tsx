@@ -168,7 +168,7 @@ const Index = () => {
             )}
 
             {(hasRole('admin') || hasRole('super_admin') || hasRole('marketing')) && (
-              <Link to="/brand" className="block">
+              <Link to="/brand-designer" className="block">
                 <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
                   <CardHeader>
                     <Palette className="h-8 w-8 text-primary mb-2" />
