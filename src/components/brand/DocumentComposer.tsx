@@ -412,13 +412,14 @@ export function DocumentComposer() {
                               type="number"
                               defaultValue={currentLayout?.logo_height ?? 24}
                               key={`logo-height-${currentLayout?.id}`}
-                              min={16}
-                              max={64}
+                              min={8}
+                              max={80}
                               onBlur={(e) => {
                                 const val = parseInt(e.target.value);
-                                if (!isNaN(val) && val >= 16 && val <= 64) handleLayoutChange('logo_height', val);
+                                if (!isNaN(val) && val >= 8 && val <= 80) handleLayoutChange('logo_height', val);
                               }}
                             />
+                            <p className="text-xs text-muted-foreground mt-1">8-80pt range</p>
                           </div>
                           <div>
                             <Label>Logo X Position (pt)</Label>
