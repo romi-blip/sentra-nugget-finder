@@ -2,15 +2,29 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import JSZip from "npm:jszip@3.10.1";
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFRawStream } from "https://esm.sh/pdf-lib@1.17.1";
+import { decode as decodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Memory limits for images
-const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB per image
-const MAX_TOTAL_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB total
+// Memory limits for images - reduced for faster processing
+const MAX_IMAGE_SIZE = 1 * 1024 * 1024; // 1MB per image
+const MAX_TOTAL_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB total
+
+// Fast base64 to Uint8Array conversion using Deno's built-in decoder
+function fastBase64ToBytes(base64: string): Uint8Array {
+  // Remove data URL prefix if present
+  const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
+  return decodeBase64(cleanBase64);
+}
+
+// Fast Uint8Array to base64 conversion
+function fastBytesToBase64(bytes: Uint8Array): string {
+  return encodeBase64(bytes);
+}
 
 // Brand colors matching the reference template exactly
 const COLORS = {
@@ -247,12 +261,7 @@ async function extractDocxImages(zip: JSZip, relMap: Map<string, string>): Promi
 async function extractDocxContent(base64Content: string): Promise<ExtractedDocument> {
   console.log('[transform-document-design] Extracting content from DOCX');
   
-  const binaryString = atob(base64Content);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-
+  const bytes = fastBase64ToBytes(base64Content);
   const zip = await JSZip.loadAsync(bytes);
   
   // Extract image relationships and images
@@ -390,12 +399,7 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
 async function extractPdfContent(base64Content: string): Promise<ExtractedDocument> {
   console.log('[transform-document-design] Extracting content from PDF');
   
-  const binaryString = atob(base64Content);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  
+  const bytes = fastBase64ToBytes(base64Content);
   const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const pages = pdfDoc.getPages();
   
@@ -712,12 +716,7 @@ async function createCoverPageWithElements(
   // Draw cover background if template has image
   if (coverTemplate?.image_base64) {
     try {
-      const base64Data = coverTemplate.image_base64.split(',')[1] || coverTemplate.image_base64;
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      const bytes = fastBase64ToBytes(coverTemplate.image_base64);
       const coverImage = await pdfDoc.embedPng(bytes);
       
       page.drawImage(coverImage, {
@@ -1018,11 +1017,7 @@ async function createContentPages(
         let embeddedImg = embeddedImageCache.get(cacheKey);
         
         if (!embeddedImg) {
-          const binaryString = atob(section.imageBase64);
-          const imgBytes = new Uint8Array(binaryString.length);
-          for (let j = 0; j < binaryString.length; j++) {
-            imgBytes[j] = binaryString.charCodeAt(j);
-          }
+          const imgBytes = fastBase64ToBytes(section.imageBase64);
           
           // Embed based on type
           if (section.imageMimeType.includes('png')) {
@@ -1235,12 +1230,7 @@ async function generatePDF(
   let logoImage: any = null;
   if (elements.logo?.image_base64) {
     try {
-      const base64Data = elements.logo.image_base64.split(',')[1] || elements.logo.image_base64;
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      const bytes = fastBase64ToBytes(elements.logo.image_base64);
       // Try PNG first, then JPG
       try {
         logoImage = await pdfDoc.embedPng(bytes);
@@ -1268,12 +1258,7 @@ async function generatePDF(
   let headerHeight = 40;
   if (elements.header?.image_base64) {
     try {
-      const base64Data = elements.header.image_base64.split(',')[1] || elements.header.image_base64;
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      const bytes = fastBase64ToBytes(elements.header.image_base64);
       embeddedHeaderImage = await pdfDoc.embedPng(bytes);
       headerHeight = elements.header.image_height || 40;
       console.log('[transform-document-design] Embedded header image once');
@@ -1287,12 +1272,7 @@ async function generatePDF(
   let footerHeight = 40;
   if (elements.footer?.image_base64) {
     try {
-      const base64Data = elements.footer.image_base64.split(',')[1] || elements.footer.image_base64;
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      const bytes = fastBase64ToBytes(elements.footer.image_base64);
       embeddedFooterImage = await pdfDoc.embedPng(bytes);
       footerHeight = elements.footer.image_height || 30;
       console.log('[transform-document-design] Embedded footer image once');
@@ -1305,12 +1285,7 @@ async function generatePDF(
   let embeddedContentPageImage: any = null;
   if (elements.content_page?.image_base64) {
     try {
-      const base64Data = elements.content_page.image_base64.split(',')[1] || elements.content_page.image_base64;
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
+      const bytes = fastBase64ToBytes(elements.content_page.image_base64);
       embeddedContentPageImage = await pdfDoc.embedPng(bytes);
       console.log('[transform-document-design] Embedded content_page full design image');
     } catch (e) {
@@ -1751,14 +1726,8 @@ serve(async (req) => {
       bullet: elements['bullet'] || null,
     }, layoutConfigForPdf);
     
-    // Convert to base64 in chunks to avoid stack overflow with large arrays
-    let pdfBase64 = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < pdfBytes.length; i += chunkSize) {
-      const chunk = pdfBytes.subarray(i, Math.min(i + chunkSize, pdfBytes.length));
-      pdfBase64 += String.fromCharCode.apply(null, chunk as unknown as number[]);
-    }
-    pdfBase64 = btoa(pdfBase64);
+    // Convert to base64 using fast method
+    const pdfBase64 = fastBytesToBase64(pdfBytes);
 
     const outputFileName = (fileName || 'document').replace(/\.(docx|pdf)$/i, '_branded.pdf');
     
