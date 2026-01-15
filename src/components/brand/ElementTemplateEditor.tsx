@@ -43,7 +43,11 @@ interface SvgConversionResult {
   height: number;
 }
 
+// High-resolution scale factor for crisp PDF rendering
+const SVG_RENDER_SCALE = 3;
+
 // Render SVG to PNG using canvas and extract dimensions
+// Uses 3x scale factor to ensure crisp rendering in PDFs
 async function renderSvgToPng(svgContent: string): Promise<SvgConversionResult> {
   return new Promise((resolve, reject) => {
     try {
@@ -59,7 +63,7 @@ async function renderSvgToPng(svgContent: string): Promise<SvgConversionResult> 
         return;
       }
 
-      // Get or set dimensions
+      // Get or set dimensions (original/logical dimensions)
       let width = parseFloat(svgElement.getAttribute('width') || '0');
       let height = parseFloat(svgElement.getAttribute('height') || '0');
       
@@ -102,10 +106,19 @@ async function renderSvgToPng(svgContent: string): Promise<SvgConversionResult> 
       const dataUrl = `data:image/svg+xml;base64,${base64}`;
 
       img.onload = () => {
-        canvas.width = img.width || width;
-        canvas.height = img.height || height;
-        ctx.drawImage(img, 0, 0);
+        // Render at 3x resolution for crisp PDF output
+        const renderWidth = Math.round((img.width || width) * SVG_RENDER_SCALE);
+        const renderHeight = Math.round((img.height || height) * SVG_RENDER_SCALE);
+        
+        canvas.width = renderWidth;
+        canvas.height = renderHeight;
+        
+        // Scale the context to draw at higher resolution
+        ctx.scale(SVG_RENDER_SCALE, SVG_RENDER_SCALE);
+        ctx.drawImage(img, 0, 0, img.width || width, img.height || height);
+        
         const pngDataUrl = canvas.toDataURL('image/png');
+        // Return original dimensions (not scaled) - the PNG is high-res but dimensions stay the same
         resolve({ pngDataUrl, width, height });
       };
 
