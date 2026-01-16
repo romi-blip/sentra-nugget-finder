@@ -18,6 +18,8 @@ export interface DocumentProfile {
   updated_at: string;
 }
 
+export type FooterSectionType = 'none' | 'text' | 'page_number' | 'image';
+
 export interface PageLayout {
   id: string;
   profile_id: string;
@@ -31,6 +33,22 @@ export interface PageLayout {
   logo_position_x: number;
   logo_position_y: number;
   logo_height: number;
+  // Footer configuration
+  footer_show_separator: boolean;
+  footer_separator_color: string | null;
+  footer_separator_thickness: number;
+  footer_left_type: FooterSectionType;
+  footer_left_text: string | null;
+  footer_left_image_base64: string | null;
+  footer_left_image_mime: string | null;
+  footer_middle_type: FooterSectionType;
+  footer_middle_text: string | null;
+  footer_middle_image_base64: string | null;
+  footer_middle_image_mime: string | null;
+  footer_right_type: FooterSectionType;
+  footer_right_text: string | null;
+  footer_right_image_base64: string | null;
+  footer_right_image_mime: string | null;
   created_at: string;
   updated_at: string;
 }

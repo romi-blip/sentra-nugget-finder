@@ -7,11 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { Plus, Save, FileText, Layout, Type, Star, Trash2 } from 'lucide-react';
-import { useDocumentProfiles, usePageLayouts, useProfileTextStyles, useCreateDocumentProfile, useUpdateDocumentProfile, useUpsertPageLayout, useUpsertPageTextStyle, useSetDefaultProfile, useDeleteDocumentProfile, DocumentProfile, PageLayout, PageTextStyle } from '@/hooks/useDocumentProfiles';
+import { Plus, Save, FileText, Layout, Type, Star, Trash2, Minus } from 'lucide-react';
+import { useDocumentProfiles, usePageLayouts, useProfileTextStyles, useCreateDocumentProfile, useUpdateDocumentProfile, useUpsertPageLayout, useUpsertPageTextStyle, useSetDefaultProfile, useDeleteDocumentProfile, DocumentProfile, PageLayout, PageTextStyle, FooterSectionType } from '@/hooks/useDocumentProfiles';
 import { useElementTemplates, ElementTemplate, VISUAL_ELEMENT_TYPES, TEXT_ELEMENT_TYPES, ELEMENT_TYPE_LABELS } from '@/hooks/useElementTemplates';
 import { PageLayoutEditor } from './PageLayoutEditor';
 import { DocumentPreview } from './DocumentPreview';
+import { FooterConfigSection, FooterSectionConfig } from './FooterConfigSection';
 
 const PAGE_TYPES = ['cover', 'toc', 'content'] as const;
 const PAGE_TYPE_LABELS: Record<typeof PAGE_TYPES[number], string> = {
@@ -450,6 +451,108 @@ export function DocumentComposer() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Footer Configuration - only for TOC and Content pages */}
+                {(pageType === 'toc' || pageType === 'content') && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Minus className="h-5 w-5" />
+                        Footer Configuration
+                      </CardTitle>
+                      <CardDescription>
+                        Configure footer sections with text, page numbers, or images
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Separator Line Options */}
+                      <div className="flex items-center gap-4 p-3 border rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={currentLayout?.footer_show_separator ?? false}
+                            onCheckedChange={(checked) => handleLayoutChange('footer_show_separator', checked)}
+                          />
+                          <Label>Show separator line</Label>
+                        </div>
+                        
+                        {currentLayout?.footer_show_separator && (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-sm">Color:</Label>
+                              <Input
+                                type="color"
+                                value={currentLayout?.footer_separator_color || '#CCCCCC'}
+                                onChange={(e) => handleLayoutChange('footer_separator_color', e.target.value)}
+                                className="w-12 h-8 p-1 cursor-pointer"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-sm">Thickness:</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={5}
+                                value={currentLayout?.footer_separator_thickness ?? 1}
+                                onChange={(e) => handleLayoutChange('footer_separator_thickness', parseInt(e.target.value) || 1)}
+                                className="w-16"
+                              />
+                              <span className="text-sm text-muted-foreground">pt</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Three-column footer sections */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FooterConfigSection
+                          label="Left Section"
+                          config={{
+                            type: (currentLayout?.footer_left_type as FooterSectionType) || 'none',
+                            text: currentLayout?.footer_left_text,
+                            imageBase64: currentLayout?.footer_left_image_base64,
+                            imageMime: currentLayout?.footer_left_image_mime,
+                          }}
+                          onChange={(config) => {
+                            handleLayoutChange('footer_left_type', config.type);
+                            handleLayoutChange('footer_left_text', config.text || null);
+                            handleLayoutChange('footer_left_image_base64', config.imageBase64 || null);
+                            handleLayoutChange('footer_left_image_mime', config.imageMime || null);
+                          }}
+                        />
+                        <FooterConfigSection
+                          label="Middle Section"
+                          config={{
+                            type: (currentLayout?.footer_middle_type as FooterSectionType) || 'none',
+                            text: currentLayout?.footer_middle_text,
+                            imageBase64: currentLayout?.footer_middle_image_base64,
+                            imageMime: currentLayout?.footer_middle_image_mime,
+                          }}
+                          onChange={(config) => {
+                            handleLayoutChange('footer_middle_type', config.type);
+                            handleLayoutChange('footer_middle_text', config.text || null);
+                            handleLayoutChange('footer_middle_image_base64', config.imageBase64 || null);
+                            handleLayoutChange('footer_middle_image_mime', config.imageMime || null);
+                          }}
+                        />
+                        <FooterConfigSection
+                          label="Right Section"
+                          config={{
+                            type: (currentLayout?.footer_right_type as FooterSectionType) || 'none',
+                            text: currentLayout?.footer_right_text,
+                            imageBase64: currentLayout?.footer_right_image_base64,
+                            imageMime: currentLayout?.footer_right_image_mime,
+                          }}
+                          onChange={(config) => {
+                            handleLayoutChange('footer_right_type', config.type);
+                            handleLayoutChange('footer_right_text', config.text || null);
+                            handleLayoutChange('footer_right_image_base64', config.imageBase64 || null);
+                            handleLayoutChange('footer_right_image_mime', config.imageMime || null);
+                          }}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Text Styles Assignment */}
                 <Card>
