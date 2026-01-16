@@ -1,11 +1,33 @@
 import { supabase } from "@/integrations/supabase/client";
 import { DocumentMetadata, TOCItem, ContentSection } from "@/lib/documentTemplates";
 
+export type FooterSectionType = 'none' | 'text' | 'page_number' | 'image';
+
+export interface FooterConfig {
+  showSeparator: boolean;
+  separatorColor: string;
+  separatorThickness: number;
+  leftType: FooterSectionType;
+  leftText?: string | null;
+  leftImageBase64?: string | null;
+  leftImageMime?: string | null;
+  middleType: FooterSectionType;
+  middleText?: string | null;
+  middleImageBase64?: string | null;
+  middleImageMime?: string | null;
+  rightType: FooterSectionType;
+  rightText?: string | null;
+  rightImageBase64?: string | null;
+  rightImageMime?: string | null;
+}
+
 export interface GenerateDocumentParams {
   metadata: DocumentMetadata;
   tableOfContents: TOCItem[];
   sections: ContentSection[];
   logoBase64: string;
+  tocFooterConfig?: FooterConfig;
+  contentFooterConfig?: FooterConfig;
 }
 
 export interface GenerateDocumentResult {

@@ -79,11 +79,31 @@ interface ContentSection {
   imageCaption?: string;
 }
 
+interface FooterConfig {
+  showSeparator: boolean;
+  separatorColor: string;
+  separatorThickness: number;
+  leftType: 'none' | 'text' | 'page_number' | 'image';
+  leftText?: string | null;
+  leftImageBase64?: string | null;
+  leftImageMime?: string | null;
+  middleType: 'none' | 'text' | 'page_number' | 'image';
+  middleText?: string | null;
+  middleImageBase64?: string | null;
+  middleImageMime?: string | null;
+  rightType: 'none' | 'text' | 'page_number' | 'image';
+  rightText?: string | null;
+  rightImageBase64?: string | null;
+  rightImageMime?: string | null;
+}
+
 interface RequestBody {
   metadata: DocumentMetadata;
   tableOfContents: TOCItem[];
   sections: ContentSection[];
   logoBase64: string;
+  tocFooterConfig?: FooterConfig;
+  contentFooterConfig?: FooterConfig;
 }
 
 // Helper to convert base64 to Uint8Array
@@ -490,6 +510,154 @@ function createContentSections(sections: ContentSection[]): Paragraph[] {
   return paragraphs;
 }
 
+// Create configurable footer
+function createConfigurableFooter(config: FooterConfig | undefined): Footer {
+  if (!config) {
+    // Default footer
+    return new Footer({
+      children: [
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "(c) 2025 Sentra Inc. All rights reserved.",
+              size: 16,
+              color: COLORS.lightGray,
+            }),
+          ],
+          alignment: AlignmentType.LEFT,
+        }),
+      ],
+    });
+  }
+
+  const createFooterCell = (
+    type: string,
+    text?: string | null,
+    imageBase64?: string | null,
+    imageMime?: string | null,
+    alignment: AlignmentType = AlignmentType.LEFT
+  ): TableCell => {
+    const children: (TextRun | ImageRun)[] = [];
+
+    if (type === 'text' && text) {
+      children.push(
+        new TextRun({
+          text: text,
+          size: 16,
+          color: COLORS.gray,
+        })
+      );
+    } else if (type === 'page_number') {
+      children.push(
+        new TextRun({
+          text: "Page ",
+          size: 16,
+          color: COLORS.gray,
+        }),
+        new TextRun({
+          children: [PageNumber.CURRENT],
+          size: 16,
+          color: COLORS.gray,
+        }),
+        new TextRun({
+          text: " of ",
+          size: 16,
+          color: COLORS.gray,
+        }),
+        new TextRun({
+          children: [PageNumber.TOTAL_PAGES],
+          size: 16,
+          color: COLORS.gray,
+        })
+      );
+    } else if (type === 'image' && imageBase64) {
+      try {
+        const imageType = imageMime?.includes("png") ? "png" : "jpg";
+        children.push(
+          new ImageRun({
+            data: base64ToUint8Array(imageBase64),
+            transformation: { width: 60, height: 24 },
+            type: imageType as "png" | "jpg",
+          })
+        );
+      } catch (e) {
+        console.error("Error adding footer image:", e);
+      }
+    }
+
+    return new TableCell({
+      children: [
+        new Paragraph({
+          children: children.length > 0 ? children : [new TextRun({ text: "" })],
+          alignment,
+        }),
+      ],
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      },
+      width: { size: 33.33, type: WidthType.PERCENTAGE },
+    });
+  };
+
+  const tableRows: TableRow[] = [];
+
+  // Add separator line row if enabled
+  if (config.showSeparator) {
+    const separatorColor = config.separatorColor?.replace('#', '') || 'CCCCCC';
+    tableRows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [] })],
+            columnSpan: 3,
+            borders: {
+              top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+              bottom: { 
+                style: BorderStyle.SINGLE, 
+                size: (config.separatorThickness || 1) * 8, 
+                color: separatorColor 
+              },
+              left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+              right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            },
+          }),
+        ],
+      })
+    );
+  }
+
+  // Add content row
+  tableRows.push(
+    new TableRow({
+      children: [
+        createFooterCell(config.leftType, config.leftText, config.leftImageBase64, config.leftImageMime, AlignmentType.LEFT),
+        createFooterCell(config.middleType, config.middleText, config.middleImageBase64, config.middleImageMime, AlignmentType.CENTER),
+        createFooterCell(config.rightType, config.rightText, config.rightImageBase64, config.rightImageMime, AlignmentType.RIGHT),
+      ],
+    })
+  );
+
+  return new Footer({
+    children: [
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: tableRows,
+        borders: {
+          top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+          insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        },
+      }),
+    ],
+  });
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -522,26 +690,132 @@ serve(async (req) => {
 
     // Parse request body
     const body: RequestBody = await req.json();
-    const { metadata, tableOfContents, sections, logoBase64 } = body;
+    const { metadata, tableOfContents, sections, logoBase64, tocFooterConfig, contentFooterConfig } = body;
 
     console.log("Generating document:", metadata.title);
     console.log("Confidential:", metadata.confidential);
     console.log("Sections:", sections.length);
+    console.log("TOC Footer Config:", tocFooterConfig ? "provided" : "default");
+    console.log("Content Footer Config:", contentFooterConfig ? "provided" : "default");
 
     // Build document sections
-    const docChildren: Paragraph[] = [];
+    const coverChildren: Paragraph[] = [];
+    const tocChildren: Paragraph[] = [];
+    const contentChildren: Paragraph[] = [];
 
     // Cover page
-    docChildren.push(...createCoverPage(metadata, logoBase64));
+    coverChildren.push(...createCoverPage(metadata, logoBase64));
 
     // Table of Contents (if provided)
     if (tableOfContents && tableOfContents.length > 0) {
-      docChildren.push(...createTableOfContents(tableOfContents));
+      tocChildren.push(...createTableOfContents(tableOfContents));
     }
 
     // Content sections
     if (sections && sections.length > 0) {
-      docChildren.push(...createContentSections(sections));
+      contentChildren.push(...createContentSections(sections));
+    }
+
+    // Create document sections array
+    const documentSections = [];
+
+    // Cover page section (no footer)
+    if (coverChildren.length > 0) {
+      documentSections.push({
+        properties: {
+          page: {
+            margin: {
+              top: 1440,
+              right: 1440,
+              bottom: 1440,
+              left: 1440,
+            },
+          },
+        },
+        children: coverChildren,
+      });
+    }
+
+    // TOC section with configurable footer
+    if (tocChildren.length > 0) {
+      documentSections.push({
+        properties: {
+          page: {
+            margin: {
+              top: 1440,
+              right: 1440,
+              bottom: 1440,
+              left: 1440,
+            },
+          },
+        },
+        headers: {
+          default: new Header({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "sentra",
+                    bold: true,
+                    size: 20,
+                    color: COLORS.black,
+                  }),
+                  new TextRun({
+                    text: " | TABLE OF CONTENTS",
+                    size: 18,
+                    color: COLORS.gray,
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
+        footers: {
+          default: createConfigurableFooter(tocFooterConfig),
+        },
+        children: tocChildren,
+      });
+    }
+
+    // Content section with configurable footer
+    if (contentChildren.length > 0) {
+      documentSections.push({
+        properties: {
+          page: {
+            margin: {
+              top: 1440,
+              right: 1440,
+              bottom: 1440,
+              left: 1440,
+            },
+          },
+        },
+        headers: {
+          default: new Header({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: "sentra",
+                    bold: true,
+                    size: 20,
+                    color: COLORS.black,
+                  }),
+                  new TextRun({
+                    text: " | WHITEPAPER",
+                    size: 18,
+                    color: COLORS.gray,
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
+        footers: {
+          default: createConfigurableFooter(contentFooterConfig),
+        },
+        children: contentChildren,
+      });
     }
 
     // Create the document
@@ -556,67 +830,7 @@ serve(async (req) => {
           },
         },
       },
-      sections: [
-        {
-          properties: {
-            page: {
-              margin: {
-                top: 1440,
-                right: 1440,
-                bottom: 1440,
-                left: 1440,
-              },
-            },
-          },
-          headers: {
-            default: new Header({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "sentra",
-                      bold: true,
-                      size: 20,
-                      color: COLORS.black,
-                    }),
-                    new TextRun({
-                      text: " | WHITEPAPER",
-                      size: 18,
-                      color: COLORS.gray,
-                    }),
-                  ],
-                }),
-              ],
-            }),
-          },
-          footers: {
-            default: new Footer({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "(c) 2025 Sentra Inc. All rights reserved.",
-                      size: 16,
-                      color: COLORS.lightGray,
-                    }),
-                    new TextRun({
-                      text: "                                    ",
-                      size: 16,
-                    }),
-                    new TextRun({
-                      text: "www.sentra.io",
-                      size: 16,
-                      color: COLORS.primary,
-                    }),
-                  ],
-                  alignment: AlignmentType.LEFT,
-                }),
-              ],
-            }),
-          },
-          children: docChildren,
-        },
-      ],
+      sections: documentSections,
     });
 
     // Generate the DOCX buffer
