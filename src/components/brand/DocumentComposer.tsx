@@ -88,6 +88,17 @@ export function DocumentComposer() {
     });
   };
 
+  // Batch update multiple layout fields at once to avoid race conditions
+  const handleLayoutBatchChange = async (updates: Partial<PageLayout>) => {
+    if (!selectedProfileId) return;
+    await upsertLayout.mutateAsync({
+      ...(currentLayout || {}),
+      profile_id: selectedProfileId,
+      page_type: selectedPageType,
+      ...updates,
+    });
+  };
+
   const handleTextStyleChange = async (context: PageTextStyle['context'], elementTemplateId: string | null) => {
     if (!currentLayout?.id) {
       // Create the layout first
@@ -513,10 +524,12 @@ export function DocumentComposer() {
                             imageMime: currentLayout?.footer_left_image_mime,
                           }}
                           onChange={(config) => {
-                            handleLayoutChange('footer_left_type', config.type);
-                            handleLayoutChange('footer_left_text', config.text || null);
-                            handleLayoutChange('footer_left_image_base64', config.imageBase64 || null);
-                            handleLayoutChange('footer_left_image_mime', config.imageMime || null);
+                            handleLayoutBatchChange({
+                              footer_left_type: config.type,
+                              footer_left_text: config.text || null,
+                              footer_left_image_base64: config.imageBase64 || null,
+                              footer_left_image_mime: config.imageMime || null,
+                            } as Partial<PageLayout>);
                           }}
                         />
                         <FooterConfigSection
@@ -528,10 +541,12 @@ export function DocumentComposer() {
                             imageMime: currentLayout?.footer_middle_image_mime,
                           }}
                           onChange={(config) => {
-                            handleLayoutChange('footer_middle_type', config.type);
-                            handleLayoutChange('footer_middle_text', config.text || null);
-                            handleLayoutChange('footer_middle_image_base64', config.imageBase64 || null);
-                            handleLayoutChange('footer_middle_image_mime', config.imageMime || null);
+                            handleLayoutBatchChange({
+                              footer_middle_type: config.type,
+                              footer_middle_text: config.text || null,
+                              footer_middle_image_base64: config.imageBase64 || null,
+                              footer_middle_image_mime: config.imageMime || null,
+                            } as Partial<PageLayout>);
                           }}
                         />
                         <FooterConfigSection
@@ -543,10 +558,12 @@ export function DocumentComposer() {
                             imageMime: currentLayout?.footer_right_image_mime,
                           }}
                           onChange={(config) => {
-                            handleLayoutChange('footer_right_type', config.type);
-                            handleLayoutChange('footer_right_text', config.text || null);
-                            handleLayoutChange('footer_right_image_base64', config.imageBase64 || null);
-                            handleLayoutChange('footer_right_image_mime', config.imageMime || null);
+                            handleLayoutBatchChange({
+                              footer_right_type: config.type,
+                              footer_right_text: config.text || null,
+                              footer_right_image_base64: config.imageBase64 || null,
+                              footer_right_image_mime: config.imageMime || null,
+                            } as Partial<PageLayout>);
                           }}
                         />
                       </div>
