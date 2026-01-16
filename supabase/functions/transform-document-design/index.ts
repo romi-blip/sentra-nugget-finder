@@ -1171,13 +1171,13 @@ async function createContentPages(
       return false;
     }
     
-    // Draw footer on current page (only if not using full page design)
-    if (!embeddedContentPageImage) {
-      if (footerConfig) {
-        await drawConfigurableFooter(currentPage, pdfDoc, fonts, footerConfig, pageNumber, totalPages, isConfidential, embeddedFooterImages);
-      } else {
-        drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
-      }
+    // Draw footer on current page
+    // If using configurable footer, always draw it (even on full page design)
+    // Otherwise, only draw default footer if not using full page design
+    if (footerConfig) {
+      await drawConfigurableFooter(currentPage, pdfDoc, fonts, footerConfig, pageNumber, totalPages, isConfidential, embeddedFooterImages);
+    } else if (!embeddedContentPageImage) {
+      drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
     }
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 842]);
@@ -1416,13 +1416,13 @@ async function createContentPages(
     }
   }
 
-  // Draw footer on last page (only if not using full page design)
-  if (!embeddedContentPageImage) {
-    if (footerConfig) {
-      await drawConfigurableFooter(currentPage, pdfDoc, fonts, footerConfig, pageNumber, totalPages, isConfidential, embeddedFooterImages);
-    } else {
-      drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
-    }
+  // Draw footer on last page
+  // If using configurable footer, always draw it (even on full page design)
+  // Otherwise, only draw default footer if not using full page design
+  if (footerConfig) {
+    await drawConfigurableFooter(currentPage, pdfDoc, fonts, footerConfig, pageNumber, totalPages, isConfidential, embeddedFooterImages);
+  } else if (!embeddedContentPageImage) {
+    drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
   }
 }
 
