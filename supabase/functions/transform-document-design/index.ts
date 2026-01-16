@@ -92,6 +92,7 @@ interface TOCEntry {
 interface ElementTemplate {
   id: string;
   element_type: string;
+  name?: string;
   image_base64: string | null;
   image_height: number | null;
   image_width: number | null;
@@ -105,6 +106,27 @@ interface ElementTemplate {
   text_align: string | null;
   bullet_character: string | null;
   bullet_indent: number | null;
+}
+
+// Footer section configuration
+type FooterSectionType = 'none' | 'text' | 'page_number' | 'image';
+
+interface FooterConfig {
+  showSeparator: boolean;
+  separatorColor: string;
+  separatorThickness: number;
+  leftType: FooterSectionType;
+  leftText: string | null;
+  leftImageBase64: string | null;
+  leftImageMime: string | null;
+  middleType: FooterSectionType;
+  middleText: string | null;
+  middleImageBase64: string | null;
+  middleImageMime: string | null;
+  rightType: FooterSectionType;
+  rightText: string | null;
+  rightImageBase64: string | null;
+  rightImageMime: string | null;
 }
 
 // Helper to convert hex color to RGB
@@ -696,6 +718,129 @@ function drawFooterElement(
   return 40;
 }
 
+// Draw configurable footer with separator, left/middle/right sections
+async function drawConfigurableFooter(
+  page: any,
+  pdfDoc: any,
+  fonts: any,
+  footerConfig: FooterConfig | null,
+  pageNumber: number,
+  totalPages: number,
+  isConfidential: boolean,
+  embeddedFooterImages: Map<string, any>
+) {
+  const width = page.getWidth();
+  const margin = 35;
+  const footerY = 25;
+  const fontSize = 9;
+  
+  // If no config, use default footer
+  if (!footerConfig) {
+    return drawFooterElement(page, fonts, null, 40, pageNumber, isConfidential);
+  }
+
+  // Draw separator line if enabled
+  if (footerConfig.showSeparator) {
+    const separatorColor = footerConfig.separatorColor 
+      ? hexToRgb(footerConfig.separatorColor) 
+      : COLORS.lightGray;
+    const thickness = footerConfig.separatorThickness || 1;
+    
+    page.drawLine({
+      start: { x: margin, y: footerY + 15 },
+      end: { x: width - margin, y: footerY + 15 },
+      thickness: thickness,
+      color: separatorColor,
+    });
+  }
+
+  // Helper to draw a section
+  const drawSection = async (
+    type: FooterSectionType,
+    text: string | null,
+    imageBase64: string | null,
+    imageMime: string | null,
+    position: 'left' | 'middle' | 'right'
+  ) => {
+    if (type === 'none') return;
+
+    let x: number;
+    let displayText = '';
+
+    if (type === 'text' && text) {
+      displayText = text;
+    } else if (type === 'page_number') {
+      displayText = `Page ${pageNumber} of ${totalPages}`;
+    }
+
+    if (type === 'text' || type === 'page_number') {
+      const textWidth = fonts.regular.widthOfTextAtSize(displayText, fontSize);
+      
+      if (position === 'left') {
+        x = margin;
+      } else if (position === 'middle') {
+        x = (width - textWidth) / 2;
+      } else {
+        x = width - margin - textWidth;
+      }
+
+      page.drawText(displayText, {
+        x: x,
+        y: footerY,
+        size: fontSize,
+        font: fonts.regular,
+        color: COLORS.footerGray,
+      });
+    } else if (type === 'image' && imageBase64) {
+      try {
+        // Check cache first
+        const cacheKey = `footer_${position}`;
+        let embeddedImg = embeddedFooterImages.get(cacheKey);
+        
+        if (!embeddedImg) {
+          const imgBytes = fastBase64ToBytes(imageBase64);
+          if (imageMime?.includes('png')) {
+            embeddedImg = await pdfDoc.embedPng(imgBytes);
+          } else {
+            embeddedImg = await pdfDoc.embedJpg(imgBytes);
+          }
+          embeddedFooterImages.set(cacheKey, embeddedImg);
+        }
+
+        // Scale image to fit footer height (about 20px)
+        const maxHeight = 18;
+        const scale = maxHeight / embeddedImg.height;
+        const imgWidth = embeddedImg.width * scale;
+        const imgHeight = maxHeight;
+
+        if (position === 'left') {
+          x = margin;
+        } else if (position === 'middle') {
+          x = (width - imgWidth) / 2;
+        } else {
+          x = width - margin - imgWidth;
+        }
+
+        page.drawImage(embeddedImg, {
+          x: x,
+          y: footerY - 4,
+          width: imgWidth,
+          height: imgHeight,
+        });
+      } catch (e) {
+        console.log(`[transform-document-design] Error embedding footer image for ${position}:`, e);
+      }
+    }
+  };
+
+  // Draw each section
+  await drawSection(footerConfig.leftType, footerConfig.leftText, footerConfig.leftImageBase64, footerConfig.leftImageMime, 'left');
+  await drawSection(footerConfig.middleType, footerConfig.middleText, footerConfig.middleImageBase64, footerConfig.middleImageMime, 'middle');
+  await drawSection(footerConfig.rightType, footerConfig.rightText, footerConfig.rightImageBase64, footerConfig.rightImageMime, 'right');
+
+  return 40;
+}
+
 // Create cover page with element templates
 // logoConfig.height: The target display height for the logo (from page layout settings)
 async function createCoverPageWithElements(
@@ -799,7 +944,7 @@ async function createCoverPageWithElements(
 }
 
 // Create TOC page
-function createTOCPage(
+async function createTOCPage(
   pdfDoc: any, 
   fonts: any, 
   tocEntries: TOCEntry[], 
@@ -809,7 +954,11 @@ function createTOCPage(
   headerHeight: number,
   embeddedFooterImage: any | null,
   footerHeight: number,
-  logoConfig: { show: boolean; x: number; y: number; height?: number; } | null = null
+  logoConfig: { show: boolean; x: number; y: number; height?: number; } | null = null,
+  footerConfig: FooterConfig | null = null,
+  totalPages: number = 1,
+  tocPageNumber: number = 2,
+  embeddedFooterImages: Map<string, any> = new Map()
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
@@ -885,7 +1034,12 @@ function createTOCPage(
     y -= 26;
   }
 
-  drawFooterElement(page, fonts, embeddedFooterImage, footerHeight, 1, isConfidential);
+  // Use configurable footer if provided, otherwise fall back to default
+  if (footerConfig) {
+    await drawConfigurableFooter(page, pdfDoc, fonts, footerConfig, tocPageNumber, totalPages, isConfidential, embeddedFooterImages);
+  } else {
+    drawFooterElement(page, fonts, embeddedFooterImage, footerHeight, tocPageNumber, isConfidential);
+  }
 }
 
 // Generate TOC entries
@@ -937,7 +1091,11 @@ async function createContentPages(
     bullet?: ElementTemplate | null;
   },
   logoConfig: { show: boolean; x: number; y: number; height?: number; } | null = null,
-  embeddedContentPageImage: any | null = null
+  embeddedContentPageImage: any | null = null,
+  footerConfig: FooterConfig | null = null,
+  totalPages: number = 10,
+  startPageNumber: number = 3,
+  embeddedFooterImages: Map<string, any> = new Map()
 ) {
   // Limit sections to prevent CPU timeout
   const MAX_SECTIONS = 100;
@@ -958,7 +1116,7 @@ async function createContentPages(
   
   let y = pageHeight - effectiveHeaderHeight - 25;
   const minY = effectiveFooterHeight + 20;
-  let pageNumber = 2;
+  let pageNumber = startPageNumber;
   let hasContent = false;
   
   // Limit pages to prevent CPU timeout
@@ -1006,7 +1164,7 @@ async function createContentPages(
   // Draw background on first page
   drawPageBackground(currentPage);
 
-  const addNewPage = () => {
+  const addNewPage = async () => {
     // Limit pages to prevent CPU timeout
     if (pageNumber >= MAX_PAGES) {
       console.log(`[transform-document-design] WARNING: Max pages (${MAX_PAGES}) reached, stopping`);
@@ -1015,7 +1173,11 @@ async function createContentPages(
     
     // Draw footer on current page (only if not using full page design)
     if (!embeddedContentPageImage) {
-      drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
+      if (footerConfig) {
+        await drawConfigurableFooter(currentPage, pdfDoc, fonts, footerConfig, pageNumber, totalPages, isConfidential, embeddedFooterImages);
+      } else {
+        drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
+      }
     }
     pageNumber++;
     currentPage = pdfDoc.addPage([595, 842]);
@@ -1048,13 +1210,13 @@ async function createContentPages(
 
     if (section.type === 'page-break') {
       if (hasContent) {
-        if (!addNewPage()) break;
+        if (!(await addNewPage())) break;
       }
       continue;
     }
 
     if (y < minY + 80) {
-      if (!addNewPage()) break;
+      if (!(await addNewPage())) break;
     }
 
     // Handle image sections - limit to 5 embedded images to prevent timeout
@@ -1103,7 +1265,7 @@ async function createContentPages(
         
         // Check page break
         if (y - imgHeight < minY + 50) {
-          if (!addNewPage()) break;
+          if (!(await addNewPage())) break;
         }
         
         // Center image horizontally
@@ -1128,7 +1290,7 @@ async function createContentPages(
 
     if (section.type === 'h1') {
       if (hasContent && i > 0) {
-        if (!addNewPage()) break;
+        if (!(await addNewPage())) break;
       }
 
       const style = getTextStyle('h1');
@@ -1151,7 +1313,7 @@ async function createContentPages(
     }
     else if (section.type === 'h2') {
       if (y < minY + 60) {
-        if (!addNewPage()) break;
+        if (!(await addNewPage())) break;
       }
       
       const style = getTextStyle('h2');
@@ -1174,7 +1336,7 @@ async function createContentPages(
     }
     else if (section.type === 'h3') {
       if (y < minY + 40) {
-        if (!addNewPage()) break;
+        if (!(await addNewPage())) break;
       }
       
       const style = getTextStyle('h3');
@@ -1201,7 +1363,7 @@ async function createContentPages(
       for (const item of section.items) {
         if (pageNumber >= MAX_PAGES) break;
         if (y < minY + 30) {
-          if (!addNewPage()) break;
+          if (!(await addNewPage())) break;
         }
 
         const bulletX = margin + 8;
@@ -1237,7 +1399,7 @@ async function createContentPages(
       for (const line of lines) {
         if (pageNumber >= MAX_PAGES) break;
         if (y < minY) {
-          if (!addNewPage()) break;
+          if (!(await addNewPage())) break;
         }
 
         currentPage.drawText(line, {
@@ -1256,7 +1418,11 @@ async function createContentPages(
 
   // Draw footer on last page (only if not using full page design)
   if (!embeddedContentPageImage) {
-    drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
+    if (footerConfig) {
+      await drawConfigurableFooter(currentPage, pdfDoc, fonts, footerConfig, pageNumber, totalPages, isConfidential, embeddedFooterImages);
+    } else {
+      drawFooterElement(currentPage, fonts, embeddedFooterImage, footerHeight, pageNumber, isConfidential);
+    }
   }
 }
 
@@ -1281,7 +1447,11 @@ async function generatePDF(
     cover?: { show_logo: boolean; logo_x: number; logo_y: number; logo_height?: number; } | null;
     content?: { show_logo: boolean; logo_x: number; logo_y: number; logo_height?: number; } | null;
     toc?: { show_logo: boolean; logo_x: number; logo_y: number; logo_height?: number; } | null;
-  }
+  },
+  footerConfigs: {
+    toc?: FooterConfig | null;
+    content?: FooterConfig | null;
+  } = {}
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   
@@ -1380,21 +1550,31 @@ async function generatePDF(
 
   // Get logo original height from element template for proper scaling
   console.log(`[transform-document-design] Logo configs - cover: ${JSON.stringify(coverLogoConfig)}, content: ${JSON.stringify(contentLogoConfig)}, toc: ${JSON.stringify(tocLogoConfig)}`);
+  console.log(`[transform-document-design] Footer configs - toc: ${JSON.stringify(footerConfigs.toc)}, content: ${JSON.stringify(footerConfigs.content)}`);
+
+  // Estimate total pages (cover + TOC + content pages)
+  const estimatedContentPages = Math.max(1, Math.ceil(extractedDoc.sections.filter(s => s.type === 'h1' || s.type === 'page-break').length + 1));
+  const totalPages = 2 + estimatedContentPages; // cover + TOC + content
+  
+  // Cache for embedded footer images
+  const embeddedFooterImages = new Map<string, any>();
 
   // Create cover page with logo (height comes from config)
   await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, logoImage, coverLogoConfig);
   
-  // Create TOC page with logo
-  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, tocLogoConfig);
+  // Create TOC page with logo and configurable footer
+  // TOC is page 2
+  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, tocLogoConfig, footerConfigs.toc || null, totalPages, 2, embeddedFooterImages);
   
-  // Create content pages with logo (pass content_page image if using full page design)
+  // Create content pages with logo and configurable footer (pass content_page image if using full page design)
+  // Content pages start at page 3
   await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, {
     h1: elements.h1,
     h2: elements.h2,
     h3: elements.h3,
     paragraph: elements.paragraph,
     bullet: elements.bullet,
-  }, contentLogoConfig, embeddedContentPageImage);
+  }, contentLogoConfig, embeddedContentPageImage, footerConfigs.content || null, totalPages, 3, embeddedFooterImages);
 
   return await pdfDoc.save();
 }
@@ -1518,6 +1698,12 @@ serve(async (req) => {
       cover?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
       content?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
       toc?: { show_logo: boolean; logo_x: number; logo_y: number; } | null;
+    } = {};
+
+    // Store footer configs for PDF generation
+    let footerConfigsForPdf: {
+      toc?: FooterConfig | null;
+      content?: FooterConfig | null;
     } = {};
 
     // First, try the new document profile system
@@ -1664,6 +1850,41 @@ serve(async (req) => {
           console.log(`[transform-document-design] TOC logo config: show=${layoutConfigForPdf.toc.show_logo}, x=${layoutConfigForPdf.toc.logo_x}, y=${layoutConfigForPdf.toc.logo_y}, height=${layoutConfigForPdf.toc.logo_height}`);
         }
 
+        // Extract footer configs from page layouts
+        const extractFooterConfig = (layout: any): FooterConfig | null => {
+          if (!layout) return null;
+          // Check if any footer section is configured
+          const hasFooterConfig = layout.footer_show_separator || 
+            layout.footer_left_type !== 'none' || 
+            layout.footer_middle_type !== 'none' || 
+            layout.footer_right_type !== 'none';
+          
+          if (!hasFooterConfig && !layout.footer_show_separator) return null;
+          
+          return {
+            showSeparator: layout.footer_show_separator ?? false,
+            separatorColor: layout.footer_separator_color ?? '#CCCCCC',
+            separatorThickness: layout.footer_separator_thickness ?? 1,
+            leftType: (layout.footer_left_type as FooterSectionType) ?? 'none',
+            leftText: layout.footer_left_text ?? null,
+            leftImageBase64: layout.footer_left_image_base64 ?? null,
+            leftImageMime: layout.footer_left_image_mime ?? null,
+            middleType: (layout.footer_middle_type as FooterSectionType) ?? 'none',
+            middleText: layout.footer_middle_text ?? null,
+            middleImageBase64: layout.footer_middle_image_base64 ?? null,
+            middleImageMime: layout.footer_middle_image_mime ?? null,
+            rightType: (layout.footer_right_type as FooterSectionType) ?? 'none',
+            rightText: layout.footer_right_text ?? null,
+            rightImageBase64: layout.footer_right_image_base64 ?? null,
+            rightImageMime: layout.footer_right_image_mime ?? null,
+          };
+        };
+
+        footerConfigsForPdf.toc = extractFooterConfig(tocLayout);
+        footerConfigsForPdf.content = extractFooterConfig(contentLayout);
+        
+        console.log(`[transform-document-design] Footer configs extracted - TOC: ${footerConfigsForPdf.toc ? 'configured' : 'default'}, Content: ${footerConfigsForPdf.content ? 'configured' : 'default'}`);
+
         // Cover page elements
         if (coverLayout?.background_element_id && templateById[coverLayout.background_element_id]) {
           elements.cover_background = templateById[coverLayout.background_element_id];
@@ -1777,7 +1998,7 @@ serve(async (req) => {
     // Build layout config from stored layoutMap (need to extract from if block)
     // We need to store layoutMap outside, so let's define it at the top
     
-    // Generate PDF with element templates and layout config
+    // Generate PDF with element templates, layout config, and footer configs
     const pdfBytes = await generatePDF(extractedDoc, logoBytes, {
       cover_background: elements['cover_background'] || null,
       header: elements['header'] || null,
@@ -1790,7 +2011,7 @@ serve(async (req) => {
       h3: elements['h3'] || null,
       paragraph: elements['paragraph'] || null,
       bullet: elements['bullet'] || null,
-    }, layoutConfigForPdf);
+    }, layoutConfigForPdf, footerConfigsForPdf);
     
     // Convert to base64 using fast method
     const pdfBase64 = fastBytesToBase64(pdfBytes);
