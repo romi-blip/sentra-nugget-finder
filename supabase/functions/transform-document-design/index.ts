@@ -739,7 +739,7 @@ async function drawConfigurableFooter(
     return drawFooterElement(page, fonts, null, 40, pageNumber, isConfidential);
   }
 
-  // Draw separator line if enabled
+  // Draw separator line if enabled - full width of page
   if (footerConfig.showSeparator) {
     const separatorColor = footerConfig.separatorColor 
       ? hexToRgb(footerConfig.separatorColor) 
@@ -747,8 +747,8 @@ async function drawConfigurableFooter(
     const thickness = footerConfig.separatorThickness || 1;
     
     page.drawLine({
-      start: { x: margin, y: footerY + 15 },
-      end: { x: width - margin, y: footerY + 15 },
+      start: { x: 0, y: footerY + 15 },
+      end: { x: width, y: footerY + 15 },
       thickness: thickness,
       color: separatorColor,
     });
@@ -1043,9 +1043,10 @@ async function createTOCPage(
 }
 
 // Generate TOC entries
+// Page numbering starts at 2 (TOC is page 1, content starts at page 2, cover not counted)
 function generateTOCEntries(sections: StructuredSection[], fonts: any): TOCEntry[] {
   const entries: TOCEntry[] = [];
-  let currentPage = 3;
+  let currentPage = 2; // Content starts at page 2 (cover not counted, TOC is page 1)
   let hasContent = false;
 
   for (const section of sections) {
@@ -1552,29 +1553,30 @@ async function generatePDF(
   console.log(`[transform-document-design] Logo configs - cover: ${JSON.stringify(coverLogoConfig)}, content: ${JSON.stringify(contentLogoConfig)}, toc: ${JSON.stringify(tocLogoConfig)}`);
   console.log(`[transform-document-design] Footer configs - toc: ${JSON.stringify(footerConfigs.toc)}, content: ${JSON.stringify(footerConfigs.content)}`);
 
-  // Estimate total pages (cover + TOC + content pages)
+  // Estimate total pages (excluding cover page from count)
+  // Total displayed pages = TOC + content pages (cover not numbered)
   const estimatedContentPages = Math.max(1, Math.ceil(extractedDoc.sections.filter(s => s.type === 'h1' || s.type === 'page-break').length + 1));
-  const totalPages = 2 + estimatedContentPages; // cover + TOC + content
+  const totalPages = 1 + estimatedContentPages; // TOC + content (cover not counted)
   
   // Cache for embedded footer images
   const embeddedFooterImages = new Map<string, any>();
 
-  // Create cover page with logo (height comes from config)
+  // Create cover page with logo (height comes from config) - no page number
   await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, logoImage, coverLogoConfig);
   
   // Create TOC page with logo and configurable footer
-  // TOC is page 2
-  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, tocLogoConfig, footerConfigs.toc || null, totalPages, 2, embeddedFooterImages);
+  // TOC is page 1 (cover not counted)
+  await createTOCPage(pdfDoc, fonts, tocEntries, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, tocLogoConfig, footerConfigs.toc || null, totalPages, 1, embeddedFooterImages);
   
   // Create content pages with logo and configurable footer (pass content_page image if using full page design)
-  // Content pages start at page 3
+  // Content pages start at page 2 (cover not counted)
   await createContentPages(pdfDoc, fonts, extractedDoc.sections, extractedDoc.isConfidential, logoImage, embeddedHeaderImage, headerHeight, embeddedFooterImage, footerHeight, {
     h1: elements.h1,
     h2: elements.h2,
     h3: elements.h3,
     paragraph: elements.paragraph,
     bullet: elements.bullet,
-  }, contentLogoConfig, embeddedContentPageImage, footerConfigs.content || null, totalPages, 3, embeddedFooterImages);
+  }, contentLogoConfig, embeddedContentPageImage, footerConfigs.content || null, totalPages, 2, embeddedFooterImages);
 
   return await pdfDoc.save();
 }
