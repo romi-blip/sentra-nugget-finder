@@ -2,8 +2,40 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import JSZip from "npm:jszip@3.10.1";
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFRawStream } from "https://esm.sh/pdf-lib@1.17.1";
+import fontkit from "https://esm.sh/@pdf-lib/fontkit@1.1.1";
 import { decode as decodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+
+// Google Fonts CDN URLs for Poppins
+const POPPINS_REGULAR_URL = "https://fonts.gstatic.com/s/poppins/v21/pxiEyp8kv8JHgFVrFJDUc1NECPY.ttf";
+const POPPINS_BOLD_URL = "https://fonts.gstatic.com/s/poppins/v21/pxiByp8kv8JHgFVrLCz7Z1xlEA.ttf";
+
+// Cache for fonts to avoid re-fetching
+let cachedPoppinsRegular: Uint8Array | null = null;
+let cachedPoppinsBold: Uint8Array | null = null;
+
+async function fetchPoppinsFonts(): Promise<{ regular: Uint8Array; bold: Uint8Array }> {
+  if (cachedPoppinsRegular && cachedPoppinsBold) {
+    console.log('[transform-document-design] Using cached Poppins fonts');
+    return { regular: cachedPoppinsRegular, bold: cachedPoppinsBold };
+  }
+
+  console.log('[transform-document-design] Fetching Poppins fonts from Google Fonts...');
+  const [regularResponse, boldResponse] = await Promise.all([
+    fetch(POPPINS_REGULAR_URL),
+    fetch(POPPINS_BOLD_URL),
+  ]);
+
+  if (!regularResponse.ok || !boldResponse.ok) {
+    throw new Error('Failed to fetch Poppins fonts from Google Fonts');
+  }
+
+  cachedPoppinsRegular = new Uint8Array(await regularResponse.arrayBuffer());
+  cachedPoppinsBold = new Uint8Array(await boldResponse.arrayBuffer());
+  
+  console.log('[transform-document-design] Poppins fonts fetched successfully');
+  return { regular: cachedPoppinsRegular, bold: cachedPoppinsBold };
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -968,20 +1000,13 @@ async function createTOCPage(
   const actualHeaderHeight = drawHeaderElement(page, embeddedHeaderImage, headerHeight, logoImage, logoConfig);
 
   const titleY = height - actualHeaderHeight - 40;
-  page.drawText('Table of ', {
+  // TOC title - all black text (no green on content pages, only cover page has green)
+  page.drawText('Table of Contents', {
     x: margin,
     y: titleY,
     size: 28,
     font: fonts.bold,
     color: COLORS.black,
-  });
-  const tableOfWidth = fonts.bold.widthOfTextAtSize('Table of ', 28);
-  page.drawText('Contents', {
-    x: margin + tableOfWidth,
-    y: titleY,
-    size: 28,
-    font: fonts.bold,
-    color: COLORS.primary,
   });
 
   let y = titleY - 50;
@@ -1456,8 +1481,21 @@ async function generatePDF(
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   
-  const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  // Register fontkit for custom fonts
+  pdfDoc.registerFontkit(fontkit);
+  
+  // Fetch and embed Poppins fonts
+  let regularFont, boldFont;
+  try {
+    const poppinsFonts = await fetchPoppinsFonts();
+    regularFont = await pdfDoc.embedFont(poppinsFonts.regular);
+    boldFont = await pdfDoc.embedFont(poppinsFonts.bold);
+    console.log('[transform-document-design] Successfully embedded Poppins fonts');
+  } catch (e) {
+    console.log('[transform-document-design] Failed to embed Poppins fonts, falling back to Helvetica:', e);
+    regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  }
   const fonts = { regular: regularFont, bold: boldFont };
 
   // Embed logo from element template if available
