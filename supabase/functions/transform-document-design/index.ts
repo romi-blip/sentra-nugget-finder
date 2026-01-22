@@ -397,104 +397,89 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       const tableContent = documentXml.substring(tableStart, tableEnd);
       const rows: string[][] = [];
       
-      // Extract rows using indexOf for more reliable matching
-      let rowSearchPos = 0;
-      while (true) {
-        const rowStart = tableContent.indexOf('<w:tr', rowSearchPos);
-        if (rowStart === -1) break;
-        
-        // Find the matching </w:tr> - handle nested structures
-        let rowDepth = 0;
-        let rowPos = rowStart;
-        let rowEnd = -1;
-        
-        while (rowPos < tableContent.length) {
-          const nextRowOpen = tableContent.indexOf('<w:tr', rowPos + 1);
-          const nextRowClose = tableContent.indexOf('</w:tr>', rowPos);
-          
-          if (nextRowClose === -1) break;
-          
-          if (nextRowOpen !== -1 && nextRowOpen < nextRowClose) {
-            rowDepth++;
-            rowPos = nextRowOpen;
-          } else {
-            if (rowDepth === 0) {
-              rowEnd = nextRowClose + '</w:tr>'.length;
-              break;
-            }
-            rowDepth--;
-            rowPos = nextRowClose + 1;
-          }
-        }
-        
-        if (rowEnd === -1) {
-          rowSearchPos = rowStart + 1;
-          continue;
-        }
-        
-        const rowContent = tableContent.substring(rowStart, rowEnd);
+      // Add diagnostic logging
+      console.log(`[transform-document-design] Table found at ${tableStart}-${tableEnd}, length: ${tableContent.length}`);
+      console.log(`[transform-document-design] Table preview (first 300 chars): ${tableContent.substring(0, 300).replace(/\n/g, ' ')}`);
+      console.log(`[transform-document-design] Contains <w:tr: ${tableContent.includes('<w:tr')}, Contains </w:tr>: ${tableContent.includes('</w:tr>')}`);
+      
+      // Use regex with word boundary and dotAll mode for reliable extraction
+      // This approach handles nested content correctly by being non-greedy
+      const rowRegex = /<w:tr\b[^>]*>([\s\S]*?)<\/w:tr>/g;
+      let rowMatch;
+      
+      while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+        const rowContent = rowMatch[0]; // Full row including tags
         const cells: string[] = [];
         
-        // Extract cells using indexOf
-        let cellSearchPos = 0;
-        while (true) {
-          const cellStart = rowContent.indexOf('<w:tc', cellSearchPos);
-          if (cellStart === -1) break;
+        // Extract cells using regex - create new regex for each row to reset state
+        const cellRegex = /<w:tc\b[^>]*>([\s\S]*?)<\/w:tc>/g;
+        let cellMatch;
+        
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+          const cellInner = cellMatch[1];
           
-          // Find matching </w:tc>
-          let cellDepth = 0;
-          let cellPos = cellStart;
-          let cellEnd = -1;
-          
-          while (cellPos < rowContent.length) {
-            const nextCellOpen = rowContent.indexOf('<w:tc', cellPos + 1);
-            const nextCellClose = rowContent.indexOf('</w:tc>', cellPos);
-            
-            if (nextCellClose === -1) break;
-            
-            if (nextCellOpen !== -1 && nextCellOpen < nextCellClose) {
-              cellDepth++;
-              cellPos = nextCellOpen;
-            } else {
-              if (cellDepth === 0) {
-                cellEnd = nextCellClose + '</w:tc>'.length;
-                break;
-              }
-              cellDepth--;
-              cellPos = nextCellClose + 1;
-            }
-          }
-          
-          if (cellEnd === -1) {
-            cellSearchPos = cellStart + 1;
-            continue;
-          }
-          
-          const cellContent = rowContent.substring(cellStart, cellEnd);
-          
-          // Extract all text from the cell
+          // Extract all text runs from the cell
           let cellText = '';
-          const textMatches = cellContent.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+          const textMatches = cellInner.matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/g);
           for (const tm of textMatches) {
             cellText += tm[1];
           }
           cells.push(decodeHtmlEntities(cellText.trim()));
-          
-          cellSearchPos = cellEnd;
         }
         
-        if (cells.length > 0) rows.push(cells);
-        rowSearchPos = rowEnd;
+        if (cells.length > 0) {
+          rows.push(cells);
+        }
+      }
+      
+      console.log(`[transform-document-design] Regex extracted ${rows.length} rows from table`);
+      
+      // Fallback: If regex finds no rows but table has w:t content, try simpler extraction
+      if (rows.length === 0 && tableContent.includes('<w:t')) {
+        console.log('[transform-document-design] Fallback: regex found 0 rows, attempting manual split extraction');
+        
+        // Try splitting by </w:tr> and extracting
+        const rowParts = tableContent.split('</w:tr>');
+        for (const part of rowParts) {
+          if (!part.includes('<w:tr')) continue;
+          
+          const rowStart = part.indexOf('<w:tr');
+          const rowContent = part.substring(rowStart);
+          const cells: string[] = [];
+          
+          // Split by </w:tc> to get cells
+          const cellParts = rowContent.split('</w:tc>');
+          for (const cellPart of cellParts) {
+            if (!cellPart.includes('<w:tc')) continue;
+            
+            let cellText = '';
+            const textMatches = cellPart.matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/g);
+            for (const tm of textMatches) {
+              cellText += tm[1];
+            }
+            if (cellText.trim()) {
+              cells.push(decodeHtmlEntities(cellText.trim()));
+            }
+          }
+          
+          if (cells.length > 0) {
+            rows.push(cells);
+          }
+        }
+        
+        console.log(`[transform-document-design] Fallback extracted ${rows.length} rows from table`);
       }
       
       // Skip tables that look like TOC (single column tables where MOST rows end with page numbers)
-      // A real TOC has consistent single-column rows ending with numbers
       const colCounts = rows.map(r => r.length);
       const maxCols = Math.max(...colCounts, 0);
       const rowsEndingWithNumber = rows.filter(r => /\d+$/.test(r[r.length - 1]?.trim() || '')).length;
-      const isTocTable = maxCols === 1 && rows.length > 3 && rowsEndingWithNumber >= rows.length * 0.7;
       
-      console.log(`[transform-document-design] Table analysis: ${rows.length} rows, maxCols=${maxCols}, rowsWithNumbers=${rowsEndingWithNumber}, isTOC=${isTocTable}`);
+      // Only consider it a TOC if it has tab leaders or dots pattern (indicating page references)
+      const hasTabLeaders = tableContent.includes('w:tab') || tableContent.includes('……') || tableContent.includes('...');
+      const isTocTable = maxCols === 1 && rows.length > 3 && rowsEndingWithNumber >= rows.length * 0.7 && hasTabLeaders;
+      
+      console.log(`[transform-document-design] Table analysis: ${rows.length} rows, maxCols=${maxCols}, rowsWithNumbers=${rowsEndingWithNumber}, hasTabLeaders=${hasTabLeaders}, isTOC=${isTocTable}`);
       
       if (rows.length > 0 && !isTocTable) {
         tablePositions.push({
@@ -511,11 +496,11 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
         tablePositions.push({
           startIndex: tableStart,
           endIndex: tableEnd,
-          section: { type: 'paragraph', content: '' } // Empty placeholder, won't be added
+          section: { type: 'paragraph', content: '' }
         });
         console.log(`[transform-document-design] ✗ Skipped TOC table with ${rows.length} rows`);
       } else if (rows.length === 0) {
-        console.log(`[transform-document-design] ✗ Empty table skipped`);
+        console.log(`[transform-document-design] ✗ Empty table skipped - no rows found`);
       }
       
       searchPos = tableEnd;
