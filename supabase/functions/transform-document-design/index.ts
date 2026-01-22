@@ -101,7 +101,7 @@ interface RequestBody {
 
 interface StructuredSection {
   id?: string;
-  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'feature-grid' | 'page-break' | 'heading' | 'image';
+  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'table' | 'feature-grid' | 'page-break' | 'heading' | 'image';
   content?: string;
   text?: string;
   level?: number;
@@ -111,6 +111,8 @@ interface StructuredSection {
   imageBase64?: string;
   imageMimeType?: string;
   imageCaption?: string;
+  // Table fields
+  tableData?: { rows: string[][]; };
 }
 
 interface ExtractedDocument {
@@ -353,13 +355,72 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       isConfidential = true;
     }
 
+    // ============ Extract Tables First ============
+    const tableRegex = /<w:tbl>([\s\S]*?)<\/w:tbl>/g;
+    const tablePositions: Array<{ startIndex: number; endIndex: number; section: StructuredSection }> = [];
+    let tableMatch;
+    
+    while ((tableMatch = tableRegex.exec(documentXml)) !== null) {
+      const tableContent = tableMatch[1];
+      const rows: string[][] = [];
+      
+      // Extract rows
+      const rowRegex = /<w:tr[\s\S]*?>([\s\S]*?)<\/w:tr>/g;
+      let rowMatch;
+      while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+        const rowContent = rowMatch[1];
+        const cells: string[] = [];
+        
+        // Extract cells
+        const cellRegex = /<w:tc[\s\S]*?>([\s\S]*?)<\/w:tc>/g;
+        let cellMatch;
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+          // Extract text from cell
+          let cellText = '';
+          const textMatches = cellMatch[1].matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+          for (const tm of textMatches) {
+            cellText += tm[1];
+          }
+          cells.push(decodeHtmlEntities(cellText.trim()));
+        }
+        if (cells.length > 0) rows.push(cells);
+      }
+      
+      if (rows.length > 0) {
+        tablePositions.push({
+          startIndex: tableMatch.index,
+          endIndex: tableMatch.index + tableMatch[0].length,
+          section: {
+            type: 'table',
+            tableData: { rows }
+          }
+        });
+        console.log(`[transform-document-design] Extracted table with ${rows.length} rows, ${rows[0]?.length || 0} cols`);
+      }
+    }
+    
+    // ============ Extract Paragraphs ============
     const paragraphRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
     const styleRegex = /<w:pStyle w:val="([^"]*)"/;
     
     let match;
     let foundTitle = false;
     
+    // Track position for interleaving tables
+    let lastParagraphEndIndex = 0;
+    let tableInsertIndex = 0;
+    
     while ((match = paragraphRegex.exec(documentXml)) !== null) {
+      const paragraphStartIndex = match.index;
+      
+      // Insert any tables that appear before this paragraph
+      while (tableInsertIndex < tablePositions.length && 
+             tablePositions[tableInsertIndex].startIndex < paragraphStartIndex) {
+        sections.push(tablePositions[tableInsertIndex].section);
+        tableInsertIndex++;
+      }
+      
+      lastParagraphEndIndex = paragraphStartIndex + match[0].length;
       const paragraphContent = match[1];
       
       // Check for images in this paragraph
@@ -433,17 +494,28 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
           paragraphText.toUpperCase() === 'WHITE PAPER' ||
           paragraphText.toUpperCase() === 'TECHNICAL WHITEPAPER') continue;
       
-      // Check if it's a bullet point
-      if (paragraphText.startsWith('•') || paragraphText.startsWith('-') || paragraphText.startsWith('*')) {
-        const cleanText = paragraphText.replace(/^[•\-*]\s*/, '');
-        const lastSection = sections[sections.length - 1];
-        if (lastSection && lastSection.type === 'bullet-list' && lastSection.items) {
-          lastSection.items.push(cleanText);
-        } else {
-          sections.push({
-            type: 'bullet-list',
-            items: [cleanText],
-          });
+      // ============ Improved Bullet Detection ============
+      // Check for Word's native numbering properties (w:numPr) or list styles
+      const hasNumPr = /<w:numPr[\s\S]*?<\/w:numPr>/.test(paragraphContent);
+      const isListStyle = styleName.match(/ListParagraph|ListBullet|ListNumber|List\d/i);
+      const startsWithBulletChar = paragraphText.startsWith('•') || paragraphText.startsWith('-') || paragraphText.startsWith('*');
+      const startsWithNumber = /^(\d+[\.\)\]]|[a-zA-Z][\.\)\]])\s/.test(paragraphText);
+      
+      // Detect list item by: numbering properties, list style, bullet chars, or numbering pattern
+      if (hasNumPr || isListStyle || startsWithBulletChar || startsWithNumber) {
+        // Clean the text - remove bullet chars or numbering prefix
+        const cleanText = paragraphText.replace(/^([•\-*]|\d+[\.\)\]]|[a-zA-Z][\.\)\]])\s*/, '');
+        
+        if (cleanText.trim()) {
+          const lastSection = sections[sections.length - 1];
+          if (lastSection && lastSection.type === 'bullet-list' && lastSection.items) {
+            lastSection.items.push(cleanText);
+          } else {
+            sections.push({
+              type: 'bullet-list',
+              items: [cleanText],
+            });
+          }
         }
       } else {
         sections.push({
@@ -451,6 +523,12 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
           content: paragraphText,
         });
       }
+    }
+    
+    // Insert any remaining tables after last paragraph
+    while (tableInsertIndex < tablePositions.length) {
+      sections.push(tablePositions[tableInsertIndex].section);
+      tableInsertIndex++;
     }
   }
 
@@ -462,7 +540,9 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
   }
 
   const imageCount = sections.filter(s => s.type === 'image').length;
-  console.log(`[transform-document-design] Extracted ${sections.length} sections (${imageCount} images), title: "${title}"`);
+  const tableCount = sections.filter(s => s.type === 'table').length;
+  const bulletCount = sections.filter(s => s.type === 'bullet-list').length;
+  console.log(`[transform-document-design] Extracted ${sections.length} sections (${imageCount} images, ${tableCount} tables, ${bulletCount} bullet lists), title: "${title}"`);
   
   return { title, subtitle, sections, isConfidential };
 }
@@ -1506,6 +1586,96 @@ async function createContentPages(
       }
       y -= style.marginBottom;
       hasContent = true;
+    }
+    else if (section.type === 'table' && section.tableData) {
+      // ============ Table Rendering ============
+      const { rows } = section.tableData;
+      if (rows.length === 0) continue;
+      
+      const colCount = Math.max(...rows.map(r => r.length));
+      const colWidth = contentWidth / colCount;
+      const cellPadding = 4;
+      const rowHeight = 18;
+      const tableHeight = rows.length * rowHeight;
+      
+      // Check page break before table
+      if (y - tableHeight < minY + 50) {
+        if (!(await addNewPage())) break;
+      }
+      
+      // Draw table
+      const tableStartY = y;
+      
+      for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+        if (pageNumber >= MAX_PAGES) break;
+        
+        const row = rows[rowIdx];
+        const rowY = y;
+        
+        // Check if we need a new page mid-table
+        if (rowY - rowHeight < minY) {
+          if (!(await addNewPage())) break;
+        }
+        
+        // Draw top border for this row
+        currentPage.drawLine({
+          start: { x: margin, y: rowY },
+          end: { x: margin + contentWidth, y: rowY },
+          thickness: rowIdx === 0 ? 1 : 0.5,
+          color: rowIdx === 0 ? COLORS.darkGray : COLORS.lightGray,
+        });
+        
+        // Draw vertical column separators
+        for (let colIdx = 0; colIdx <= colCount; colIdx++) {
+          const colX = margin + (colIdx * colWidth);
+          currentPage.drawLine({
+            start: { x: colX, y: rowY },
+            end: { x: colX, y: rowY - rowHeight },
+            thickness: 0.5,
+            color: COLORS.lightGray,
+          });
+        }
+        
+        // Draw cell text
+        for (let colIdx = 0; colIdx < colCount; colIdx++) {
+          const cellX = margin + (colIdx * colWidth) + cellPadding;
+          const cellText = row[colIdx] || '';
+          const font = rowIdx === 0 ? fonts.bold : fonts.medium;
+          const fontSize = 9;
+          const maxCellWidth = colWidth - (cellPadding * 2);
+          
+          // Truncate text to fit cell
+          let displayText = sanitizeForPdf(cellText);
+          while (displayText.length > 0 && font.widthOfTextAtSize(displayText, fontSize) > maxCellWidth) {
+            displayText = displayText.slice(0, -1);
+          }
+          if (displayText.length < cellText.length && displayText.length > 3) {
+            displayText = displayText.slice(0, -3) + '...';
+          }
+          
+          currentPage.drawText(displayText, {
+            x: cellX,
+            y: rowY - 13,
+            size: fontSize,
+            font,
+            color: rowIdx === 0 ? COLORS.darkGray : COLORS.bodyText,
+          });
+        }
+        
+        y -= rowHeight;
+      }
+      
+      // Draw bottom border
+      currentPage.drawLine({
+        start: { x: margin, y: y },
+        end: { x: margin + contentWidth, y: y },
+        thickness: 1,
+        color: COLORS.darkGray,
+      });
+      
+      y -= 15; // Spacing after table
+      hasContent = true;
+      console.log(`[transform-document-design] Drew table with ${rows.length} rows`);
     }
     else if (section.type === 'paragraph' && content) {
       const style = getTextStyle('paragraph');
