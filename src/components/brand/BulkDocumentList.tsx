@@ -1,9 +1,8 @@
 import React from 'react';
-import { Trash2, Download, FileText, Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Trash2, Download, FileText, Loader2, CheckCircle, XCircle, AlertCircle, Edit3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 import {
   Table,
   TableBody,
@@ -17,7 +16,7 @@ import { TransformResult } from '@/services/brandService';
 export interface BulkDocumentItem {
   id: string;
   file: File;
-  coverTitleTextColor: string;
+  coverTitleHighlightWords: number;
   status: 'pending' | 'processing' | 'complete' | 'error';
   result?: TransformResult;
   errorMessage?: string;
@@ -26,8 +25,9 @@ export interface BulkDocumentItem {
 interface BulkDocumentListProps {
   documents: BulkDocumentItem[];
   onRemove: (id: string) => void;
-  onColorChange: (id: string, color: string) => void;
+  onHighlightWordsChange: (id: string, words: number) => void;
   onDownload: (item: BulkDocumentItem) => void;
+  onEdit: (item: BulkDocumentItem) => void;
   onClearAll: () => void;
   isProcessing: boolean;
 }
@@ -35,8 +35,9 @@ interface BulkDocumentListProps {
 const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
   documents,
   onRemove,
-  onColorChange,
+  onHighlightWordsChange,
   onDownload,
+  onEdit,
   onClearAll,
   isProcessing,
 }) => {
@@ -111,11 +112,11 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[300px]">Document</TableHead>
-              <TableHead>Size</TableHead>
-              <TableHead>Cover Title Color</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[120px]">Actions</TableHead>
+              <TableHead className="w-[280px]">Document</TableHead>
+              <TableHead className="w-[80px]">Size</TableHead>
+              <TableHead className="w-[140px]">Highlight Words</TableHead>
+              <TableHead className="w-[100px]">Status</TableHead>
+              <TableHead className="w-[130px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -124,37 +125,35 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="truncate max-w-[250px]" title={doc.file.name}>
+                    <span className="truncate max-w-[230px]" title={doc.file.name}>
                       {doc.file.name}
                     </span>
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="text-muted-foreground text-sm">
                   {formatFileSize(doc.file.size)}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={doc.coverTitleTextColor}
-                      onChange={(e) => onColorChange(doc.id, e.target.value)}
+                    <Slider
+                      value={[doc.coverTitleHighlightWords]}
+                      onValueChange={([val]) => onHighlightWordsChange(doc.id, val)}
+                      min={0}
+                      max={15}
+                      step={1}
                       disabled={isProcessing || doc.status !== 'pending'}
-                      className="w-8 h-8 rounded border cursor-pointer disabled:opacity-50"
+                      className="w-20"
                     />
-                    <Input
-                      value={doc.coverTitleTextColor}
-                      onChange={(e) => onColorChange(doc.id, e.target.value)}
-                      disabled={isProcessing || doc.status !== 'pending'}
-                      className="w-24 h-8 text-xs font-mono"
-                      placeholder="#FFFFFF"
-                    />
+                    <span className="w-5 text-center font-mono text-sm text-muted-foreground">
+                      {doc.coverTitleHighlightWords}
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">
                     {getStatusBadge(doc.status)}
                     {doc.errorMessage && (
-                      <span className="text-xs text-destructive truncate max-w-[200px]" title={doc.errorMessage}>
+                      <span className="text-xs text-destructive truncate max-w-[150px]" title={doc.errorMessage}>
                         {doc.errorMessage}
                       </span>
                     )}
@@ -162,6 +161,16 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
+                    {doc.status === 'complete' && doc.result?.extractedContent && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onEdit(doc)}
+                        title="Edit Before Download"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+                    )}
                     {doc.status === 'complete' && doc.result?.modifiedFile && (
                       <Button
                         variant="ghost"
