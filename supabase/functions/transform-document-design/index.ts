@@ -142,6 +142,7 @@ interface ElementTemplate {
 
 // Footer section configuration
 type FooterSectionType = 'none' | 'text' | 'page_number' | 'image';
+type PageNumberFormat = 'full' | 'number_only';
 
 interface FooterConfig {
   showSeparator: boolean;
@@ -151,14 +152,17 @@ interface FooterConfig {
   leftText: string | null;
   leftImageBase64: string | null;
   leftImageMime: string | null;
+  leftPageNumberFormat: PageNumberFormat;
   middleType: FooterSectionType;
   middleText: string | null;
   middleImageBase64: string | null;
   middleImageMime: string | null;
+  middlePageNumberFormat: PageNumberFormat;
   rightType: FooterSectionType;
   rightText: string | null;
   rightImageBase64: string | null;
   rightImageMime: string | null;
+  rightPageNumberFormat: PageNumberFormat;
 }
 
 // Cover page title configuration
@@ -800,7 +804,8 @@ async function drawConfigurableFooter(
     text: string | null,
     imageBase64: string | null,
     imageMime: string | null,
-    position: 'left' | 'middle' | 'right'
+    position: 'left' | 'middle' | 'right',
+    pageNumberFormat: PageNumberFormat = 'full'
   ) => {
     if (type === 'none') return;
 
@@ -810,7 +815,10 @@ async function drawConfigurableFooter(
     if (type === 'text' && text) {
       displayText = text;
     } else if (type === 'page_number') {
-      displayText = `Page ${pageNumber} of ${totalPages}`;
+      // Use configured format: 'number_only' shows just the number, 'full' shows "Page X of Y"
+      displayText = pageNumberFormat === 'number_only' 
+        ? pageNumber.toString() 
+        : `Page ${pageNumber} of ${totalPages}`;
     }
 
     if (type === 'text' || type === 'page_number') {
@@ -873,10 +881,10 @@ async function drawConfigurableFooter(
     }
   };
 
-  // Draw each section
-  await drawSection(footerConfig.leftType, footerConfig.leftText, footerConfig.leftImageBase64, footerConfig.leftImageMime, 'left');
-  await drawSection(footerConfig.middleType, footerConfig.middleText, footerConfig.middleImageBase64, footerConfig.middleImageMime, 'middle');
-  await drawSection(footerConfig.rightType, footerConfig.rightText, footerConfig.rightImageBase64, footerConfig.rightImageMime, 'right');
+  // Draw each section with their respective page number formats
+  await drawSection(footerConfig.leftType, footerConfig.leftText, footerConfig.leftImageBase64, footerConfig.leftImageMime, 'left', footerConfig.leftPageNumberFormat);
+  await drawSection(footerConfig.middleType, footerConfig.middleText, footerConfig.middleImageBase64, footerConfig.middleImageMime, 'middle', footerConfig.middlePageNumberFormat);
+  await drawSection(footerConfig.rightType, footerConfig.rightText, footerConfig.rightImageBase64, footerConfig.rightImageMime, 'right', footerConfig.rightPageNumberFormat);
 
   return 40;
 }
@@ -1999,14 +2007,17 @@ serve(async (req) => {
             leftText: layout.footer_left_text ?? null,
             leftImageBase64: layout.footer_left_image_base64 ?? null,
             leftImageMime: layout.footer_left_image_mime ?? null,
+            leftPageNumberFormat: (layout.footer_left_page_number_format as PageNumberFormat) ?? 'full',
             middleType: (layout.footer_middle_type as FooterSectionType) ?? 'none',
             middleText: layout.footer_middle_text ?? null,
             middleImageBase64: layout.footer_middle_image_base64 ?? null,
             middleImageMime: layout.footer_middle_image_mime ?? null,
+            middlePageNumberFormat: (layout.footer_middle_page_number_format as PageNumberFormat) ?? 'full',
             rightType: (layout.footer_right_type as FooterSectionType) ?? 'none',
             rightText: layout.footer_right_text ?? null,
             rightImageBase64: layout.footer_right_image_base64 ?? null,
             rightImageMime: layout.footer_right_image_mime ?? null,
+            rightPageNumberFormat: (layout.footer_right_page_number_format as PageNumberFormat) ?? 'full',
           };
         };
 

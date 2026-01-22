@@ -637,6 +637,7 @@ export function DocumentComposer() {
                             text: currentLayout?.footer_left_text,
                             imageBase64: currentLayout?.footer_left_image_base64,
                             imageMime: currentLayout?.footer_left_image_mime,
+                            pageNumberFormat: (currentLayout?.footer_left_page_number_format as 'full' | 'number_only') || 'full',
                           }}
                           onChange={(config) => {
                             handleLayoutBatchChange({
@@ -644,6 +645,7 @@ export function DocumentComposer() {
                               footer_left_text: config.text || null,
                               footer_left_image_base64: config.imageBase64 || null,
                               footer_left_image_mime: config.imageMime || null,
+                              footer_left_page_number_format: config.pageNumberFormat || 'full',
                             } as Partial<PageLayout>);
                           }}
                         />
@@ -654,6 +656,7 @@ export function DocumentComposer() {
                             text: currentLayout?.footer_middle_text,
                             imageBase64: currentLayout?.footer_middle_image_base64,
                             imageMime: currentLayout?.footer_middle_image_mime,
+                            pageNumberFormat: (currentLayout?.footer_middle_page_number_format as 'full' | 'number_only') || 'full',
                           }}
                           onChange={(config) => {
                             handleLayoutBatchChange({
@@ -661,6 +664,7 @@ export function DocumentComposer() {
                               footer_middle_text: config.text || null,
                               footer_middle_image_base64: config.imageBase64 || null,
                               footer_middle_image_mime: config.imageMime || null,
+                              footer_middle_page_number_format: config.pageNumberFormat || 'full',
                             } as Partial<PageLayout>);
                           }}
                         />
@@ -671,6 +675,7 @@ export function DocumentComposer() {
                             text: currentLayout?.footer_right_text,
                             imageBase64: currentLayout?.footer_right_image_base64,
                             imageMime: currentLayout?.footer_right_image_mime,
+                            pageNumberFormat: (currentLayout?.footer_right_page_number_format as 'full' | 'number_only') || 'full',
                           }}
                           onChange={(config) => {
                             handleLayoutBatchChange({
@@ -678,6 +683,7 @@ export function DocumentComposer() {
                               footer_right_text: config.text || null,
                               footer_right_image_base64: config.imageBase64 || null,
                               footer_right_image_mime: config.imageMime || null,
+                              footer_right_page_number_format: config.pageNumberFormat || 'full',
                             } as Partial<PageLayout>);
                           }}
                         />

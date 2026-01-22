@@ -6,12 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 
 export type FooterSectionType = 'none' | 'text' | 'page_number' | 'image';
+export type PageNumberFormat = 'full' | 'number_only';
 
 export interface FooterSectionConfig {
   type: FooterSectionType;
   text?: string | null;
   imageBase64?: string | null;
   imageMime?: string | null;
+  pageNumberFormat?: PageNumberFormat;
 }
 
 interface FooterConfigSectionProps {
@@ -31,11 +33,16 @@ export function FooterConfigSection({ label, config, onChange }: FooterConfigSec
       text: type === 'text' ? (config.text || '') : null,
       imageBase64: type === 'image' ? config.imageBase64 : null,
       imageMime: type === 'image' ? config.imageMime : null,
+      pageNumberFormat: type === 'page_number' ? (config.pageNumberFormat || 'full') : undefined,
     });
   };
 
   const handleTextChange = (text: string) => {
     onChange({ ...config, text });
+  };
+
+  const handleFormatChange = (format: PageNumberFormat) => {
+    onChange({ ...config, pageNumberFormat: format });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,6 +73,10 @@ export function FooterConfigSection({ label, config, onChange }: FooterConfigSec
     }
   };
 
+  const getPageNumberPreview = () => {
+    return config.pageNumberFormat === 'number_only' ? '1' : 'Page 1 of 10';
+  };
+
   return (
     <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
       <Label className="font-medium">{label}</Label>
@@ -91,8 +102,20 @@ export function FooterConfigSection({ label, config, onChange }: FooterConfigSec
       )}
 
       {config.type === 'page_number' && (
-        <div className="text-sm text-muted-foreground bg-background p-2 rounded border">
-          Preview: <span className="font-mono">Page 1 of 10</span>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Format</Label>
+          <Select value={config.pageNumberFormat || 'full'} onValueChange={handleFormatChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="full">Full (Page X of Y)</SelectItem>
+              <SelectItem value="number_only">Number Only (X)</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="text-sm text-muted-foreground bg-background p-2 rounded border">
+            Preview: <span className="font-mono">{getPageNumberPreview()}</span>
+          </div>
         </div>
       )}
 
