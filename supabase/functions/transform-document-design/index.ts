@@ -359,10 +359,27 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     // Use a more robust approach to match tables by finding balanced tags
     const tablePositions: Array<{ startIndex: number; endIndex: number; section: StructuredSection }> = [];
     
+    // Helper to find proper <w:tbl> or <w:tbl ...> tag (not <w:tblPr>, <w:tblGrid>, etc.)
+    const findTableTag = (xml: string, startFrom: number): number => {
+      let pos = startFrom;
+      while (true) {
+        const idx = xml.indexOf('<w:tbl', pos);
+        if (idx === -1) return -1;
+        
+        // Check the character after '<w:tbl' - must be '>' or ' ' or '/'
+        const nextChar = xml[idx + 6]; // '<w:tbl'.length = 6
+        if (nextChar === '>' || nextChar === ' ' || nextChar === '/') {
+          return idx;
+        }
+        // It's something like <w:tblPr, <w:tblGrid, etc. - skip it
+        pos = idx + 1;
+      }
+    };
+    
     // Find all table start positions
     let searchPos = 0;
     while (true) {
-      const tableStart = documentXml.indexOf('<w:tbl', searchPos);
+      const tableStart = findTableTag(documentXml, searchPos);
       if (tableStart === -1) break;
       
       // Find the matching end tag by counting nested tables
@@ -371,7 +388,7 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       let tableEnd = -1;
       
       while (pos < documentXml.length) {
-        const nextOpen = documentXml.indexOf('<w:tbl', pos + 1);
+        const nextOpen = findTableTag(documentXml, pos + 1);
         const nextClose = documentXml.indexOf('</w:tbl>', pos);
         
         if (nextClose === -1) break;
