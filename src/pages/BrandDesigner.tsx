@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import JSZip from 'jszip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -249,17 +250,64 @@ const BrandDesigner: React.FC = () => {
     URL.revokeObjectURL(url);
   }, []);
 
-  const handleBulkDownloadAll = useCallback(() => {
+  const handleBulkDownloadAll = useCallback(async () => {
     const completedDocs = bulkDocuments.filter(
       (doc) => doc.status === 'complete' && doc.result?.modifiedFile
     );
-    
-    completedDocs.forEach((item, index) => {
-      setTimeout(() => {
-        handleBulkDownload(item);
-      }, index * 500); // Stagger downloads
-    });
-  }, [bulkDocuments, handleBulkDownload]);
+
+    if (completedDocs.length === 0) {
+      toast({
+        title: 'No documents to download',
+        description: 'There are no completed documents to download.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const zip = new JSZip();
+
+      // Add each PDF to the ZIP archive
+      completedDocs.forEach((item) => {
+        const baseName = item.file.name.replace(/\.(docx|pdf)$/i, '');
+        const fileName = `${baseName}_branded.pdf`;
+        
+        // Convert base64 to binary data
+        const binaryString = atob(item.result!.modifiedFile!);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        zip.file(fileName, bytes);
+      });
+
+      // Generate the ZIP file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      // Download the ZIP
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `branded_documents_${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Download complete',
+        description: `Downloaded ${completedDocs.length} documents as a ZIP file.`,
+      });
+    } catch (error) {
+      console.error('Error creating ZIP:', error);
+      toast({
+        title: 'Download failed',
+        description: 'Failed to create ZIP file. Please try downloading individually.',
+        variant: 'destructive',
+      });
+    }
+  }, [bulkDocuments]);
 
   const handleBulkEdit = useCallback((item: BulkDocumentItem) => {
     setEditingBulkDoc(item);
