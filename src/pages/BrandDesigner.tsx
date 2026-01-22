@@ -226,11 +226,7 @@ const BrandDesigner: React.FC = () => {
     );
   }, []);
 
-  const handleBulkOutputFormatChange = useCallback((id: string, format: OutputFormat) => {
-    setBulkDocuments((prev) =>
-      prev.map((doc) => (doc.id === id ? { ...doc, outputFormat: format } : doc))
-    );
-  }, []);
+  // Output format is always PDF (no DOCX support due to design limitations)
 
   const handleBulkClearAll = useCallback(() => {
     setBulkDocuments([]);
@@ -246,18 +242,12 @@ const BrandDesigner: React.FC = () => {
       bytes[i] = binaryString.charCodeAt(i);
     }
     
-    const isDocx = item.outputFormat === 'docx' && item.result.type === 'docx';
-    const mimeType = isDocx 
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      : 'application/pdf';
-    const extension = isDocx ? 'docx' : 'pdf';
-    
-    const blob = new Blob([bytes], { type: mimeType });
+    const blob = new Blob([bytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const baseName = item.file.name.replace(/\.(docx|pdf)$/i, '');
-    a.download = `${baseName}_branded.${extension}`;
+    a.download = `${baseName}_branded.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -281,12 +271,10 @@ const BrandDesigner: React.FC = () => {
     try {
       const zip = new JSZip();
 
-      // Add each document to the ZIP archive
+      // Add each document to the ZIP archive (PDF only)
       completedDocs.forEach((item) => {
         const baseName = item.file.name.replace(/\.(docx|pdf)$/i, '');
-        const isDocx = item.outputFormat === 'docx' && item.result?.type === 'docx';
-        const extension = isDocx ? 'docx' : 'pdf';
-        const fileName = `${baseName}_branded.${extension}`;
+        const fileName = `${baseName}_branded.pdf`;
         
         // Convert base64 to binary data
         const binaryString = atob(item.result!.modifiedFile!);
@@ -397,7 +385,6 @@ const BrandDesigner: React.FC = () => {
           'extract',
           { 
             coverTitleHighlightWords: doc.coverTitleHighlightWords,
-            outputFormat: doc.outputFormat,
           }
         );
 
@@ -532,7 +519,6 @@ const BrandDesigner: React.FC = () => {
                       documents={bulkDocuments}
                       onRemove={handleBulkRemove}
                       onHighlightWordsChange={handleBulkHighlightWordsChange}
-                      onOutputFormatChange={handleBulkOutputFormatChange}
                       onDownload={handleBulkDownload}
                       onEdit={handleBulkEdit}
                       onClearAll={handleBulkClearAll}

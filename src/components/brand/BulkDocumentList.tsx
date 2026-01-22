@@ -4,13 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Table,
   TableBody,
   TableCell,
@@ -20,7 +13,8 @@ import {
 } from '@/components/ui/table';
 import { TransformResult } from '@/services/brandService';
 
-export type OutputFormat = 'pdf' | 'docx';
+// Output format is PDF only (DOCX has design limitations)
+export type OutputFormat = 'pdf';
 
 export interface BulkDocumentItem {
   id: string;
@@ -36,7 +30,6 @@ interface BulkDocumentListProps {
   documents: BulkDocumentItem[];
   onRemove: (id: string) => void;
   onHighlightWordsChange: (id: string, words: number) => void;
-  onOutputFormatChange: (id: string, format: OutputFormat) => void;
   onDownload: (item: BulkDocumentItem) => void;
   onEdit: (item: BulkDocumentItem) => void;
   onClearAll: () => void;
@@ -47,7 +40,6 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
   documents,
   onRemove,
   onHighlightWordsChange,
-  onOutputFormatChange,
   onDownload,
   onEdit,
   onClearAll,
@@ -124,10 +116,9 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[240px]">Document</TableHead>
+              <TableHead className="w-[280px]">Document</TableHead>
               <TableHead className="w-[80px]">Size</TableHead>
-              <TableHead className="w-[130px]">Highlight Words</TableHead>
-              <TableHead className="w-[100px]">Format</TableHead>
+              <TableHead className="w-[150px]">Highlight Words</TableHead>
               <TableHead className="w-[100px]">Status</TableHead>
               <TableHead className="w-[130px]">Actions</TableHead>
             </TableRow>
@@ -138,7 +129,7 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="truncate max-w-[200px]" title={doc.file.name}>
+                    <span className="truncate max-w-[240px]" title={doc.file.name}>
                       {doc.file.name}
                     </span>
                   </div>
@@ -155,27 +146,12 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
                       max={15}
                       step={1}
                       disabled={isProcessing || doc.status !== 'pending'}
-                      className="w-20"
+                      className="w-24"
                     />
                     <span className="w-5 text-center font-mono text-sm text-muted-foreground">
                       {doc.coverTitleHighlightWords}
                     </span>
                   </div>
-                </TableCell>
-                <TableCell>
-                  <Select
-                    value={doc.outputFormat}
-                    onValueChange={(val: OutputFormat) => onOutputFormatChange(doc.id, val)}
-                    disabled={isProcessing || doc.status !== 'pending'}
-                  >
-                    <SelectTrigger className="w-[80px] h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pdf">PDF</SelectItem>
-                      <SelectItem value="docx">DOCX</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">

@@ -36,11 +36,11 @@ export interface ExtractedDocument {
 
 export interface TransformOptions {
   coverTitleHighlightWords?: number;
-  outputFormat?: 'pdf' | 'docx';
+  // Output is always PDF (DOCX has design limitations)
 }
 
 export interface TransformResult {
-  type: 'docx' | 'pdf' | null;
+  type: 'pdf' | null;
   modifiedFile: string | null;
   originalFileName: string;
   message?: string;
@@ -92,7 +92,7 @@ export const brandService = {
         fileType,
         mode,
         coverTitleHighlightWordsOverride: options?.coverTitleHighlightWords,
-        outputFormat: options?.outputFormat,
+        outputFormat: 'pdf', // Always PDF
       },
     });
 
@@ -120,7 +120,7 @@ export const brandService = {
         editedContent,
         fileName: originalFileName,
         coverTitleHighlightWordsOverride: options?.coverTitleHighlightWords,
-        outputFormat: options?.outputFormat,
+        outputFormat: 'pdf', // Always PDF
       },
     });
 
