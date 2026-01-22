@@ -1796,14 +1796,17 @@ export type Database = {
           footer_element_id: string | null
           footer_left_image_base64: string | null
           footer_left_image_mime: string | null
+          footer_left_page_number_format: string | null
           footer_left_text: string | null
           footer_left_type: string | null
           footer_middle_image_base64: string | null
           footer_middle_image_mime: string | null
+          footer_middle_page_number_format: string | null
           footer_middle_text: string | null
           footer_middle_type: string | null
           footer_right_image_base64: string | null
           footer_right_image_mime: string | null
+          footer_right_page_number_format: string | null
           footer_right_text: string | null
           footer_right_type: string | null
           footer_separator_color: string | null
@@ -1831,14 +1834,17 @@ export type Database = {
           footer_element_id?: string | null
           footer_left_image_base64?: string | null
           footer_left_image_mime?: string | null
+          footer_left_page_number_format?: string | null
           footer_left_text?: string | null
           footer_left_type?: string | null
           footer_middle_image_base64?: string | null
           footer_middle_image_mime?: string | null
+          footer_middle_page_number_format?: string | null
           footer_middle_text?: string | null
           footer_middle_type?: string | null
           footer_right_image_base64?: string | null
           footer_right_image_mime?: string | null
+          footer_right_page_number_format?: string | null
           footer_right_text?: string | null
           footer_right_type?: string | null
           footer_separator_color?: string | null
@@ -1866,14 +1872,17 @@ export type Database = {
           footer_element_id?: string | null
           footer_left_image_base64?: string | null
           footer_left_image_mime?: string | null
+          footer_left_page_number_format?: string | null
           footer_left_text?: string | null
           footer_left_type?: string | null
           footer_middle_image_base64?: string | null
           footer_middle_image_mime?: string | null
+          footer_middle_page_number_format?: string | null
           footer_middle_text?: string | null
           footer_middle_type?: string | null
           footer_right_image_base64?: string | null
           footer_right_image_mime?: string | null
+          footer_right_page_number_format?: string | null
           footer_right_text?: string | null
           footer_right_type?: string | null
           footer_separator_color?: string | null

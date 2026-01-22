@@ -19,6 +19,7 @@ export interface DocumentProfile {
 }
 
 export type FooterSectionType = 'none' | 'text' | 'page_number' | 'image';
+export type PageNumberFormat = 'full' | 'number_only';
 
 export interface PageLayout {
   id: string;
@@ -46,14 +47,17 @@ export interface PageLayout {
   footer_left_text: string | null;
   footer_left_image_base64: string | null;
   footer_left_image_mime: string | null;
+  footer_left_page_number_format: PageNumberFormat | null;
   footer_middle_type: FooterSectionType;
   footer_middle_text: string | null;
   footer_middle_image_base64: string | null;
   footer_middle_image_mime: string | null;
+  footer_middle_page_number_format: PageNumberFormat | null;
   footer_right_type: FooterSectionType;
   footer_right_text: string | null;
   footer_right_image_base64: string | null;
   footer_right_image_mime: string | null;
+  footer_right_page_number_format: PageNumberFormat | null;
   created_at: string;
   updated_at: string;
 }
