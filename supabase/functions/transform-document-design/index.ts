@@ -397,24 +397,94 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       const tableContent = documentXml.substring(tableStart, tableEnd);
       const rows: string[][] = [];
       
-      // Extract rows - use a more careful regex
-      const rowMatches = tableContent.matchAll(/<w:tr[^>]*>([\s\S]*?)<\/w:tr>/g);
-      for (const rowMatch of rowMatches) {
-        const rowContent = rowMatch[1];
+      // Extract rows using indexOf for more reliable matching
+      let rowSearchPos = 0;
+      while (true) {
+        const rowStart = tableContent.indexOf('<w:tr', rowSearchPos);
+        if (rowStart === -1) break;
+        
+        // Find the matching </w:tr> - handle nested structures
+        let rowDepth = 0;
+        let rowPos = rowStart;
+        let rowEnd = -1;
+        
+        while (rowPos < tableContent.length) {
+          const nextRowOpen = tableContent.indexOf('<w:tr', rowPos + 1);
+          const nextRowClose = tableContent.indexOf('</w:tr>', rowPos);
+          
+          if (nextRowClose === -1) break;
+          
+          if (nextRowOpen !== -1 && nextRowOpen < nextRowClose) {
+            rowDepth++;
+            rowPos = nextRowOpen;
+          } else {
+            if (rowDepth === 0) {
+              rowEnd = nextRowClose + '</w:tr>'.length;
+              break;
+            }
+            rowDepth--;
+            rowPos = nextRowClose + 1;
+          }
+        }
+        
+        if (rowEnd === -1) {
+          rowSearchPos = rowStart + 1;
+          continue;
+        }
+        
+        const rowContent = tableContent.substring(rowStart, rowEnd);
         const cells: string[] = [];
         
-        // Extract cells
-        const cellMatches = rowContent.matchAll(/<w:tc[^>]*>([\s\S]*?)<\/w:tc>/g);
-        for (const cellMatch of cellMatches) {
-          // Extract text from cell (handle multiple paragraphs in a cell)
+        // Extract cells using indexOf
+        let cellSearchPos = 0;
+        while (true) {
+          const cellStart = rowContent.indexOf('<w:tc', cellSearchPos);
+          if (cellStart === -1) break;
+          
+          // Find matching </w:tc>
+          let cellDepth = 0;
+          let cellPos = cellStart;
+          let cellEnd = -1;
+          
+          while (cellPos < rowContent.length) {
+            const nextCellOpen = rowContent.indexOf('<w:tc', cellPos + 1);
+            const nextCellClose = rowContent.indexOf('</w:tc>', cellPos);
+            
+            if (nextCellClose === -1) break;
+            
+            if (nextCellOpen !== -1 && nextCellOpen < nextCellClose) {
+              cellDepth++;
+              cellPos = nextCellOpen;
+            } else {
+              if (cellDepth === 0) {
+                cellEnd = nextCellClose + '</w:tc>'.length;
+                break;
+              }
+              cellDepth--;
+              cellPos = nextCellClose + 1;
+            }
+          }
+          
+          if (cellEnd === -1) {
+            cellSearchPos = cellStart + 1;
+            continue;
+          }
+          
+          const cellContent = rowContent.substring(cellStart, cellEnd);
+          
+          // Extract all text from the cell
           let cellText = '';
-          const textMatches = cellMatch[1].matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g);
+          const textMatches = cellContent.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g);
           for (const tm of textMatches) {
             cellText += tm[1];
           }
           cells.push(decodeHtmlEntities(cellText.trim()));
+          
+          cellSearchPos = cellEnd;
         }
+        
         if (cells.length > 0) rows.push(cells);
+        rowSearchPos = rowEnd;
       }
       
       // Skip tables that look like TOC (single column tables where MOST rows end with page numbers)
