@@ -399,19 +399,33 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       }
     }
     
-    // ============ Extract Paragraphs ============
+    // ============ Extract Paragraphs (Skip those inside tables) ============
     const paragraphRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
     const styleRegex = /<w:pStyle w:val="([^"]*)"/;
+    
+    // Helper to check if a position is inside any table
+    const isInsideTable = (pos: number): boolean => {
+      for (const table of tablePositions) {
+        if (pos >= table.startIndex && pos < table.endIndex) {
+          return true;
+        }
+      }
+      return false;
+    };
     
     let match;
     let foundTitle = false;
     
     // Track position for interleaving tables
-    let lastParagraphEndIndex = 0;
     let tableInsertIndex = 0;
     
     while ((match = paragraphRegex.exec(documentXml)) !== null) {
       const paragraphStartIndex = match.index;
+      
+      // Skip paragraphs that are inside table cells
+      if (isInsideTable(paragraphStartIndex)) {
+        continue;
+      }
       
       // Insert any tables that appear before this paragraph
       while (tableInsertIndex < tablePositions.length && 
@@ -420,7 +434,6 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
         tableInsertIndex++;
       }
       
-      lastParagraphEndIndex = paragraphStartIndex + match[0].length;
       const paragraphContent = match[1];
       
       // Check for images in this paragraph
