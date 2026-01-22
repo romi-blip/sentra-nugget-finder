@@ -178,6 +178,7 @@ interface CoverTitleConfig {
   highlightColor: string;
   textColor: string;
   yOffset: number;
+  showConfidential: boolean;
 }
 
 // Helper to convert hex color to RGB
@@ -1157,7 +1158,8 @@ async function createCoverPageWithElements(
   subtitleStyle: ElementTemplate | null,
   logoImage: any,
   logoConfig: { show: boolean; x: number; y: number; height?: number; } | null,
-  titleConfig: CoverTitleConfig | null = null
+  titleConfig: CoverTitleConfig | null = null,
+  showConfidential: boolean = false
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
@@ -1334,6 +1336,28 @@ async function createCoverPageWithElements(
     });
     
     console.log(`[transform-document-design] Rendered subtitle: "${data.subtitle}" at y=${subtitleY}`);
+  }
+  
+  // Draw "Confidential" marking at bottom center if enabled
+  if (showConfidential) {
+    const confidentialText = 'Confidential';
+    const confidentialFontSize = 14;
+    const confidentialFont = fonts.bold;
+    const confidentialColor = rgb(0.8, 0, 0); // Red color
+    
+    const textWidth = confidentialFont.widthOfTextAtSize(confidentialText, confidentialFontSize);
+    const confidentialX = (width - textWidth) / 2; // Center horizontally
+    const confidentialY = 30; // 30pt from bottom
+    
+    page.drawText(confidentialText, {
+      x: confidentialX,
+      y: confidentialY,
+      size: confidentialFontSize,
+      font: confidentialFont,
+      color: confidentialColor,
+    });
+    
+    console.log(`[transform-document-design] Rendered "Confidential" marking at center bottom`);
   }
 }
 
@@ -2068,9 +2092,9 @@ async function generatePDF(
   const embeddedFooterImages = new Map<string, any>();
 
   // Create cover page with logo (height comes from config) - no page number
-  // Pass coverTitleConfig for split-color title rendering
-  console.log(`[transform-document-design] Cover page: subtitle="${extractedDoc.subtitle}", title="${extractedDoc.title}"`);
-  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, elements.subtitle || null, logoImage, coverLogoConfig, coverTitleConfig);
+  // Pass coverTitleConfig for split-color title rendering and confidential marking
+  console.log(`[transform-document-design] Cover page: subtitle="${extractedDoc.subtitle}", title="${extractedDoc.title}", confidential=${coverTitleConfig?.showConfidential ?? false}`);
+  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, elements.subtitle || null, logoImage, coverLogoConfig, coverTitleConfig, coverTitleConfig?.showConfidential ?? false);
   
   // Create TOC page with logo and configurable footer
   // TOC is page 1 (cover not counted)
@@ -2350,8 +2374,9 @@ serve(async (req) => {
             highlightColor: coverLayout.cover_title_highlight_color ?? '#39FF14',
             textColor: coverLayout.cover_title_text_color || '#FFFFFF',
             yOffset: coverLayout.cover_title_y_offset ?? 100,
+            showConfidential: coverLayout.show_confidential ?? false,
           };
-          console.log(`[transform-document-design] Cover title config: highlightWords=${coverTitleConfigForPdf.highlightWords} (override=${coverTitleHighlightWordsOverride ?? 'none'}), highlightColor=${coverTitleConfigForPdf.highlightColor}, textColor=${coverTitleConfigForPdf.textColor}, yOffset=${coverTitleConfigForPdf.yOffset}`);
+          console.log(`[transform-document-design] Cover title config: highlightWords=${coverTitleConfigForPdf.highlightWords} (override=${coverTitleHighlightWordsOverride ?? 'none'}), highlightColor=${coverTitleConfigForPdf.highlightColor}, textColor=${coverTitleConfigForPdf.textColor}, yOffset=${coverTitleConfigForPdf.yOffset}, showConfidential=${coverTitleConfigForPdf.showConfidential}`);
         }
         if (contentLayout) {
           layoutConfigForPdf.content = {

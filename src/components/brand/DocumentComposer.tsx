@@ -574,6 +574,22 @@ export function DocumentComposer() {
                           </span>
                         </div>
                       </div>
+
+                      {/* Confidential Marking */}
+                      <div className="p-4 border rounded-lg bg-muted/30">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label className="text-base">Confidential Marking</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Display "Confidential" in red at the bottom center of the cover page
+                            </p>
+                          </div>
+                          <Switch
+                            checked={currentLayout?.show_confidential ?? false}
+                            onCheckedChange={(checked) => handleLayoutChange('show_confidential', checked)}
+                          />
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 )}
