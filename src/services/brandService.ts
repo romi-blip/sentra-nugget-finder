@@ -36,6 +36,7 @@ export interface ExtractedDocument {
 
 export interface TransformOptions {
   coverTitleHighlightWords?: number;
+  outputFormat?: 'pdf' | 'docx';
 }
 
 export interface TransformResult {
@@ -91,6 +92,7 @@ export const brandService = {
         fileType,
         mode,
         coverTitleHighlightWordsOverride: options?.coverTitleHighlightWords,
+        outputFormat: options?.outputFormat,
       },
     });
 
@@ -107,12 +109,18 @@ export const brandService = {
     };
   },
 
-  async generateFromContent(editedContent: ExtractedDocument, originalFileName: string): Promise<TransformResult> {
+  async generateFromContent(
+    editedContent: ExtractedDocument, 
+    originalFileName: string,
+    options?: TransformOptions
+  ): Promise<TransformResult> {
     const { data, error } = await supabase.functions.invoke('transform-document-design', {
       body: {
         mode: 'generate',
         editedContent,
         fileName: originalFileName,
+        coverTitleHighlightWordsOverride: options?.coverTitleHighlightWords,
+        outputFormat: options?.outputFormat,
       },
     });
 
