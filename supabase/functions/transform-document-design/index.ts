@@ -356,26 +356,57 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
     }
 
     // ============ Extract Tables First ============
-    const tableRegex = /<w:tbl>([\s\S]*?)<\/w:tbl>/g;
+    // Use a more robust approach to match tables by finding balanced tags
     const tablePositions: Array<{ startIndex: number; endIndex: number; section: StructuredSection }> = [];
-    let tableMatch;
     
-    while ((tableMatch = tableRegex.exec(documentXml)) !== null) {
-      const tableContent = tableMatch[1];
+    // Find all table start positions
+    let searchPos = 0;
+    while (true) {
+      const tableStart = documentXml.indexOf('<w:tbl', searchPos);
+      if (tableStart === -1) break;
+      
+      // Find the matching end tag by counting nested tables
+      let depth = 0;
+      let pos = tableStart;
+      let tableEnd = -1;
+      
+      while (pos < documentXml.length) {
+        const nextOpen = documentXml.indexOf('<w:tbl', pos + 1);
+        const nextClose = documentXml.indexOf('</w:tbl>', pos);
+        
+        if (nextClose === -1) break;
+        
+        if (nextOpen !== -1 && nextOpen < nextClose) {
+          depth++;
+          pos = nextOpen;
+        } else {
+          if (depth === 0) {
+            tableEnd = nextClose + '</w:tbl>'.length;
+            break;
+          }
+          depth--;
+          pos = nextClose + 1;
+        }
+      }
+      
+      if (tableEnd === -1) {
+        searchPos = tableStart + 1;
+        continue;
+      }
+      
+      const tableContent = documentXml.substring(tableStart, tableEnd);
       const rows: string[][] = [];
       
-      // Extract rows
-      const rowRegex = /<w:tr[\s\S]*?>([\s\S]*?)<\/w:tr>/g;
-      let rowMatch;
-      while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+      // Extract rows - use a more careful regex
+      const rowMatches = tableContent.matchAll(/<w:tr[^>]*>([\s\S]*?)<\/w:tr>/g);
+      for (const rowMatch of rowMatches) {
         const rowContent = rowMatch[1];
         const cells: string[] = [];
         
         // Extract cells
-        const cellRegex = /<w:tc[\s\S]*?>([\s\S]*?)<\/w:tc>/g;
-        let cellMatch;
-        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
-          // Extract text from cell
+        const cellMatches = rowContent.matchAll(/<w:tc[^>]*>([\s\S]*?)<\/w:tc>/g);
+        for (const cellMatch of cellMatches) {
+          // Extract text from cell (handle multiple paragraphs in a cell)
           let cellText = '';
           const textMatches = cellMatch[1].matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g);
           for (const tm of textMatches) {
@@ -386,17 +417,31 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
         if (cells.length > 0) rows.push(cells);
       }
       
-      if (rows.length > 0) {
+      // Skip tables that look like TOC (single column with page numbers)
+      const isTocTable = rows.length > 0 && rows.every(r => r.length === 1) && 
+                         rows.some(r => /\d+$/.test(r[0]?.trim() || ''));
+      
+      if (rows.length > 0 && !isTocTable) {
         tablePositions.push({
-          startIndex: tableMatch.index,
-          endIndex: tableMatch.index + tableMatch[0].length,
+          startIndex: tableStart,
+          endIndex: tableEnd,
           section: {
             type: 'table',
             tableData: { rows }
           }
         });
         console.log(`[transform-document-design] Extracted table with ${rows.length} rows, ${rows[0]?.length || 0} cols`);
+      } else if (isTocTable) {
+        // Still track position to skip paragraphs inside
+        tablePositions.push({
+          startIndex: tableStart,
+          endIndex: tableEnd,
+          section: { type: 'paragraph', content: '' } // Empty placeholder, won't be added
+        });
+        console.log(`[transform-document-design] Skipped TOC table with ${rows.length} rows`);
       }
+      
+      searchPos = tableEnd;
     }
     
     // ============ Extract Paragraphs (Skip those inside tables) ============
@@ -427,10 +472,14 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
         continue;
       }
       
-      // Insert any tables that appear before this paragraph
+      // Insert any tables that appear before this paragraph (skip empty placeholders)
       while (tableInsertIndex < tablePositions.length && 
              tablePositions[tableInsertIndex].startIndex < paragraphStartIndex) {
-        sections.push(tablePositions[tableInsertIndex].section);
+        const tableSection = tablePositions[tableInsertIndex].section;
+        // Only add actual tables (not empty placeholders from TOC tables)
+        if (tableSection.type === 'table' && tableSection.tableData && tableSection.tableData.rows.length > 0) {
+          sections.push(tableSection);
+        }
         tableInsertIndex++;
       }
       
@@ -480,6 +529,23 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       
       const styleMatch = styleRegex.exec(paragraphContent);
       const styleName = styleMatch ? styleMatch[1] : '';
+      
+      // Skip TOC entries (Word uses TOC styles or SDT wrappers)
+      if (styleName.match(/^TOC\d|^toc\d|TOCHeading/i)) {
+        console.log(`[transform-document-design] Skipped TOC paragraph: "${paragraphText.substring(0, 30)}..."`);
+        continue;
+      }
+      
+      // Also skip text that looks like TOC entries (text ending with page numbers, often with tabs)
+      // Pattern: "Some Title4" or "Some Title 4" at end - indicating TOC entry with page number
+      const looksLikeTocEntry = /^[A-Za-z][^0-9]*\d{1,3}$/.test(paragraphText.trim()) && 
+                                paragraphText.length < 80 &&
+                                !paragraphText.includes('.') && // Skip if has periods (likely a sentence)
+                                !/\d{4}/.test(paragraphText); // Skip if has year
+      if (looksLikeTocEntry) {
+        console.log(`[transform-document-design] Skipped TOC-like paragraph: "${paragraphText}"`);
+        continue;
+      }
       
       let sectionType: StructuredSection['type'] = 'paragraph';
       
@@ -538,9 +604,12 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       }
     }
     
-    // Insert any remaining tables after last paragraph
+    // Insert any remaining tables after last paragraph (skip empty placeholders)
     while (tableInsertIndex < tablePositions.length) {
-      sections.push(tablePositions[tableInsertIndex].section);
+      const tableSection = tablePositions[tableInsertIndex].section;
+      if (tableSection.type === 'table' && tableSection.tableData && tableSection.tableData.rows.length > 0) {
+        sections.push(tableSection);
+      }
       tableInsertIndex++;
     }
   }
