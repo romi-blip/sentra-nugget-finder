@@ -88,6 +88,9 @@ const COLORS = {
   darkGray: rgb(31/255, 41/255, 55/255),        // #1F2937
   bodyText: rgb(55/255, 65/255, 81/255),        // #374151
   footerGray: rgb(107/255, 114/255, 128/255),   // #6B7280
+  
+  // Special markings
+  confidentialRed: rgb(204/255, 0, 0),          // #CC0000 - Confidential marking
 };
 
 interface RequestBody {
@@ -1343,7 +1346,7 @@ async function createCoverPageWithElements(
     const confidentialText = 'Confidential';
     const confidentialFontSize = 14;
     const confidentialFont = fonts.bold;
-    const confidentialColor = rgb(0.8, 0, 0); // Red color
+    const confidentialColor = COLORS.confidentialRed;
     
     const textWidth = confidentialFont.widthOfTextAtSize(confidentialText, confidentialFontSize);
     const confidentialX = (width - textWidth) / 2; // Center horizontally
