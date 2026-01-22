@@ -1,28 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import JSZip from "npm:jszip@3.10.1";
-import { PDFDocument, rgb, StandardFonts, PDFName, PDFRawStream } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 import fontkit from "https://esm.sh/@pdf-lib/fontkit@1.1.1";
 import { decode as decodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
-import { 
-  Document, 
-  Packer, 
-  Paragraph, 
-  TextRun, 
-  HeadingLevel, 
-  Table, 
-  TableRow, 
-  TableCell, 
-  WidthType,
-  AlignmentType,
-  BorderStyle,
-  Header,
-  Footer,
-  ImageRun,
-  PageBreak,
-  ShadingType,
-} from "npm:docx@9.5.1";
 
 // Google Fonts CDN URLs for Poppins
 const POPPINS_REGULAR_URL = "https://fonts.gstatic.com/s/poppins/v21/pxiEyp8kv8JHgFVrFJDUc1NECPY.ttf";
@@ -118,7 +100,6 @@ interface RequestBody {
   mode?: 'extract' | 'generate';
   editedContent?: ExtractedDocument;
   coverTitleHighlightWordsOverride?: number;
-  outputFormat?: 'pdf' | 'docx';
 }
 
 interface StructuredSection {
@@ -2135,574 +2116,7 @@ async function generatePDF(
   return await pdfDoc.save();
 }
 
-// Generate DOCX from extracted content with Sentra branding
-// This is a complete rewrite to match PDF design quality with proper sections, headers, footers, and styling
-async function generateDocx(
-  extractedDoc: ExtractedDocument,
-  logoBytes: Uint8Array | null,
-  elements: Record<string, ElementTemplate | null>,
-  coverTitleConfig: CoverTitleConfig | null
-): Promise<Uint8Array> {
-  console.log('[transform-document-design] Generating branded DOCX document with full design');
-  
-  // Brand colors (hex without #)
-  const BRAND_COLORS = {
-    primary: '39FF14',      // Neon green
-    dark: '0F0F1A',         // Dark background
-    text: '374151',         // Body text
-    heading: '1F2937',      // Heading text
-    white: 'FFFFFF',
-    gray: '6B7280',
-    lightGray: 'F3F4F6',
-    orange: 'FFAE1A',
-    confidentialRed: 'CC0000',
-  };
-  
-  // Page dimensions in twips (1 inch = 1440 twips, 1 pt = 20 twips)
-  const PAGE_WIDTH = 12240; // 8.5 inches
-  const PAGE_HEIGHT = 15840; // 11 inches
-  const MARGIN = 1440; // 1 inch margins
-  
-  // Helper to convert hex color to uppercase format for docx
-  const normalizeColor = (color: string): string => {
-    return color.replace('#', '').toUpperCase();
-  };
-  
-  // Get highlight color from config or use brand primary
-  const highlightColor = normalizeColor(coverTitleConfig?.highlightColor || '#39FF14');
-  const titleTextColor = normalizeColor(coverTitleConfig?.textColor || '#FFFFFF');
-  
-  // Build TOC entries from h1 headings
-  const tocEntries = extractedDoc.sections
-    .filter(s => s.type === 'h1' || (s.type === 'heading' && s.level === 1))
-    .map((s, i) => ({ 
-      title: sanitizeForPdf(s.content || s.text || ''), 
-      page: i + 3 // Start from page 3 (cover=1, toc=2)
-    }));
-  
-  // ============ SECTION 1: COVER PAGE ============
-  const coverChildren: Paragraph[] = [];
-  
-  // Add logo at top of cover if available
-  if (logoBytes) {
-    try {
-      coverChildren.push(new Paragraph({
-        children: [
-          new ImageRun({
-            data: logoBytes,
-            transformation: { width: 120, height: 40 },
-            type: 'jpg',
-          }),
-        ],
-        spacing: { before: 200, after: 400 },
-      }));
-    } catch (e) {
-      console.log('[transform-document-design] Error adding logo to cover:', e);
-    }
-  }
-  
-  // Add substantial spacing before title (push to lower portion)
-  for (let i = 0; i < 8; i++) {
-    coverChildren.push(new Paragraph({ text: '', spacing: { after: 400 } }));
-  }
-  
-  // Subtitle (category) above title - styled like PDF
-  if (extractedDoc.subtitle) {
-    coverChildren.push(new Paragraph({
-      children: [
-        new TextRun({
-          text: extractedDoc.subtitle.toUpperCase(),
-          size: 28, // 14pt
-          color: BRAND_COLORS.orange,
-          font: 'Poppins',
-          bold: true,
-        }),
-      ],
-      spacing: { after: 300 },
-    }));
-  }
-  
-  // Main title with split coloring (green + white like PDF)
-  if (extractedDoc.title) {
-    const titleWords = extractedDoc.title.split(' ');
-    const highlightWords = coverTitleConfig?.highlightWords ?? 3;
-    const highlightPart = titleWords.slice(0, highlightWords).join(' ');
-    const regularPart = titleWords.slice(highlightWords).join(' ');
-    
-    const titleRuns: TextRun[] = [];
-    if (highlightPart) {
-      titleRuns.push(new TextRun({
-        text: highlightPart,
-        size: 72, // 36pt - large title
-        color: highlightColor,
-        font: 'Poppins',
-        bold: true,
-      }));
-    }
-    if (regularPart) {
-      if (highlightPart) {
-        titleRuns.push(new TextRun({
-          text: ' ',
-          size: 72,
-          font: 'Poppins',
-        }));
-      }
-      titleRuns.push(new TextRun({
-        text: regularPart,
-        size: 72,
-        color: titleTextColor,
-        font: 'Poppins',
-        bold: true,
-      }));
-    }
-    
-    coverChildren.push(new Paragraph({
-      children: titleRuns,
-      spacing: { after: 600 },
-    }));
-  }
-  
-  // Confidential marking if enabled
-  if (coverTitleConfig?.showConfidential || extractedDoc.isConfidential) {
-    // Add spacing before confidential
-    for (let i = 0; i < 4; i++) {
-      coverChildren.push(new Paragraph({ text: '', spacing: { after: 400 } }));
-    }
-    coverChildren.push(new Paragraph({
-      children: [
-        new TextRun({
-          text: 'CONFIDENTIAL',
-          size: 24,
-          color: BRAND_COLORS.confidentialRed,
-          font: 'Poppins',
-          bold: true,
-        }),
-      ],
-      alignment: AlignmentType.CENTER,
-    }));
-  }
-  
-  // ============ SECTION 2: TABLE OF CONTENTS ============
-  const tocChildren: Paragraph[] = [];
-  
-  // TOC heading
-  tocChildren.push(new Paragraph({
-    children: [
-      new TextRun({
-        text: 'TABLE OF CONTENTS',
-        size: 36, // 18pt
-        color: BRAND_COLORS.heading,
-        font: 'Poppins',
-        bold: true,
-      }),
-    ],
-    spacing: { before: 400, after: 600 },
-  }));
-  
-  // TOC entries with proper formatting
-  for (let i = 0; i < tocEntries.length; i++) {
-    const entry = tocEntries[i];
-    tocChildren.push(new Paragraph({
-      children: [
-        new TextRun({
-          text: `${i + 1}.  ${entry.title}`,
-          size: 24, // 12pt
-          color: BRAND_COLORS.text,
-          font: 'Poppins',
-        }),
-        new TextRun({
-          text: '   ........................................   ',
-          size: 24,
-          color: BRAND_COLORS.gray,
-          font: 'Poppins',
-        }),
-        new TextRun({
-          text: entry.page.toString(),
-          size: 24,
-          color: BRAND_COLORS.text,
-          font: 'Poppins',
-        }),
-      ],
-      spacing: { after: 200 },
-    }));
-  }
-  
-  // ============ SECTION 3: CONTENT PAGES ============
-  const contentChildren: (Paragraph | Table)[] = [];
-  
-  for (const section of extractedDoc.sections) {
-    switch (section.type) {
-      case 'h1':
-      case 'heading':
-        const level = section.level ?? 1;
-        const headingText = sanitizeForPdf(section.content || section.text || '');
-        
-        if (level === 1) {
-          // H1 - Large green heading with page break before
-          contentChildren.push(new Paragraph({
-            children: [new PageBreak()],
-          }));
-          contentChildren.push(new Paragraph({
-            children: [
-              new TextRun({
-                text: headingText,
-                size: 40, // 20pt
-                color: BRAND_COLORS.primary,
-                font: 'Poppins',
-                bold: true,
-              }),
-            ],
-            spacing: { before: 200, after: 400 },
-            heading: HeadingLevel.HEADING_1,
-          }));
-        } else if (level === 2) {
-          contentChildren.push(new Paragraph({
-            children: [
-              new TextRun({
-                text: headingText,
-                size: 32, // 16pt
-                color: BRAND_COLORS.heading,
-                font: 'Poppins',
-                bold: true,
-              }),
-            ],
-            spacing: { before: 300, after: 200 },
-            heading: HeadingLevel.HEADING_2,
-          }));
-        } else {
-          contentChildren.push(new Paragraph({
-            children: [
-              new TextRun({
-                text: headingText,
-                size: 26, // 13pt
-                color: BRAND_COLORS.heading,
-                font: 'Poppins',
-                bold: true,
-              }),
-            ],
-            spacing: { before: 200, after: 150 },
-            heading: HeadingLevel.HEADING_3,
-          }));
-        }
-        break;
-        
-      case 'h2':
-        contentChildren.push(new Paragraph({
-          children: [
-            new TextRun({
-              text: sanitizeForPdf(section.content || ''),
-              size: 32,
-              color: BRAND_COLORS.heading,
-              font: 'Poppins',
-              bold: true,
-            }),
-          ],
-          spacing: { before: 300, after: 200 },
-          heading: HeadingLevel.HEADING_2,
-        }));
-        break;
-        
-      case 'h3':
-        contentChildren.push(new Paragraph({
-          children: [
-            new TextRun({
-              text: sanitizeForPdf(section.content || ''),
-              size: 26,
-              color: BRAND_COLORS.heading,
-              font: 'Poppins',
-              bold: true,
-            }),
-          ],
-          spacing: { before: 200, after: 150 },
-          heading: HeadingLevel.HEADING_3,
-        }));
-        break;
-        
-      case 'paragraph':
-        if (section.content) {
-          contentChildren.push(new Paragraph({
-            children: [
-              new TextRun({
-                text: sanitizeForPdf(section.content),
-                size: 24, // 12pt
-                color: BRAND_COLORS.text,
-                font: 'Poppins',
-              }),
-            ],
-            spacing: { after: 240 },
-          }));
-        }
-        break;
-        
-      case 'bullet-list':
-        if (section.items && section.items.length > 0) {
-          for (const item of section.items) {
-            contentChildren.push(new Paragraph({
-              children: [
-                new TextRun({
-                  text: '• ',
-                  size: 24,
-                  color: BRAND_COLORS.primary,
-                  font: 'Poppins',
-                }),
-                new TextRun({
-                  text: sanitizeForPdf(item),
-                  size: 24,
-                  color: BRAND_COLORS.text,
-                  font: 'Poppins',
-                }),
-              ],
-              spacing: { after: 120 },
-              indent: { left: 400 },
-            }));
-          }
-          // Add spacing after bullet list
-          contentChildren.push(new Paragraph({ text: '', spacing: { after: 200 } }));
-        }
-        break;
-        
-      case 'table':
-        if (section.tableData?.rows && section.tableData.rows.length > 0) {
-          // Create actual Word table with proper styling
-          const tableRows = section.tableData.rows.map((row, rowIndex) => {
-            return new TableRow({
-              children: row.map(cell => 
-                new TableCell({
-                  children: [
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: sanitizeForPdf(cell),
-                          size: 22, // 11pt
-                          color: rowIndex === 0 ? BRAND_COLORS.white : BRAND_COLORS.text,
-                          font: 'Poppins',
-                          bold: rowIndex === 0,
-                        }),
-                      ],
-                      spacing: { before: 60, after: 60 },
-                    }),
-                  ],
-                  shading: rowIndex === 0 ? {
-                    type: ShadingType.SOLID,
-                    color: BRAND_COLORS.dark,
-                  } : {
-                    type: ShadingType.SOLID,
-                    color: rowIndex % 2 === 0 ? BRAND_COLORS.lightGray : BRAND_COLORS.white,
-                  },
-                  margins: {
-                    top: 80,
-                    bottom: 80,
-                    left: 120,
-                    right: 120,
-                  },
-                })
-              ),
-            });
-          });
-          
-          contentChildren.push(new Paragraph({ text: '', spacing: { after: 120 } }));
-          contentChildren.push(new Table({
-            rows: tableRows,
-            width: { size: 100, type: WidthType.PERCENTAGE },
-          }));
-          contentChildren.push(new Paragraph({ text: '', spacing: { after: 240 } }));
-        }
-        break;
-        
-      case 'page-break':
-        contentChildren.push(new Paragraph({
-          children: [new PageBreak()],
-        }));
-        break;
-        
-      case 'image':
-        if (section.imageBase64) {
-          try {
-            const imageData = fastBase64ToBytes(section.imageBase64);
-            contentChildren.push(new Paragraph({
-              children: [
-                new ImageRun({
-                  data: imageData,
-                  transformation: { width: 450, height: 300 },
-                  type: section.imageMimeType?.includes('png') ? 'png' : 'jpg',
-                }),
-              ],
-              spacing: { before: 200, after: 120 },
-              alignment: AlignmentType.CENTER,
-            }));
-            if (section.imageCaption) {
-              contentChildren.push(new Paragraph({
-                children: [
-                  new TextRun({
-                    text: section.imageCaption,
-                    size: 20, // 10pt
-                    color: BRAND_COLORS.gray,
-                    font: 'Poppins',
-                    italics: true,
-                  }),
-                ],
-                spacing: { after: 200 },
-                alignment: AlignmentType.CENTER,
-              }));
-            }
-          } catch (e) {
-            console.log('[transform-document-design] Error embedding image in DOCX:', e);
-            contentChildren.push(new Paragraph({
-              children: [
-                new TextRun({
-                  text: '[Image]',
-                  size: 22,
-                  color: BRAND_COLORS.gray,
-                  font: 'Poppins',
-                  italics: true,
-                }),
-              ],
-              spacing: { after: 200 },
-              alignment: AlignmentType.CENTER,
-            }));
-          }
-        }
-        break;
-    }
-  }
-  
-  // ============ CREATE HEADERS AND FOOTERS ============
-  
-  // Header with logo for non-cover sections
-  let tocAndContentHeader: Header | undefined;
-  if (logoBytes) {
-    try {
-      tocAndContentHeader = new Header({
-        children: [
-          new Paragraph({
-            children: [
-              new ImageRun({
-                data: logoBytes,
-                transformation: { width: 80, height: 28 },
-                type: 'jpg',
-              }),
-            ],
-            alignment: AlignmentType.LEFT,
-          }),
-        ],
-      });
-    } catch (e) {
-      console.log('[transform-document-design] Error creating header:', e);
-    }
-  }
-  
-  // Footer with page numbers
-  const createFooter = (): Footer => {
-    return new Footer({
-      children: [
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: '© Sentra  |  ',
-              size: 18,
-              color: BRAND_COLORS.gray,
-              font: 'Poppins',
-            }),
-            new TextRun({
-              children: ['Page ', { type: 'pageNumber' as any }, ' of ', { type: 'totalPages' as any }],
-              size: 18,
-              color: BRAND_COLORS.gray,
-              font: 'Poppins',
-            } as any),
-          ],
-          alignment: AlignmentType.CENTER,
-          border: {
-            top: {
-              style: BorderStyle.SINGLE,
-              size: 6,
-              color: 'CCCCCC',
-              space: 4,
-            },
-          },
-        }),
-      ],
-    });
-  };
-  
-  // ============ CREATE THE DOCUMENT WITH MULTIPLE SECTIONS ============
-  const doc = new Document({
-    styles: {
-      default: {
-        document: {
-          run: {
-            font: 'Poppins',
-            size: 24,
-          },
-        },
-      },
-      paragraphStyles: [
-        {
-          id: 'Normal',
-          name: 'Normal',
-          run: {
-            font: 'Poppins',
-            size: 24,
-            color: BRAND_COLORS.text,
-          },
-        },
-      ],
-    },
-    sections: [
-      // Section 1: Cover page (no header/footer, dark background effect via shading)
-      {
-        properties: {
-          page: {
-            margin: {
-              top: MARGIN,
-              right: MARGIN,
-              bottom: MARGIN,
-              left: MARGIN,
-            },
-          },
-        },
-        children: coverChildren,
-      },
-      // Section 2: Table of Contents
-      {
-        properties: {
-          page: {
-            margin: {
-              top: MARGIN,
-              right: MARGIN,
-              bottom: MARGIN,
-              left: MARGIN,
-            },
-          },
-        },
-        headers: tocAndContentHeader ? { default: tocAndContentHeader } : undefined,
-        footers: { default: createFooter() },
-        children: tocChildren,
-      },
-      // Section 3: Content pages
-      {
-        properties: {
-          page: {
-            margin: {
-              top: MARGIN,
-              right: MARGIN,
-              bottom: MARGIN,
-              left: MARGIN,
-            },
-          },
-        },
-        headers: tocAndContentHeader ? { default: tocAndContentHeader } : undefined,
-        footers: { default: createFooter() },
-        children: contentChildren,
-      },
-    ],
-  });
-  
-  console.log('[transform-document-design] DOCX document created with 3 sections (cover, TOC, content)');
-  
-  // Generate the DOCX buffer
-  const buffer = await Packer.toBuffer(doc);
-  return new Uint8Array(buffer);
-}
+// DOCX generation removed - PDF only for design fidelity
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -2738,9 +2152,9 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleHighlightWordsOverride, outputFormat = 'pdf' } = body;
+    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleHighlightWordsOverride } = body;
 
-    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, outputFormat=${outputFormat}, coverTitleHighlightWordsOverride=${coverTitleHighlightWordsOverride ?? 'none'}`);
+    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, coverTitleHighlightWordsOverride=${coverTitleHighlightWordsOverride ?? 'none'}`);
 
     // Handle generate mode - use edited content directly
     let extractedDoc: ExtractedDocument;
@@ -3139,49 +2553,36 @@ serve(async (req) => {
     // Build layout config from stored layoutMap (need to extract from if block)
     // We need to store layoutMap outside, so let's define it at the top
     
-    // Generate output based on requested format
-    let outputBytes: Uint8Array;
-    let outputType: 'pdf' | 'docx';
-    let outputExtension: string;
-    
-    if (outputFormat === 'docx') {
-      console.log('[transform-document-design] Generating DOCX output');
-      outputBytes = await generateDocx(extractedDoc, logoBytes, elements, coverTitleConfigForPdf);
-      outputType = 'docx';
-      outputExtension = 'docx';
-    } else {
-      console.log('[transform-document-design] Generating PDF output');
-      outputBytes = await generatePDF(extractedDoc, logoBytes, {
-        cover_background: elements['cover_background'] || null,
-        header: elements['header'] || null,
-        footer: elements['footer'] || null,
-        logo: elements['logo'] || null,
-        content_page: elements['content_page'] || null,
-        title: elements['title'] || null,
-        h1: elements['h1'] || null,
-        h2: elements['h2'] || null,
-        h3: elements['h3'] || null,
-        paragraph: elements['paragraph'] || null,
-        bullet: elements['bullet'] || null,
-      }, layoutConfigForPdf, footerConfigsForPdf, coverTitleConfigForPdf);
-      outputType = 'pdf';
-      outputExtension = 'pdf';
-    }
+    // Generate PDF output (PDF-only for design fidelity)
+    console.log('[transform-document-design] Generating PDF output');
+    const outputBytes = await generatePDF(extractedDoc, logoBytes, {
+      cover_background: elements['cover_background'] || null,
+      header: elements['header'] || null,
+      footer: elements['footer'] || null,
+      logo: elements['logo'] || null,
+      content_page: elements['content_page'] || null,
+      title: elements['title'] || null,
+      h1: elements['h1'] || null,
+      h2: elements['h2'] || null,
+      h3: elements['h3'] || null,
+      paragraph: elements['paragraph'] || null,
+      bullet: elements['bullet'] || null,
+    }, layoutConfigForPdf, footerConfigsForPdf, coverTitleConfigForPdf);
     
     // Convert to base64 using fast method
     const outputBase64 = fastBytesToBase64(outputBytes);
 
-    const outputFileName = (fileName || 'document').replace(/\.(docx|pdf)$/i, `_branded.${outputExtension}`);
+    const outputFileName = (fileName || 'document').replace(/\.(docx|pdf)$/i, '_branded.pdf');
     
     // Calculate approximate page count from sections
     const pageCount = extractedDoc.sections.filter(s => s.type === 'h1' || s.type === 'page-break').length + 2;
 
     return new Response(
       JSON.stringify({
-        type: outputType,
+        type: 'pdf',
         modifiedFile: outputBase64,
         originalFileName: outputFileName,
-        message: `Document transformed successfully with Sentra branding (${outputType.toUpperCase()}). ${mode === 'generate' ? 'Generated from edited content.' : `Extracted ${extractedDoc.sections.filter(s => s.type === 'image').length} images.`}`,
+        message: `Document transformed successfully with Sentra branding (PDF). ${mode === 'generate' ? 'Generated from edited content.' : `Extracted ${extractedDoc.sections.filter(s => s.type === 'image').length} images.`}`,
         extractedContent: mode === 'extract' ? extractedDoc : undefined,
         pageCount: pageCount,
       }),
