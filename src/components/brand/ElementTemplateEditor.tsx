@@ -195,7 +195,7 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
   const [extractedWidth, setExtractedWidth] = useState(template.image_width || 595);
   const [fontFamily, setFontFamily] = useState(template.font_family || 'Helvetica');
   const [fontSize, setFontSize] = useState(template.font_size || 12);
-  const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>((template.font_weight as 'normal' | 'bold') || 'normal');
+  const [fontWeight, setFontWeight] = useState<'normal' | 'medium' | 'bold'>((template.font_weight as 'normal' | 'medium' | 'bold') || 'normal');
   const [fontColor, setFontColor] = useState(template.font_color || '#000000');
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>((template.text_align as 'left' | 'center' | 'right') || 'left');
   const [marginTop, setMarginTop] = useState(template.margin_top || 0);
@@ -371,13 +371,14 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
                 </div>
                 <div className="space-y-2">
                   <Label>Font Weight</Label>
-                  <Select value={fontWeight} onValueChange={(v) => setFontWeight(v as 'normal' | 'bold')}>
+                  <Select value={fontWeight} onValueChange={(v) => setFontWeight(v as 'normal' | 'medium' | 'bold')}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="bold">Bold</SelectItem>
+                      <SelectItem value="normal">Normal (400)</SelectItem>
+                      <SelectItem value="medium">Medium (500)</SelectItem>
+                      <SelectItem value="bold">Bold (700)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -441,7 +442,7 @@ function EditDialog({ template, isOpen, onClose, onSave, isSaving }: EditDialogP
                   style={{
                     fontFamily: fontFamily,
                     fontSize: `${fontSize}px`,
-                    fontWeight: fontWeight === 'bold' ? 700 : 400,
+                    fontWeight: fontWeight === 'bold' ? 700 : fontWeight === 'medium' ? 500 : 400,
                     color: fontColor,
                     textAlign: textAlign,
                   }}
