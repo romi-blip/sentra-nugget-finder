@@ -5,6 +5,24 @@ import { PDFDocument, rgb, StandardFonts, PDFName, PDFRawStream } from "https://
 import fontkit from "https://esm.sh/@pdf-lib/fontkit@1.1.1";
 import { decode as decodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { 
+  Document, 
+  Packer, 
+  Paragraph, 
+  TextRun, 
+  HeadingLevel, 
+  Table, 
+  TableRow, 
+  TableCell, 
+  WidthType,
+  AlignmentType,
+  BorderStyle,
+  Header,
+  Footer,
+  ImageRun,
+  PageBreak,
+  ShadingType,
+} from "npm:docx@9.5.1";
 
 // Google Fonts CDN URLs for Poppins
 const POPPINS_REGULAR_URL = "https://fonts.gstatic.com/s/poppins/v21/pxiEyp8kv8JHgFVrFJDUc1NECPY.ttf";
@@ -100,6 +118,7 @@ interface RequestBody {
   mode?: 'extract' | 'generate';
   editedContent?: ExtractedDocument;
   coverTitleHighlightWordsOverride?: number;
+  outputFormat?: 'pdf' | 'docx';
 }
 
 interface StructuredSection {
@@ -2116,6 +2135,347 @@ async function generatePDF(
   return await pdfDoc.save();
 }
 
+// Generate DOCX from extracted content with Sentra branding
+async function generateDocx(
+  extractedDoc: ExtractedDocument,
+  logoBytes: Uint8Array | null,
+  elements: Record<string, ElementTemplate | null>,
+  coverTitleConfig: CoverTitleConfig | null
+): Promise<Uint8Array> {
+  console.log('[transform-document-design] Generating branded DOCX document');
+  
+  const BRAND_COLORS = {
+    primary: '39FF14',      // Neon green
+    dark: '0F0F1A',         // Dark background
+    text: '374151',         // Body text
+    heading: '1F2937',      // Heading text
+  };
+  
+  const children: Paragraph[] = [];
+  
+  // Title page content
+  if (extractedDoc.title) {
+    // Add spacing before title
+    children.push(new Paragraph({ text: '', spacing: { after: 400 } }));
+    children.push(new Paragraph({ text: '', spacing: { after: 400 } }));
+    
+    // Subtitle (category) above title
+    if (extractedDoc.subtitle) {
+      children.push(new Paragraph({
+        children: [
+          new TextRun({
+            text: extractedDoc.subtitle.toUpperCase(),
+            size: 24,
+            color: BRAND_COLORS.primary,
+            font: 'Poppins',
+            bold: true,
+          }),
+        ],
+        spacing: { after: 200 },
+      }));
+    }
+    
+    // Main title with split coloring
+    const titleWords = extractedDoc.title.split(' ');
+    const highlightWords = coverTitleConfig?.highlightWords ?? 3;
+    const highlightPart = titleWords.slice(0, highlightWords).join(' ');
+    const regularPart = titleWords.slice(highlightWords).join(' ');
+    
+    const titleRuns: TextRun[] = [];
+    if (highlightPart) {
+      titleRuns.push(new TextRun({
+        text: highlightPart,
+        size: 56,
+        color: BRAND_COLORS.primary,
+        font: 'Poppins',
+        bold: true,
+      }));
+    }
+    if (regularPart) {
+      if (highlightPart) {
+        titleRuns.push(new TextRun({
+          text: ' ',
+          size: 56,
+          font: 'Poppins',
+        }));
+      }
+      titleRuns.push(new TextRun({
+        text: regularPart,
+        size: 56,
+        color: BRAND_COLORS.heading,
+        font: 'Poppins',
+        bold: true,
+      }));
+    }
+    
+    children.push(new Paragraph({
+      children: titleRuns,
+      spacing: { after: 600 },
+    }));
+    
+    // Page break after cover
+    children.push(new Paragraph({
+      children: [new PageBreak()],
+    }));
+  }
+  
+  // Table of Contents heading
+  children.push(new Paragraph({
+    children: [
+      new TextRun({
+        text: 'TABLE OF CONTENTS',
+        size: 28,
+        color: BRAND_COLORS.heading,
+        font: 'Poppins',
+        bold: true,
+      }),
+    ],
+    spacing: { after: 400 },
+  }));
+  
+  // Build TOC entries
+  const tocEntries = extractedDoc.sections
+    .filter(s => s.type === 'h1' || (s.type === 'heading' && s.level === 1))
+    .map((s, i) => ({ title: s.content || s.text || '', page: i + 3 }));
+  
+  for (const entry of tocEntries) {
+    children.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: entry.title,
+          size: 22,
+          color: BRAND_COLORS.text,
+          font: 'Poppins',
+        }),
+      ],
+      spacing: { after: 100 },
+    }));
+  }
+  
+  // Page break after TOC
+  children.push(new Paragraph({
+    children: [new PageBreak()],
+  }));
+  
+  // Content sections
+  for (const section of extractedDoc.sections) {
+    switch (section.type) {
+      case 'h1':
+      case 'heading':
+        const level = section.level ?? 1;
+        children.push(new Paragraph({
+          children: [
+            new TextRun({
+              text: sanitizeForPdf(section.content || section.text || ''),
+              size: level === 1 ? 32 : level === 2 ? 26 : 22,
+              color: level === 1 ? BRAND_COLORS.primary : BRAND_COLORS.heading,
+              font: 'Poppins',
+              bold: true,
+            }),
+          ],
+          spacing: { before: level === 1 ? 400 : 200, after: 200 },
+          heading: level === 1 ? HeadingLevel.HEADING_1 : level === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3,
+        }));
+        break;
+        
+      case 'h2':
+        children.push(new Paragraph({
+          children: [
+            new TextRun({
+              text: sanitizeForPdf(section.content || ''),
+              size: 26,
+              color: BRAND_COLORS.heading,
+              font: 'Poppins',
+              bold: true,
+            }),
+          ],
+          spacing: { before: 200, after: 150 },
+          heading: HeadingLevel.HEADING_2,
+        }));
+        break;
+        
+      case 'h3':
+        children.push(new Paragraph({
+          children: [
+            new TextRun({
+              text: sanitizeForPdf(section.content || ''),
+              size: 22,
+              color: BRAND_COLORS.heading,
+              font: 'Poppins',
+              bold: true,
+            }),
+          ],
+          spacing: { before: 150, after: 100 },
+          heading: HeadingLevel.HEADING_3,
+        }));
+        break;
+        
+      case 'paragraph':
+        if (section.content) {
+          children.push(new Paragraph({
+            children: [
+              new TextRun({
+                text: sanitizeForPdf(section.content),
+                size: 22,
+                color: BRAND_COLORS.text,
+                font: 'Poppins',
+              }),
+            ],
+            spacing: { after: 200 },
+          }));
+        }
+        break;
+        
+      case 'bullet-list':
+        if (section.items && section.items.length > 0) {
+          for (const item of section.items) {
+            children.push(new Paragraph({
+              children: [
+                new TextRun({
+                  text: `• ${sanitizeForPdf(item)}`,
+                  size: 22,
+                  color: BRAND_COLORS.text,
+                  font: 'Poppins',
+                }),
+              ],
+              spacing: { after: 100 },
+              indent: { left: 360 },
+            }));
+          }
+        }
+        break;
+        
+      case 'table':
+        if (section.tableData?.rows && section.tableData.rows.length > 0) {
+          const tableRows = section.tableData.rows.map((row, rowIndex) => {
+            return new TableRow({
+              children: row.map(cell => 
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: sanitizeForPdf(cell),
+                          size: 20,
+                          color: rowIndex === 0 ? 'FFFFFF' : BRAND_COLORS.text,
+                          font: 'Poppins',
+                          bold: rowIndex === 0,
+                        }),
+                      ],
+                    }),
+                  ],
+                  shading: rowIndex === 0 ? {
+                    type: ShadingType.SOLID,
+                    color: BRAND_COLORS.dark,
+                  } : undefined,
+                })
+              ),
+            });
+          });
+          
+          children.push(new Paragraph({ text: '', spacing: { after: 100 } }));
+          // Note: Tables need to be added to the document differently
+          // For simplicity, we'll add table content as formatted paragraphs
+          for (let i = 0; i < section.tableData.rows.length; i++) {
+            const row = section.tableData.rows[i];
+            children.push(new Paragraph({
+              children: [
+                new TextRun({
+                  text: row.map(c => sanitizeForPdf(c)).join(' | '),
+                  size: 20,
+                  color: i === 0 ? BRAND_COLORS.primary : BRAND_COLORS.text,
+                  font: 'Poppins',
+                  bold: i === 0,
+                }),
+              ],
+              spacing: { after: 50 },
+              border: {
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+              },
+            }));
+          }
+          children.push(new Paragraph({ text: '', spacing: { after: 200 } }));
+        }
+        break;
+        
+      case 'page-break':
+        children.push(new Paragraph({
+          children: [new PageBreak()],
+        }));
+        break;
+        
+      case 'image':
+        // For images, add a placeholder text (DOCX image embedding is complex)
+        if (section.imageBase64) {
+          try {
+            const imageData = fastBase64ToBytes(section.imageBase64);
+            children.push(new Paragraph({
+              children: [
+                new ImageRun({
+                  data: imageData,
+                  transformation: { width: 400, height: 300 },
+                  type: section.imageMimeType?.includes('png') ? 'png' : 'jpg',
+                }),
+              ],
+              spacing: { before: 200, after: 200 },
+            }));
+            if (section.imageCaption) {
+              children.push(new Paragraph({
+                children: [
+                  new TextRun({
+                    text: section.imageCaption,
+                    size: 18,
+                    color: BRAND_COLORS.text,
+                    font: 'Poppins',
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 200 },
+                alignment: AlignmentType.CENTER,
+              }));
+            }
+          } catch (e) {
+            console.log('[transform-document-design] Error embedding image in DOCX:', e);
+            children.push(new Paragraph({
+              children: [
+                new TextRun({
+                  text: '[Image]',
+                  size: 22,
+                  color: BRAND_COLORS.text,
+                  font: 'Poppins',
+                  italics: true,
+                }),
+              ],
+              spacing: { after: 200 },
+            }));
+          }
+        }
+        break;
+    }
+  }
+  
+  // Create the document
+  const doc = new Document({
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: 'Poppins',
+            size: 22,
+          },
+        },
+      },
+    },
+    sections: [{
+      children,
+    }],
+  });
+  
+  // Generate the DOCX buffer
+  const buffer = await Packer.toBuffer(doc);
+  return new Uint8Array(buffer);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -2150,9 +2510,9 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleHighlightWordsOverride } = body;
+    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleHighlightWordsOverride, outputFormat = 'pdf' } = body;
 
-    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, coverTitleHighlightWordsOverride=${coverTitleHighlightWordsOverride ?? 'none'}`);
+    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, outputFormat=${outputFormat}, coverTitleHighlightWordsOverride=${coverTitleHighlightWordsOverride ?? 'none'}`);
 
     // Handle generate mode - use edited content directly
     let extractedDoc: ExtractedDocument;
@@ -2551,35 +2911,49 @@ serve(async (req) => {
     // Build layout config from stored layoutMap (need to extract from if block)
     // We need to store layoutMap outside, so let's define it at the top
     
-    // Generate PDF with element templates, layout config, footer configs, and cover title config
-    const pdfBytes = await generatePDF(extractedDoc, logoBytes, {
-      cover_background: elements['cover_background'] || null,
-      header: elements['header'] || null,
-      footer: elements['footer'] || null,
-      logo: elements['logo'] || null,
-      content_page: elements['content_page'] || null,
-      title: elements['title'] || null,
-      h1: elements['h1'] || null,
-      h2: elements['h2'] || null,
-      h3: elements['h3'] || null,
-      paragraph: elements['paragraph'] || null,
-      bullet: elements['bullet'] || null,
-    }, layoutConfigForPdf, footerConfigsForPdf, coverTitleConfigForPdf);
+    // Generate output based on requested format
+    let outputBytes: Uint8Array;
+    let outputType: 'pdf' | 'docx';
+    let outputExtension: string;
+    
+    if (outputFormat === 'docx') {
+      console.log('[transform-document-design] Generating DOCX output');
+      outputBytes = await generateDocx(extractedDoc, logoBytes, elements, coverTitleConfigForPdf);
+      outputType = 'docx';
+      outputExtension = 'docx';
+    } else {
+      console.log('[transform-document-design] Generating PDF output');
+      outputBytes = await generatePDF(extractedDoc, logoBytes, {
+        cover_background: elements['cover_background'] || null,
+        header: elements['header'] || null,
+        footer: elements['footer'] || null,
+        logo: elements['logo'] || null,
+        content_page: elements['content_page'] || null,
+        title: elements['title'] || null,
+        h1: elements['h1'] || null,
+        h2: elements['h2'] || null,
+        h3: elements['h3'] || null,
+        paragraph: elements['paragraph'] || null,
+        bullet: elements['bullet'] || null,
+      }, layoutConfigForPdf, footerConfigsForPdf, coverTitleConfigForPdf);
+      outputType = 'pdf';
+      outputExtension = 'pdf';
+    }
     
     // Convert to base64 using fast method
-    const pdfBase64 = fastBytesToBase64(pdfBytes);
+    const outputBase64 = fastBytesToBase64(outputBytes);
 
-    const outputFileName = (fileName || 'document').replace(/\.(docx|pdf)$/i, '_branded.pdf');
+    const outputFileName = (fileName || 'document').replace(/\.(docx|pdf)$/i, `_branded.${outputExtension}`);
     
     // Calculate approximate page count from sections
     const pageCount = extractedDoc.sections.filter(s => s.type === 'h1' || s.type === 'page-break').length + 2;
 
     return new Response(
       JSON.stringify({
-        type: 'pdf',
-        modifiedFile: pdfBase64,
+        type: outputType,
+        modifiedFile: outputBase64,
         originalFileName: outputFileName,
-        message: `Document transformed successfully with Sentra branding. ${mode === 'generate' ? 'Generated from edited content.' : `Extracted ${extractedDoc.sections.filter(s => s.type === 'image').length} images.`}`,
+        message: `Document transformed successfully with Sentra branding (${outputType.toUpperCase()}). ${mode === 'generate' ? 'Generated from edited content.' : `Extracted ${extractedDoc.sections.filter(s => s.type === 'image').length} images.`}`,
         extractedContent: mode === 'extract' ? extractedDoc : undefined,
         pageCount: pageCount,
       }),

@@ -14,7 +14,7 @@ import BrandColorPicker from '@/components/brand/BrandColorPicker';
 import FontSelector from '@/components/brand/FontSelector';
 import DocumentUploader from '@/components/brand/DocumentUploader';
 import BulkDocumentUploader from '@/components/brand/BulkDocumentUploader';
-import BulkDocumentList, { BulkDocumentItem } from '@/components/brand/BulkDocumentList';
+import BulkDocumentList, { BulkDocumentItem, OutputFormat } from '@/components/brand/BulkDocumentList';
 import TransformedPreview from '@/components/brand/TransformedPreview';
 import DocumentMetadataForm from '@/components/brand/DocumentMetadataForm';
 import ContentSectionEditor from '@/components/brand/ContentSectionEditor';
@@ -210,6 +210,7 @@ const BrandDesigner: React.FC = () => {
       id: `${Date.now()}-${index}-${file.name}`,
       file,
       coverTitleHighlightWords: 3,
+      outputFormat: 'pdf' as OutputFormat,
       status: 'pending' as const,
     }));
     setBulkDocuments((prev) => [...prev, ...newItems]);
@@ -222,6 +223,12 @@ const BrandDesigner: React.FC = () => {
   const handleBulkHighlightWordsChange = useCallback((id: string, words: number) => {
     setBulkDocuments((prev) =>
       prev.map((doc) => (doc.id === id ? { ...doc, coverTitleHighlightWords: words } : doc))
+    );
+  }, []);
+
+  const handleBulkOutputFormatChange = useCallback((id: string, format: OutputFormat) => {
+    setBulkDocuments((prev) =>
+      prev.map((doc) => (doc.id === id ? { ...doc, outputFormat: format } : doc))
     );
   }, []);
 
@@ -238,12 +245,19 @@ const BrandDesigner: React.FC = () => {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    const blob = new Blob([bytes], { type: 'application/pdf' });
+    
+    const isDocx = item.outputFormat === 'docx' && item.result.type === 'docx';
+    const mimeType = isDocx 
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      : 'application/pdf';
+    const extension = isDocx ? 'docx' : 'pdf';
+    
+    const blob = new Blob([bytes], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const baseName = item.file.name.replace(/\.(docx|pdf)$/i, '');
-    a.download = `${baseName}_branded.pdf`;
+    a.download = `${baseName}_branded.${extension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -267,10 +281,12 @@ const BrandDesigner: React.FC = () => {
     try {
       const zip = new JSZip();
 
-      // Add each PDF to the ZIP archive
+      // Add each document to the ZIP archive
       completedDocs.forEach((item) => {
         const baseName = item.file.name.replace(/\.(docx|pdf)$/i, '');
-        const fileName = `${baseName}_branded.pdf`;
+        const isDocx = item.outputFormat === 'docx' && item.result?.type === 'docx';
+        const extension = isDocx ? 'docx' : 'pdf';
+        const fileName = `${baseName}_branded.${extension}`;
         
         // Convert base64 to binary data
         const binaryString = atob(item.result!.modifiedFile!);
@@ -319,7 +335,8 @@ const BrandDesigner: React.FC = () => {
     try {
       const result = await brandService.generateFromContent(
         editedContent,
-        editingBulkDoc.file.name
+        editingBulkDoc.file.name,
+        { coverTitleHighlightWords: editingBulkDoc.coverTitleHighlightWords }
       );
       
       // Update the document in the list with new result
@@ -378,7 +395,10 @@ const BrandDesigner: React.FC = () => {
           doc.file,
           settings as BrandSettings,
           'extract',
-          { coverTitleHighlightWords: doc.coverTitleHighlightWords }
+          { 
+            coverTitleHighlightWords: doc.coverTitleHighlightWords,
+            outputFormat: doc.outputFormat,
+          }
         );
 
         setBulkDocuments((prev) =>
@@ -512,6 +532,7 @@ const BrandDesigner: React.FC = () => {
                       documents={bulkDocuments}
                       onRemove={handleBulkRemove}
                       onHighlightWordsChange={handleBulkHighlightWordsChange}
+                      onOutputFormatChange={handleBulkOutputFormatChange}
                       onDownload={handleBulkDownload}
                       onEdit={handleBulkEdit}
                       onClearAll={handleBulkClearAll}
