@@ -34,6 +34,10 @@ export interface ExtractedDocument {
   isConfidential: boolean;
 }
 
+export interface TransformOptions {
+  coverTitleTextColor?: string;
+}
+
 export interface TransformResult {
   type: 'docx' | 'pdf' | null;
   modifiedFile: string | null;
@@ -71,7 +75,7 @@ export const brandService = {
     return data as BrandSettings;
   },
 
-  async transformDocument(file: File, settings: BrandSettings, mode: 'extract' | 'generate' = 'extract'): Promise<TransformResult> {
+  async transformDocument(file: File, settings: BrandSettings, mode: 'extract' | 'generate' = 'extract', options?: TransformOptions): Promise<TransformResult> {
     // Read file as base64
     const arrayBuffer = await file.arrayBuffer();
     const base64 = btoa(
@@ -86,6 +90,7 @@ export const brandService = {
         fileName: file.name,
         fileType,
         mode,
+        coverTitleTextColorOverride: options?.coverTitleTextColor,
       },
     });
 

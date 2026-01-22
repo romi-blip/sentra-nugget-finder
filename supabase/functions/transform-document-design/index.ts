@@ -96,6 +96,7 @@ interface RequestBody {
   fileType?: string;
   mode?: 'extract' | 'generate';
   editedContent?: ExtractedDocument;
+  coverTitleTextColorOverride?: string;
 }
 
 interface StructuredSection {
@@ -1745,7 +1746,9 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { file, fileName, fileType, mode = 'extract', editedContent } = body;
+    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleTextColorOverride } = body;
+
+    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, coverTitleTextColorOverride=${coverTitleTextColorOverride || 'none'}`);
 
     console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}`);
 
@@ -1970,10 +1973,10 @@ serve(async (req) => {
           coverTitleConfigForPdf = {
             highlightWords: coverLayout.cover_title_highlight_words ?? 3,
             highlightColor: coverLayout.cover_title_highlight_color ?? '#39FF14',
-            textColor: coverLayout.cover_title_text_color ?? '#FFFFFF',
+            textColor: coverTitleTextColorOverride || coverLayout.cover_title_text_color || '#FFFFFF',
             yOffset: coverLayout.cover_title_y_offset ?? 100,
           };
-          console.log(`[transform-document-design] Cover title config: highlightWords=${coverTitleConfigForPdf.highlightWords}, highlightColor=${coverTitleConfigForPdf.highlightColor}, textColor=${coverTitleConfigForPdf.textColor}, yOffset=${coverTitleConfigForPdf.yOffset}`);
+          console.log(`[transform-document-design] Cover title config: highlightWords=${coverTitleConfigForPdf.highlightWords}, highlightColor=${coverTitleConfigForPdf.highlightColor}, textColor=${coverTitleConfigForPdf.textColor} (override=${coverTitleTextColorOverride || 'none'}), yOffset=${coverTitleConfigForPdf.yOffset}`);
         }
         if (contentLayout) {
           layoutConfigForPdf.content = {

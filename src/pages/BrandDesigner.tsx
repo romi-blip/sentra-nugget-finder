@@ -1,14 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Palette, Save, Wand2, FileText, PlusCircle, Layout, Layers } from 'lucide-react';
+import { Loader2, Palette, Save, Wand2, FileText, PlusCircle, Layout, Layers, Download } from 'lucide-react';
 import BrandColorPicker from '@/components/brand/BrandColorPicker';
 import FontSelector from '@/components/brand/FontSelector';
 import DocumentUploader from '@/components/brand/DocumentUploader';
+import BulkDocumentUploader from '@/components/brand/BulkDocumentUploader';
+import BulkDocumentList, { BulkDocumentItem } from '@/components/brand/BulkDocumentList';
 import TransformedPreview from '@/components/brand/TransformedPreview';
 import DocumentMetadataForm from '@/components/brand/DocumentMetadataForm';
 import ContentSectionEditor from '@/components/brand/ContentSectionEditor';
@@ -37,6 +42,12 @@ const BrandDesigner: React.FC = () => {
   }>({ type: null, modifiedFile: null });
   const [localSettings, setLocalSettings] = useState<Partial<BrandSettings>>({});
   const [isEditing, setIsEditing] = useState(false);
+
+  // Bulk mode state
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkDocuments, setBulkDocuments] = useState<BulkDocumentItem[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
   // Document generator state
   const [documentMetadata, setDocumentMetadata] = useState<DocumentMetadata>(DEFAULT_DOCUMENT_METADATA);
@@ -191,6 +202,124 @@ const BrandDesigner: React.FC = () => {
     setLocalSettings((prev) => ({ ...prev, [key]: value }));
   };
 
+  // Bulk processing handlers
+  const handleBulkFilesSelect = useCallback((files: File[]) => {
+    const newItems: BulkDocumentItem[] = files.map((file, index) => ({
+      id: `${Date.now()}-${index}-${file.name}`,
+      file,
+      coverTitleTextColor: '#FFFFFF',
+      status: 'pending' as const,
+    }));
+    setBulkDocuments((prev) => [...prev, ...newItems]);
+  }, []);
+
+  const handleBulkRemove = useCallback((id: string) => {
+    setBulkDocuments((prev) => prev.filter((doc) => doc.id !== id));
+  }, []);
+
+  const handleBulkColorChange = useCallback((id: string, color: string) => {
+    setBulkDocuments((prev) =>
+      prev.map((doc) => (doc.id === id ? { ...doc, coverTitleTextColor: color } : doc))
+    );
+  }, []);
+
+  const handleBulkClearAll = useCallback(() => {
+    setBulkDocuments([]);
+    setBulkProgress({ current: 0, total: 0 });
+  }, []);
+
+  const handleBulkDownload = useCallback((item: BulkDocumentItem) => {
+    if (!item.result?.modifiedFile) return;
+
+    const binaryString = atob(item.result.modifiedFile);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const baseName = item.file.name.replace(/\.(docx|pdf)$/i, '');
+    a.download = `${baseName}_branded.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleBulkDownloadAll = useCallback(() => {
+    const completedDocs = bulkDocuments.filter(
+      (doc) => doc.status === 'complete' && doc.result?.modifiedFile
+    );
+    
+    completedDocs.forEach((item, index) => {
+      setTimeout(() => {
+        handleBulkDownload(item);
+      }, index * 500); // Stagger downloads
+    });
+  }, [bulkDocuments, handleBulkDownload]);
+
+  const processBulkTransform = useCallback(async () => {
+    if (!settings) return;
+
+    const pendingDocs = bulkDocuments.filter((doc) => doc.status === 'pending');
+    if (pendingDocs.length === 0) {
+      toast({
+        title: 'No documents to process',
+        description: 'All documents have already been processed.',
+      });
+      return;
+    }
+
+    setIsBulkProcessing(true);
+    setBulkProgress({ current: 0, total: pendingDocs.length });
+
+    for (let i = 0; i < pendingDocs.length; i++) {
+      const doc = pendingDocs[i];
+      
+      // Update status to processing
+      setBulkDocuments((prev) =>
+        prev.map((d) => (d.id === doc.id ? { ...d, status: 'processing' as const } : d))
+      );
+      setBulkProgress({ current: i + 1, total: pendingDocs.length });
+
+      try {
+        const result = await brandService.transformDocument(
+          doc.file,
+          settings as BrandSettings,
+          'extract',
+          { coverTitleTextColor: doc.coverTitleTextColor }
+        );
+
+        setBulkDocuments((prev) =>
+          prev.map((d) =>
+            d.id === doc.id ? { ...d, status: 'complete' as const, result } : d
+          )
+        );
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setBulkDocuments((prev) =>
+          prev.map((d) =>
+            d.id === doc.id
+              ? { ...d, status: 'error' as const, errorMessage }
+              : d
+          )
+        );
+      }
+    }
+
+    setIsBulkProcessing(false);
+    
+    const successCount = bulkDocuments.filter((d) => d.status === 'complete').length + 
+      pendingDocs.filter((d) => !d.errorMessage).length;
+    
+    toast({
+      title: 'Bulk transformation complete',
+      description: `Processed ${pendingDocs.length} documents.`,
+    });
+  }, [bulkDocuments, settings]);
+
   // Auto-generate TOC from heading sections
   useEffect(() => {
     const headings = contentSections.filter((s) => s.type === 'heading' && s.title);
@@ -256,47 +385,132 @@ const BrandDesigner: React.FC = () => {
           <TabsContent value="transform" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="font-poppins">Transform Existing Document</CardTitle>
-                <CardDescription>
-                  Upload a DOCX file to apply brand styling using your configured element templates.
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="font-poppins">Transform Documents</CardTitle>
+                    <CardDescription>
+                      {bulkMode 
+                        ? 'Upload multiple documents to transform in bulk with per-document cover title color settings.'
+                        : 'Upload a DOCX or PDF file to apply brand styling using your configured element templates.'}
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="bulk-mode" className="text-sm">Bulk Mode</Label>
+                    <Switch
+                      id="bulk-mode"
+                      checked={bulkMode}
+                      onCheckedChange={(checked) => {
+                        setBulkMode(checked);
+                        if (!checked) {
+                          setBulkDocuments([]);
+                          setBulkProgress({ current: 0, total: 0 });
+                        }
+                      }}
+                      disabled={isBulkProcessing || transformMutation.isPending}
+                    />
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                <DocumentUploader
-                  onFileSelect={setSelectedFile}
-                  selectedFile={selectedFile}
-                  onClear={() => {
-                    setSelectedFile(null);
-                    setTransformResult({ type: null, modifiedFile: null });
-                  }}
-                  isProcessing={transformMutation.isPending}
-                />
+                {bulkMode ? (
+                  <>
+                    <BulkDocumentUploader
+                      onFilesSelect={handleBulkFilesSelect}
+                      isProcessing={isBulkProcessing}
+                    />
 
-                {selectedFile && (
-                  <div className="flex justify-center">
-                    <Button
-                      onClick={handleTransform}
-                      disabled={transformMutation.isPending}
-                      size="lg"
-                    >
-                      {transformMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Wand2 className="h-4 w-4 mr-2" />
-                      )}
-                      Transform Document
-                    </Button>
-                  </div>
+                    <BulkDocumentList
+                      documents={bulkDocuments}
+                      onRemove={handleBulkRemove}
+                      onColorChange={handleBulkColorChange}
+                      onDownload={handleBulkDownload}
+                      onClearAll={handleBulkClearAll}
+                      isProcessing={isBulkProcessing}
+                    />
+
+                    {bulkDocuments.length > 0 && (
+                      <div className="space-y-4">
+                        {isBulkProcessing && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm text-muted-foreground">
+                              <span>Processing documents...</span>
+                              <span>{bulkProgress.current} of {bulkProgress.total}</span>
+                            </div>
+                            <Progress 
+                              value={(bulkProgress.current / bulkProgress.total) * 100} 
+                              className="h-2"
+                            />
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-center gap-3">
+                          <Button
+                            onClick={processBulkTransform}
+                            disabled={isBulkProcessing || bulkDocuments.every(d => d.status !== 'pending')}
+                            size="lg"
+                          >
+                            {isBulkProcessing ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Wand2 className="h-4 w-4 mr-2" />
+                            )}
+                            Transform All
+                          </Button>
+                          
+                          {bulkDocuments.some(d => d.status === 'complete') && (
+                            <Button
+                              onClick={handleBulkDownloadAll}
+                              variant="outline"
+                              size="lg"
+                              disabled={isBulkProcessing}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Download All
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <DocumentUploader
+                      onFileSelect={setSelectedFile}
+                      selectedFile={selectedFile}
+                      onClear={() => {
+                        setSelectedFile(null);
+                        setTransformResult({ type: null, modifiedFile: null });
+                      }}
+                      isProcessing={transformMutation.isPending}
+                    />
+
+                    {selectedFile && (
+                      <div className="flex justify-center">
+                        <Button
+                          onClick={handleTransform}
+                          disabled={transformMutation.isPending}
+                          size="lg"
+                        >
+                          {transformMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Wand2 className="h-4 w-4 mr-2" />
+                          )}
+                          Transform Document
+                        </Button>
+                      </div>
+                    )}
+
+                    <TransformedPreview
+                      type={transformResult.type}
+                      modifiedFile={transformResult.modifiedFile}
+                      originalFileName={selectedFile?.name || ''}
+                      message={transformResult.message}
+                      extractedContent={transformResult.extractedContent}
+                      onEditClick={() => setIsEditing(true)}
+                    />
+                  </>
                 )}
-
-                <TransformedPreview
-                  type={transformResult.type}
-                  modifiedFile={transformResult.modifiedFile}
-                  originalFileName={selectedFile?.name || ''}
-                  message={transformResult.message}
-                  extractedContent={transformResult.extractedContent}
-                  onEditClick={() => setIsEditing(true)}
-                />
               </CardContent>
             </Card>
           </TabsContent>
