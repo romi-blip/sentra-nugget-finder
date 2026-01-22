@@ -628,17 +628,28 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
       
       let sectionType: StructuredSection['type'] = 'paragraph';
       
+      // Cover page text extraction strategy:
+      // - First short heading (< 30 chars or all caps) -> subtitle/category (e.g., "POLICY DOCUMENT")
+      // - First longer heading -> main title (e.g., "AI Tools Policy & Procedure")
+      const isShortCategoryHeading = paragraphText.length < 30 || paragraphText === paragraphText.toUpperCase();
+      const skipForTitle = paragraphText.toUpperCase().includes('WHITEPAPER') || 
+                           paragraphText.toUpperCase().includes('WHITE PAPER');
+      
       if (styleName.match(/Heading1|Title/i) || paragraphContent.includes('w:outlineLvl w:val="0"')) {
         sectionType = 'h1';
-        if (!foundTitle && paragraphText.length > 10 && 
-            !paragraphText.toUpperCase().includes('WHITEPAPER') &&
-            !paragraphText.toUpperCase().includes('WHITE PAPER')) {
-          title = paragraphText;
-          foundTitle = true;
+        if (!skipForTitle && paragraphText.length > 3) {
+          if (!subtitle && isShortCategoryHeading) {
+            // First short/uppercase heading becomes subtitle
+            subtitle = paragraphText;
+          } else if (!foundTitle && paragraphText.length > 10) {
+            // Longer heading becomes title
+            title = paragraphText;
+            foundTitle = true;
+          }
         }
       } else if (styleName.match(/Heading2|Subtitle/i) || paragraphContent.includes('w:outlineLvl w:val="1"')) {
         sectionType = 'h2';
-        if (!foundTitle && paragraphText.length > 15) {
+        if (!foundTitle && paragraphText.length > 15 && !skipForTitle) {
           title = paragraphText;
           foundTitle = true;
         }
@@ -1143,6 +1154,7 @@ async function createCoverPageWithElements(
   data: ExtractedDocument,
   coverTemplate: ElementTemplate | null,
   titleStyle: ElementTemplate | null,
+  subtitleStyle: ElementTemplate | null,
   logoImage: any,
   logoConfig: { show: boolean; x: number; y: number; height?: number; } | null,
   titleConfig: CoverTitleConfig | null = null
@@ -1302,6 +1314,26 @@ async function createCoverPageWithElements(
     
     wordsProcessed += lineWords.length;
     currentY -= titleFontSize + 8;
+  }
+  
+  // Draw subtitle/category ABOVE the title (e.g., "POLICY DOCUMENT")
+  if (data.subtitle) {
+    const subtitleFontSize = subtitleStyle?.font_size || 14;
+    const subtitleFont = fonts.bold;
+    const subtitleColor = subtitleStyle?.font_color ? hexToRgb(subtitleStyle.font_color) : COLORS.white;
+    
+    // Position subtitle above the title with some spacing
+    const subtitleY = titleY + (titleLines.length * (titleFontSize + 8)) + 30;
+    
+    page.drawText(data.subtitle.toUpperCase(), {
+      x: margin,
+      y: subtitleY,
+      size: subtitleFontSize,
+      font: subtitleFont,
+      color: subtitleColor,
+    });
+    
+    console.log(`[transform-document-design] Rendered subtitle: "${data.subtitle}" at y=${subtitleY}`);
   }
 }
 
@@ -2037,7 +2069,8 @@ async function generatePDF(
 
   // Create cover page with logo (height comes from config) - no page number
   // Pass coverTitleConfig for split-color title rendering
-  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, logoImage, coverLogoConfig, coverTitleConfig);
+  console.log(`[transform-document-design] Cover page: subtitle="${extractedDoc.subtitle}", title="${extractedDoc.title}"`);
+  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, elements.subtitle || null, logoImage, coverLogoConfig, coverTitleConfig);
   
   // Create TOC page with logo and configurable footer
   // TOC is page 1 (cover not counted)
