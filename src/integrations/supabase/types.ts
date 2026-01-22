@@ -1820,6 +1820,7 @@ export type Database = {
           logo_position_y: number | null
           page_type: string
           profile_id: string
+          show_confidential: boolean | null
           show_logo: boolean | null
           updated_at: string | null
         }
@@ -1858,6 +1859,7 @@ export type Database = {
           logo_position_y?: number | null
           page_type: string
           profile_id: string
+          show_confidential?: boolean | null
           show_logo?: boolean | null
           updated_at?: string | null
         }
@@ -1896,6 +1898,7 @@ export type Database = {
           logo_position_y?: number | null
           page_type?: string
           profile_id?: string
+          show_confidential?: boolean | null
           show_logo?: boolean | null
           updated_at?: string | null
         }

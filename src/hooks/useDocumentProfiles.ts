@@ -39,6 +39,8 @@ export interface PageLayout {
   cover_title_highlight_color: string | null;
   cover_title_text_color: string | null;
   cover_title_y_offset: number;
+  // Confidential marking
+  show_confidential: boolean;
   // Footer configuration
   footer_show_separator: boolean;
   footer_separator_color: string | null;
