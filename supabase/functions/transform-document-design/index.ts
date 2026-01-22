@@ -1756,21 +1756,41 @@ async function createContentPages(
       const colCount = Math.max(...rows.map(r => r.length));
       const colWidth = contentWidth / colCount;
       const cellPadding = 4;
-      const rowHeight = 18;
-      const tableHeight = rows.length * rowHeight;
+      const baseFontSize = 9;
+      const lineHeight = 12; // Height per line of text
+      const cellVerticalPadding = 4;
+      
+      // Pre-calculate wrapped text and row heights for all rows
+      const rowsData: Array<{ wrappedCells: string[][]; rowHeight: number }> = [];
+      for (const row of rows) {
+        const wrappedCells: string[][] = [];
+        let maxLines = 1;
+        
+        for (let colIdx = 0; colIdx < colCount; colIdx++) {
+          const cellText = row[colIdx] || '';
+          const font = rowsData.length === 0 ? fonts.bold : fonts.medium;
+          const maxCellWidth = colWidth - (cellPadding * 2);
+          const cellLines = wrapText(cellText, font, baseFontSize, maxCellWidth);
+          wrappedCells.push(cellLines);
+          maxLines = Math.max(maxLines, cellLines.length);
+        }
+        
+        const rowHeight = (maxLines * lineHeight) + (cellVerticalPadding * 2);
+        rowsData.push({ wrappedCells, rowHeight });
+      }
+      
+      const totalTableHeight = rowsData.reduce((sum, r) => sum + r.rowHeight, 0);
       
       // Check page break before table
-      if (y - tableHeight < minY + 50) {
+      if (y - totalTableHeight < minY + 50) {
         if (!(await addNewPage())) break;
       }
       
       // Draw table
-      const tableStartY = y;
-      
-      for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+      for (let rowIdx = 0; rowIdx < rowsData.length; rowIdx++) {
         if (pageNumber >= MAX_PAGES) break;
         
-        const row = rows[rowIdx];
+        const { wrappedCells, rowHeight } = rowsData[rowIdx];
         const rowY = y;
         
         // Check if we need a new page mid-table
@@ -1797,30 +1817,23 @@ async function createContentPages(
           });
         }
         
-        // Draw cell text
+        // Draw cell text with wrapping
         for (let colIdx = 0; colIdx < colCount; colIdx++) {
           const cellX = margin + (colIdx * colWidth) + cellPadding;
-          const cellText = row[colIdx] || '';
+          const cellLines = wrappedCells[colIdx];
           const font = rowIdx === 0 ? fonts.bold : fonts.medium;
-          const fontSize = 9;
-          const maxCellWidth = colWidth - (cellPadding * 2);
+          const textColor = rowIdx === 0 ? COLORS.darkGray : COLORS.bodyText;
           
-          // Truncate text to fit cell
-          let displayText = sanitizeForPdf(cellText);
-          while (displayText.length > 0 && font.widthOfTextAtSize(displayText, fontSize) > maxCellWidth) {
-            displayText = displayText.slice(0, -1);
+          for (let lineIdx = 0; lineIdx < cellLines.length; lineIdx++) {
+            const lineY = rowY - cellVerticalPadding - lineHeight + 2 - (lineIdx * lineHeight);
+            currentPage.drawText(cellLines[lineIdx], {
+              x: cellX,
+              y: lineY,
+              size: baseFontSize,
+              font,
+              color: textColor,
+            });
           }
-          if (displayText.length < cellText.length && displayText.length > 3) {
-            displayText = displayText.slice(0, -3) + '...';
-          }
-          
-          currentPage.drawText(displayText, {
-            x: cellX,
-            y: rowY - 13,
-            size: fontSize,
-            font,
-            color: rowIdx === 0 ? COLORS.darkGray : COLORS.bodyText,
-          });
         }
         
         y -= rowHeight;
