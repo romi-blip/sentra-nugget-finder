@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { Plus, Save, FileText, Layout, Type, Star, Trash2, Minus } from 'lucide-react';
+import { Plus, Save, FileText, Layout, Type, Star, Trash2, Minus, Palette } from 'lucide-react';
 import { useDocumentProfiles, usePageLayouts, useProfileTextStyles, useCreateDocumentProfile, useUpdateDocumentProfile, useUpsertPageLayout, useUpsertPageTextStyle, useSetDefaultProfile, useDeleteDocumentProfile, DocumentProfile, PageLayout, PageTextStyle, FooterSectionType } from '@/hooks/useDocumentProfiles';
 import { useElementTemplates, ElementTemplate, VISUAL_ELEMENT_TYPES, TEXT_ELEMENT_TYPES, ELEMENT_TYPE_LABELS } from '@/hooks/useElementTemplates';
 import { PageLayoutEditor } from './PageLayoutEditor';
@@ -462,6 +462,121 @@ export function DocumentComposer() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Cover Page Title Styling - only for cover page */}
+                {pageType === 'cover' && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Palette className="h-5 w-5" />
+                        Title Styling
+                      </CardTitle>
+                      <CardDescription>
+                        Configure how the cover page title is colored and positioned
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      {/* Word highlighting */}
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Highlighted Words</Label>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Number of words from the start to display in the highlight color
+                          </p>
+                          <div className="flex items-center gap-4">
+                            <Slider
+                              value={[currentLayout?.cover_title_highlight_words ?? 3]}
+                              onValueChange={([val]) => handleLayoutChange('cover_title_highlight_words', val)}
+                              min={0}
+                              max={15}
+                              step={1}
+                              className="flex-1"
+                            />
+                            <span className="w-8 text-center font-mono">
+                              {currentLayout?.cover_title_highlight_words ?? 3}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Preview of title split */}
+                        <div className="p-4 bg-muted/50 rounded-lg">
+                          <Label className="text-xs text-muted-foreground mb-2 block">Preview</Label>
+                          <div className="text-lg font-bold">
+                            <span style={{ color: currentLayout?.cover_title_highlight_color || '#39FF14' }}>
+                              Highlighted Words Here
+                            </span>
+                            <span style={{ color: currentLayout?.cover_title_text_color || '#FFFFFF' }}>
+                              {' '}Remaining Text
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Color pickers */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Highlight Color</Label>
+                          <p className="text-xs text-muted-foreground mb-2">For first N words</p>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="color"
+                              value={currentLayout?.cover_title_highlight_color || '#39FF14'}
+                              onChange={(e) => handleLayoutChange('cover_title_highlight_color', e.target.value)}
+                              className="w-12 h-10 p-1 cursor-pointer"
+                            />
+                            <Input
+                              type="text"
+                              value={currentLayout?.cover_title_highlight_color || '#39FF14'}
+                              onChange={(e) => handleLayoutChange('cover_title_highlight_color', e.target.value)}
+                              className="flex-1 font-mono text-sm"
+                              placeholder="#39FF14"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <Label>Remaining Text Color</Label>
+                          <p className="text-xs text-muted-foreground mb-2">For words after highlight</p>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="color"
+                              value={currentLayout?.cover_title_text_color || '#FFFFFF'}
+                              onChange={(e) => handleLayoutChange('cover_title_text_color', e.target.value)}
+                              className="w-12 h-10 p-1 cursor-pointer"
+                            />
+                            <Input
+                              type="text"
+                              value={currentLayout?.cover_title_text_color || '#FFFFFF'}
+                              onChange={(e) => handleLayoutChange('cover_title_text_color', e.target.value)}
+                              className="flex-1 font-mono text-sm"
+                              placeholder="#FFFFFF"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Vertical position */}
+                      <div>
+                        <Label>Vertical Position Offset (pt)</Label>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Move title up from default position (higher value = higher on page)
+                        </p>
+                        <div className="flex items-center gap-4">
+                          <Slider
+                            value={[currentLayout?.cover_title_y_offset ?? 100]}
+                            onValueChange={([val]) => handleLayoutChange('cover_title_y_offset', val)}
+                            min={0}
+                            max={300}
+                            step={10}
+                            className="flex-1"
+                          />
+                          <span className="w-12 text-center font-mono">
+                            {currentLayout?.cover_title_y_offset ?? 100}pt
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Footer Configuration - only for TOC and Content pages */}
                 {(pageType === 'toc' || pageType === 'content') && (

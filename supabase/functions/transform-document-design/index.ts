@@ -161,6 +161,14 @@ interface FooterConfig {
   rightImageMime: string | null;
 }
 
+// Cover page title configuration
+interface CoverTitleConfig {
+  highlightWords: number;
+  highlightColor: string;
+  textColor: string;
+  yOffset: number;
+}
+
 // Helper to convert hex color to RGB
 function hexToRgb(hex: string) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -882,7 +890,8 @@ async function createCoverPageWithElements(
   coverTemplate: ElementTemplate | null,
   titleStyle: ElementTemplate | null,
   logoImage: any,
-  logoConfig: { show: boolean; x: number; y: number; height?: number; } | null
+  logoConfig: { show: boolean; x: number; y: number; height?: number; } | null,
+  titleConfig: CoverTitleConfig | null = null
 ) {
   const page = pdfDoc.addPage([595, 842]);
   const width = page.getWidth();
@@ -955,22 +964,89 @@ async function createCoverPageWithElements(
     });
   }
 
-  // Draw title with element style
-  const titleY = coverTemplate?.image_base64 ? 400 : height - 440;
+  // Draw title with element style and configurable split-color
+  // Apply y offset from titleConfig (higher offset = higher on page)
+  const baseY = coverTemplate?.image_base64 ? 400 : height - 440;
+  const yOffset = titleConfig?.yOffset ?? 100;
+  const titleY = baseY + yOffset;
+  
   const titleFontSize = titleStyle?.font_size || 28;
-  const titleColor = titleStyle?.font_color ? hexToRgb(titleStyle.font_color) : COLORS.primary;
   const titleFont = titleStyle?.font_weight === 'bold' ? fonts.bold : fonts.bold;
   
-  const titleLines = wrapText(data.title || 'Document Title', titleFont, titleFontSize, width - margin * 2);
+  // Get colors from titleConfig or fall back to defaults
+  const highlightColor = titleConfig?.highlightColor ? hexToRgb(titleConfig.highlightColor) : COLORS.primary;
+  const textColor = titleConfig?.textColor ? hexToRgb(titleConfig.textColor) : COLORS.white;
+  const highlightWords = titleConfig?.highlightWords ?? 3;
+  
+  const titleText = data.title || 'Document Title';
+  const titleLines = wrapText(titleText, titleFont, titleFontSize, width - margin * 2);
+  
+  // Split title into words to track highlight boundary
+  const allWords = titleText.split(/\s+/);
+  let wordsProcessed = 0;
+  
   let currentY = titleY;
   for (const line of titleLines) {
-    page.drawText(line, {
-      x: margin,
-      y: currentY,
-      size: titleFontSize,
-      font: titleFont,
-      color: titleColor,
-    });
+    const lineWords = line.split(/\s+/);
+    
+    // Calculate where in this line the highlight ends
+    const wordsBeforeLine = wordsProcessed;
+    const wordsAfterLine = wordsProcessed + lineWords.length;
+    
+    if (highlightWords === 0) {
+      // No highlight, all text in secondary color
+      page.drawText(line, {
+        x: margin,
+        y: currentY,
+        size: titleFontSize,
+        font: titleFont,
+        color: textColor,
+      });
+    } else if (wordsAfterLine <= highlightWords) {
+      // Entire line is highlighted
+      page.drawText(line, {
+        x: margin,
+        y: currentY,
+        size: titleFontSize,
+        font: titleFont,
+        color: highlightColor,
+      });
+    } else if (wordsBeforeLine >= highlightWords) {
+      // Entire line is in text color (past highlight)
+      page.drawText(line, {
+        x: margin,
+        y: currentY,
+        size: titleFontSize,
+        font: titleFont,
+        color: textColor,
+      });
+    } else {
+      // Line contains the transition point - split rendering
+      const highlightWordCount = highlightWords - wordsBeforeLine;
+      const highlightedPart = lineWords.slice(0, highlightWordCount).join(' ') + ' ';
+      const remainingPart = lineWords.slice(highlightWordCount).join(' ');
+      
+      // Draw highlighted portion
+      page.drawText(highlightedPart, {
+        x: margin,
+        y: currentY,
+        size: titleFontSize,
+        font: titleFont,
+        color: highlightColor,
+      });
+      
+      // Measure highlighted text width and draw remaining
+      const highlightedWidth = titleFont.widthOfTextAtSize(highlightedPart, titleFontSize);
+      page.drawText(remainingPart, {
+        x: margin + highlightedWidth,
+        y: currentY,
+        size: titleFontSize,
+        font: titleFont,
+        color: textColor,
+      });
+    }
+    
+    wordsProcessed += lineWords.length;
     currentY -= titleFontSize + 8;
   }
 }
@@ -1477,7 +1553,8 @@ async function generatePDF(
   footerConfigs: {
     toc?: FooterConfig | null;
     content?: FooterConfig | null;
-  } = {}
+  } = {},
+  coverTitleConfig: CoverTitleConfig | null = null
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   
@@ -1600,7 +1677,8 @@ async function generatePDF(
   const embeddedFooterImages = new Map<string, any>();
 
   // Create cover page with logo (height comes from config) - no page number
-  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, logoImage, coverLogoConfig);
+  // Pass coverTitleConfig for split-color title rendering
+  await createCoverPageWithElements(pdfDoc, fonts, extractedDoc, elements.cover_background || null, elements.title || null, logoImage, coverLogoConfig, coverTitleConfig);
   
   // Create TOC page with logo and configurable footer
   // TOC is page 1 (cover not counted)
@@ -1746,6 +1824,9 @@ serve(async (req) => {
       content?: FooterConfig | null;
     } = {};
 
+    // Store cover title config for split-color rendering
+    let coverTitleConfigForPdf: CoverTitleConfig | null = null;
+
     // First, try the new document profile system
     const { data: defaultProfile, error: profileError } = await supabase
       .from('document_profiles')
@@ -1870,6 +1951,15 @@ serve(async (req) => {
             logo_height: coverLayout.logo_height ?? 40, // Larger default for cover
           };
           console.log(`[transform-document-design] Cover logo config: show=${layoutConfigForPdf.cover.show_logo}, x=${layoutConfigForPdf.cover.logo_x}, y=${layoutConfigForPdf.cover.logo_y}, height=${layoutConfigForPdf.cover.logo_height}`);
+          
+          // Extract cover title config for split-color rendering
+          coverTitleConfigForPdf = {
+            highlightWords: coverLayout.cover_title_highlight_words ?? 3,
+            highlightColor: coverLayout.cover_title_highlight_color ?? '#39FF14',
+            textColor: coverLayout.cover_title_text_color ?? '#FFFFFF',
+            yOffset: coverLayout.cover_title_y_offset ?? 100,
+          };
+          console.log(`[transform-document-design] Cover title config: highlightWords=${coverTitleConfigForPdf.highlightWords}, highlightColor=${coverTitleConfigForPdf.highlightColor}, textColor=${coverTitleConfigForPdf.textColor}, yOffset=${coverTitleConfigForPdf.yOffset}`);
         }
         if (contentLayout) {
           layoutConfigForPdf.content = {
@@ -2038,7 +2128,7 @@ serve(async (req) => {
     // Build layout config from stored layoutMap (need to extract from if block)
     // We need to store layoutMap outside, so let's define it at the top
     
-    // Generate PDF with element templates, layout config, and footer configs
+    // Generate PDF with element templates, layout config, footer configs, and cover title config
     const pdfBytes = await generatePDF(extractedDoc, logoBytes, {
       cover_background: elements['cover_background'] || null,
       header: elements['header'] || null,
@@ -2051,7 +2141,7 @@ serve(async (req) => {
       h3: elements['h3'] || null,
       paragraph: elements['paragraph'] || null,
       bullet: elements['bullet'] || null,
-    }, layoutConfigForPdf, footerConfigsForPdf);
+    }, layoutConfigForPdf, footerConfigsForPdf, coverTitleConfigForPdf);
     
     // Convert to base64 using fast method
     const pdfBase64 = fastBytesToBase64(pdfBytes);

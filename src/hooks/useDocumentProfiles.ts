@@ -33,6 +33,11 @@ export interface PageLayout {
   logo_position_x: number;
   logo_position_y: number;
   logo_height: number;
+  // Cover page title styling
+  cover_title_highlight_words: number;
+  cover_title_highlight_color: string | null;
+  cover_title_text_color: string | null;
+  cover_title_y_offset: number;
   // Footer configuration
   footer_show_separator: boolean;
   footer_separator_color: string | null;
