@@ -8,33 +8,37 @@ import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/b
 
 // Google Fonts CDN URLs for Poppins
 const POPPINS_REGULAR_URL = "https://fonts.gstatic.com/s/poppins/v21/pxiEyp8kv8JHgFVrFJDUc1NECPY.ttf";
+const POPPINS_MEDIUM_URL = "https://fonts.gstatic.com/s/poppins/v21/pxiByp8kv8JHgFVrLGT9Z1xlEA.ttf";
 const POPPINS_BOLD_URL = "https://fonts.gstatic.com/s/poppins/v21/pxiByp8kv8JHgFVrLCz7Z1xlEA.ttf";
 
 // Cache for fonts to avoid re-fetching
 let cachedPoppinsRegular: Uint8Array | null = null;
+let cachedPoppinsMedium: Uint8Array | null = null;
 let cachedPoppinsBold: Uint8Array | null = null;
 
-async function fetchPoppinsFonts(): Promise<{ regular: Uint8Array; bold: Uint8Array }> {
-  if (cachedPoppinsRegular && cachedPoppinsBold) {
+async function fetchPoppinsFonts(): Promise<{ regular: Uint8Array; medium: Uint8Array; bold: Uint8Array }> {
+  if (cachedPoppinsRegular && cachedPoppinsMedium && cachedPoppinsBold) {
     console.log('[transform-document-design] Using cached Poppins fonts');
-    return { regular: cachedPoppinsRegular, bold: cachedPoppinsBold };
+    return { regular: cachedPoppinsRegular, medium: cachedPoppinsMedium, bold: cachedPoppinsBold };
   }
 
   console.log('[transform-document-design] Fetching Poppins fonts from Google Fonts...');
-  const [regularResponse, boldResponse] = await Promise.all([
+  const [regularResponse, mediumResponse, boldResponse] = await Promise.all([
     fetch(POPPINS_REGULAR_URL),
+    fetch(POPPINS_MEDIUM_URL),
     fetch(POPPINS_BOLD_URL),
   ]);
 
-  if (!regularResponse.ok || !boldResponse.ok) {
+  if (!regularResponse.ok || !mediumResponse.ok || !boldResponse.ok) {
     throw new Error('Failed to fetch Poppins fonts from Google Fonts');
   }
 
   cachedPoppinsRegular = new Uint8Array(await regularResponse.arrayBuffer());
+  cachedPoppinsMedium = new Uint8Array(await mediumResponse.arrayBuffer());
   cachedPoppinsBold = new Uint8Array(await boldResponse.arrayBuffer());
   
   console.log('[transform-document-design] Poppins fonts fetched successfully');
-  return { regular: cachedPoppinsRegular, bold: cachedPoppinsBold };
+  return { regular: cachedPoppinsRegular, medium: cachedPoppinsMedium, bold: cachedPoppinsBold };
 }
 
 const corsHeaders = {
@@ -1486,13 +1490,13 @@ async function createContentPages(
           color: style.color,
         });
 
-        const lines = wrapText(item, fonts.regular, style.fontSize, contentWidth - style.bulletIndent - 8);
+        const lines = wrapText(item, fonts.medium, style.fontSize, contentWidth - style.bulletIndent - 8);
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
           currentPage.drawText(lines[lineIdx], {
             x: margin + style.bulletIndent,
             y: y,
             size: style.fontSize,
-            font: fonts.regular,
+            font: fonts.medium,
             color: style.color,
           });
           y -= style.fontSize + 6;
@@ -1504,7 +1508,7 @@ async function createContentPages(
     }
     else if (section.type === 'paragraph' && content) {
       const style = getTextStyle('paragraph');
-      const lines = wrapText(content, fonts.regular, style.fontSize, contentWidth);
+      const lines = wrapText(content, fonts.medium, style.fontSize, contentWidth);
       
       for (const line of lines) {
         if (pageNumber >= MAX_PAGES) break;
@@ -1516,7 +1520,7 @@ async function createContentPages(
           x: margin,
           y: y,
           size: style.fontSize,
-          font: fonts.regular,
+          font: fonts.medium,
           color: style.color,
         });
         y -= style.fontSize + 5;
@@ -1570,18 +1574,20 @@ async function generatePDF(
   pdfDoc.registerFontkit(fontkit);
   
   // Fetch and embed Poppins fonts
-  let regularFont, boldFont;
+  let regularFont, mediumFont, boldFont;
   try {
     const poppinsFonts = await fetchPoppinsFonts();
     regularFont = await pdfDoc.embedFont(poppinsFonts.regular);
+    mediumFont = await pdfDoc.embedFont(poppinsFonts.medium);
     boldFont = await pdfDoc.embedFont(poppinsFonts.bold);
-    console.log('[transform-document-design] Successfully embedded Poppins fonts');
+    console.log('[transform-document-design] Successfully embedded Poppins fonts (Regular, Medium, Bold)');
   } catch (e) {
     console.log('[transform-document-design] Failed to embed Poppins fonts, falling back to Helvetica:', e);
     regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    mediumFont = await pdfDoc.embedFont(StandardFonts.Helvetica); // Helvetica has no medium, use regular
     boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   }
-  const fonts = { regular: regularFont, bold: boldFont };
+  const fonts = { regular: regularFont, medium: mediumFont, bold: boldFont };
 
   // Embed logo from element template if available
   let logoImage: any = null;
