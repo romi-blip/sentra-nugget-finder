@@ -35,7 +35,7 @@ export interface ExtractedDocument {
 }
 
 export interface TransformOptions {
-  coverTitleTextColor?: string;
+  coverTitleHighlightWords?: number;
 }
 
 export interface TransformResult {
@@ -90,7 +90,7 @@ export const brandService = {
         fileName: file.name,
         fileType,
         mode,
-        coverTitleTextColorOverride: options?.coverTitleTextColor,
+        coverTitleHighlightWordsOverride: options?.coverTitleHighlightWords,
       },
     });
 

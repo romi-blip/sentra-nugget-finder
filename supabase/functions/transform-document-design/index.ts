@@ -96,7 +96,7 @@ interface RequestBody {
   fileType?: string;
   mode?: 'extract' | 'generate';
   editedContent?: ExtractedDocument;
-  coverTitleTextColorOverride?: string;
+  coverTitleHighlightWordsOverride?: number;
 }
 
 interface StructuredSection {
@@ -1746,11 +1746,9 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleTextColorOverride } = body;
+    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleHighlightWordsOverride } = body;
 
-    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, coverTitleTextColorOverride=${coverTitleTextColorOverride || 'none'}`);
-
-    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}`);
+    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, coverTitleHighlightWordsOverride=${coverTitleHighlightWordsOverride ?? 'none'}`);
 
     // Handle generate mode - use edited content directly
     let extractedDoc: ExtractedDocument;
@@ -1971,12 +1969,12 @@ serve(async (req) => {
           
           // Extract cover title config for split-color rendering
           coverTitleConfigForPdf = {
-            highlightWords: coverLayout.cover_title_highlight_words ?? 3,
+            highlightWords: coverTitleHighlightWordsOverride ?? coverLayout.cover_title_highlight_words ?? 3,
             highlightColor: coverLayout.cover_title_highlight_color ?? '#39FF14',
-            textColor: coverTitleTextColorOverride || coverLayout.cover_title_text_color || '#FFFFFF',
+            textColor: coverLayout.cover_title_text_color || '#FFFFFF',
             yOffset: coverLayout.cover_title_y_offset ?? 100,
           };
-          console.log(`[transform-document-design] Cover title config: highlightWords=${coverTitleConfigForPdf.highlightWords}, highlightColor=${coverTitleConfigForPdf.highlightColor}, textColor=${coverTitleConfigForPdf.textColor} (override=${coverTitleTextColorOverride || 'none'}), yOffset=${coverTitleConfigForPdf.yOffset}`);
+          console.log(`[transform-document-design] Cover title config: highlightWords=${coverTitleConfigForPdf.highlightWords} (override=${coverTitleHighlightWordsOverride ?? 'none'}), highlightColor=${coverTitleConfigForPdf.highlightColor}, textColor=${coverTitleConfigForPdf.textColor}, yOffset=${coverTitleConfigForPdf.yOffset}`);
         }
         if (contentLayout) {
           layoutConfigForPdf.content = {

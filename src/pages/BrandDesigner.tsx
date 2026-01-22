@@ -48,6 +48,7 @@ const BrandDesigner: React.FC = () => {
   const [bulkDocuments, setBulkDocuments] = useState<BulkDocumentItem[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+  const [editingBulkDoc, setEditingBulkDoc] = useState<BulkDocumentItem | null>(null);
 
   // Document generator state
   const [documentMetadata, setDocumentMetadata] = useState<DocumentMetadata>(DEFAULT_DOCUMENT_METADATA);
@@ -207,7 +208,7 @@ const BrandDesigner: React.FC = () => {
     const newItems: BulkDocumentItem[] = files.map((file, index) => ({
       id: `${Date.now()}-${index}-${file.name}`,
       file,
-      coverTitleTextColor: '#FFFFFF',
+      coverTitleHighlightWords: 3,
       status: 'pending' as const,
     }));
     setBulkDocuments((prev) => [...prev, ...newItems]);
@@ -217,9 +218,9 @@ const BrandDesigner: React.FC = () => {
     setBulkDocuments((prev) => prev.filter((doc) => doc.id !== id));
   }, []);
 
-  const handleBulkColorChange = useCallback((id: string, color: string) => {
+  const handleBulkHighlightWordsChange = useCallback((id: string, words: number) => {
     setBulkDocuments((prev) =>
-      prev.map((doc) => (doc.id === id ? { ...doc, coverTitleTextColor: color } : doc))
+      prev.map((doc) => (doc.id === id ? { ...doc, coverTitleHighlightWords: words } : doc))
     );
   }, []);
 
@@ -260,6 +261,46 @@ const BrandDesigner: React.FC = () => {
     });
   }, [bulkDocuments, handleBulkDownload]);
 
+  const handleBulkEdit = useCallback((item: BulkDocumentItem) => {
+    setEditingBulkDoc(item);
+  }, []);
+
+  const handleBulkEditSave = useCallback(async (editedContent: ExtractedDocument) => {
+    if (!editingBulkDoc) return;
+    
+    try {
+      const result = await brandService.generateFromContent(
+        editedContent,
+        editingBulkDoc.file.name
+      );
+      
+      // Update the document in the list with new result
+      setBulkDocuments((prev) =>
+        prev.map((doc) =>
+          doc.id === editingBulkDoc.id
+            ? { 
+                ...doc, 
+                result: { 
+                  ...doc.result!, 
+                  modifiedFile: result.modifiedFile,
+                  extractedContent: editedContent,
+                } 
+              }
+            : doc
+        )
+      );
+      
+      setEditingBulkDoc(null);
+      toast({ title: 'Document updated', description: 'Your edits have been applied.' });
+    } catch (error) {
+      toast({
+        title: 'Update failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  }, [editingBulkDoc, toast]);
+
   const processBulkTransform = useCallback(async () => {
     if (!settings) return;
 
@@ -289,7 +330,7 @@ const BrandDesigner: React.FC = () => {
           doc.file,
           settings as BrandSettings,
           'extract',
-          { coverTitleTextColor: doc.coverTitleTextColor }
+          { coverTitleHighlightWords: doc.coverTitleHighlightWords }
         );
 
         setBulkDocuments((prev) =>
@@ -422,8 +463,9 @@ const BrandDesigner: React.FC = () => {
                     <BulkDocumentList
                       documents={bulkDocuments}
                       onRemove={handleBulkRemove}
-                      onColorChange={handleBulkColorChange}
+                      onHighlightWordsChange={handleBulkHighlightWordsChange}
                       onDownload={handleBulkDownload}
+                      onEdit={handleBulkEdit}
                       onClearAll={handleBulkClearAll}
                       isProcessing={isBulkProcessing}
                     />
@@ -686,7 +728,7 @@ const BrandDesigner: React.FC = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Document Editor Modal */}
+        {/* Document Editor Modal - Single mode */}
         {isEditing && transformResult.extractedContent && (
           <DocumentEditor
             extractedContent={transformResult.extractedContent as EditorExtractedDoc}
@@ -695,6 +737,18 @@ const BrandDesigner: React.FC = () => {
             onSave={(editedContent) => generateFromEditMutation.mutate(editedContent)}
             onCancel={() => setIsEditing(false)}
             isGenerating={generateFromEditMutation.isPending}
+          />
+        )}
+
+        {/* Document Editor Modal - Bulk mode */}
+        {editingBulkDoc && editingBulkDoc.result?.extractedContent && (
+          <DocumentEditor
+            extractedContent={editingBulkDoc.result.extractedContent as EditorExtractedDoc}
+            previewPdf={editingBulkDoc.result.modifiedFile}
+            originalFileName={editingBulkDoc.file.name}
+            onSave={handleBulkEditSave}
+            onCancel={() => setEditingBulkDoc(null)}
+            isGenerating={false}
           />
         )}
       </div>
