@@ -417,9 +417,14 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
         if (cells.length > 0) rows.push(cells);
       }
       
-      // Skip tables that look like TOC (single column with page numbers)
-      const isTocTable = rows.length > 0 && rows.every(r => r.length === 1) && 
-                         rows.some(r => /\d+$/.test(r[0]?.trim() || ''));
+      // Skip tables that look like TOC (single column tables where MOST rows end with page numbers)
+      // A real TOC has consistent single-column rows ending with numbers
+      const colCounts = rows.map(r => r.length);
+      const maxCols = Math.max(...colCounts, 0);
+      const rowsEndingWithNumber = rows.filter(r => /\d+$/.test(r[r.length - 1]?.trim() || '')).length;
+      const isTocTable = maxCols === 1 && rows.length > 3 && rowsEndingWithNumber >= rows.length * 0.7;
+      
+      console.log(`[transform-document-design] Table analysis: ${rows.length} rows, maxCols=${maxCols}, rowsWithNumbers=${rowsEndingWithNumber}, isTOC=${isTocTable}`);
       
       if (rows.length > 0 && !isTocTable) {
         tablePositions.push({
@@ -430,7 +435,7 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
             tableData: { rows }
           }
         });
-        console.log(`[transform-document-design] Extracted table with ${rows.length} rows, ${rows[0]?.length || 0} cols`);
+        console.log(`[transform-document-design] ✓ Extracted table with ${rows.length} rows, ${maxCols} cols`);
       } else if (isTocTable) {
         // Still track position to skip paragraphs inside
         tablePositions.push({
@@ -438,7 +443,9 @@ async function extractDocxContent(base64Content: string): Promise<ExtractedDocum
           endIndex: tableEnd,
           section: { type: 'paragraph', content: '' } // Empty placeholder, won't be added
         });
-        console.log(`[transform-document-design] Skipped TOC table with ${rows.length} rows`);
+        console.log(`[transform-document-design] ✗ Skipped TOC table with ${rows.length} rows`);
+      } else if (rows.length === 0) {
+        console.log(`[transform-document-design] ✗ Empty table skipped`);
       }
       
       searchPos = tableEnd;
