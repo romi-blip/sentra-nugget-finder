@@ -1788,6 +1788,10 @@ export type Database = {
         Row: {
           background_element_id: string | null
           content_page_element_id: string | null
+          cover_title_highlight_color: string | null
+          cover_title_highlight_words: number
+          cover_title_text_color: string | null
+          cover_title_y_offset: number
           created_at: string | null
           footer_element_id: string | null
           footer_left_image_base64: string | null
@@ -1819,6 +1823,10 @@ export type Database = {
         Insert: {
           background_element_id?: string | null
           content_page_element_id?: string | null
+          cover_title_highlight_color?: string | null
+          cover_title_highlight_words?: number
+          cover_title_text_color?: string | null
+          cover_title_y_offset?: number
           created_at?: string | null
           footer_element_id?: string | null
           footer_left_image_base64?: string | null
@@ -1850,6 +1858,10 @@ export type Database = {
         Update: {
           background_element_id?: string | null
           content_page_element_id?: string | null
+          cover_title_highlight_color?: string | null
+          cover_title_highlight_words?: number
+          cover_title_text_color?: string | null
+          cover_title_y_offset?: number
           created_at?: string | null
           footer_element_id?: string | null
           footer_left_image_base64?: string | null
