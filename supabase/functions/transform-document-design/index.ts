@@ -192,7 +192,11 @@ CRITICAL REMINDERS:
 - Do NOT add any text that wasn't in the original
 - Keep the document order exactly as provided`;
 
-// AI Structuring function - calls Lovable AI gateway
+// AI Structuring limits to prevent CPU timeout
+const AI_MAX_TEXT_LENGTH = 50000; // Max characters to send to AI (truncate beyond this)
+const AI_TIMEOUT_MS = 15000; // 15 second timeout for AI call
+
+// AI Structuring function - calls Lovable AI gateway with timeout
 async function callAiStructuring(rawText: string, extractedTables: Array<{ rows: string[][] }>, extractedImages: Array<{ base64: string; mimeType: string }>): Promise<ExtractedDocument> {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   
@@ -203,81 +207,108 @@ async function callAiStructuring(rawText: string, extractedTables: Array<{ rows:
   console.log('[transform-document-design] Calling AI structuring agent...');
   console.log(`[transform-document-design] Raw text length: ${rawText.length} chars`);
   
+  // Truncate very long documents to prevent timeout
+  let textToProcess = rawText;
+  if (rawText.length > AI_MAX_TEXT_LENGTH) {
+    console.log(`[transform-document-design] WARNING: Truncating text from ${rawText.length} to ${AI_MAX_TEXT_LENGTH} chars for AI processing`);
+    textToProcess = rawText.substring(0, AI_MAX_TEXT_LENGTH) + '\n\n[... Document truncated for processing ...]';
+  }
+  
   const userPrompt = `Structure this document text. Identify all headings, paragraphs, lists, and other elements.
 
 DOCUMENT TEXT:
-${rawText}
+${textToProcess}
 
 ${extractedTables.length > 0 ? `\nNOTE: ${extractedTables.length} table(s) were extracted separately and will be merged back in.` : ''}
 ${extractedImages.length > 0 ? `\nNOTE: ${extractedImages.length} image(s) were extracted separately and will be merged back in.` : ''}`;
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-3-flash-preview',
-      messages: [
-        { role: 'system', content: AI_STRUCTURE_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1, // Low for consistency
-    }),
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[transform-document-design] AI gateway error:', response.status, errorText);
-    throw new Error(`AI gateway error: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  
-  if (!content) {
-    throw new Error('No content returned from AI');
-  }
-  
-  console.log('[transform-document-design] AI response received, parsing...');
-  
-  const structured = JSON.parse(content);
-  
-  // Validate structure
-  if (!structured.sections || !Array.isArray(structured.sections)) {
-    throw new Error('Invalid AI response: missing sections array');
-  }
-  
-  // Add IDs to sections
-  const sectionsWithIds = structured.sections.map((section: any, index: number) => ({
-    ...section,
-    id: `ai-${index}-${Date.now()}`,
-  }));
-  
-  // Merge back extracted tables and images at appropriate positions
-  // Tables: insert after paragraphs that might reference them
-  // Images: append at end for now (can be repositioned in editor)
-  
-  // Add extracted images as sections
-  for (const img of extractedImages) {
-    sectionsWithIds.push({
-      id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type: 'image',
-      imageBase64: img.base64,
-      imageMimeType: img.mimeType,
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          { role: 'system', content: AI_STRUCTURE_SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.1, // Low for consistency
+      }),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[transform-document-design] AI gateway error:', response.status, errorText);
+      throw new Error(`AI gateway error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    
+    if (!content) {
+      throw new Error('No content returned from AI');
+    }
+    
+    console.log('[transform-document-design] AI response received, parsing...');
+    
+    const structured = JSON.parse(content);
+    
+    // Validate structure
+    if (!structured.sections || !Array.isArray(structured.sections)) {
+      throw new Error('Invalid AI response: missing sections array');
+    }
+    
+    // Add IDs to sections
+    const sectionsWithIds = structured.sections.map((section: any, index: number) => ({
+      ...section,
+      id: `ai-${index}-${Date.now()}`,
+    }));
+    
+    // Merge back extracted tables and images at appropriate positions
+    // Tables: insert after paragraphs that might reference them
+    // Images: append at end for now (can be repositioned in editor)
+    
+    // Add extracted images as sections (limit to 3 to prevent CPU overload)
+    const limitedImages = extractedImages.slice(0, 3);
+    if (extractedImages.length > 3) {
+      console.log(`[transform-document-design] WARNING: Limiting images from ${extractedImages.length} to 3 for AI structuring`);
+    }
+    
+    for (const img of limitedImages) {
+      sectionsWithIds.push({
+        id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        type: 'image',
+        imageBase64: img.base64,
+        imageMimeType: img.mimeType,
+      });
+    }
+    
+    console.log(`[transform-document-design] AI structured ${sectionsWithIds.length} sections`);
+    
+    return {
+      title: structured.title || 'Untitled Document',
+      subtitle: structured.subtitle || '',
+      sections: sectionsWithIds,
+      isConfidential: structured.isConfidential || false,
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`AI structuring timed out after ${AI_TIMEOUT_MS / 1000}s`);
+    }
+    throw error;
   }
-  
-  console.log(`[transform-document-design] AI structured ${sectionsWithIds.length} sections`);
-  
-  return {
-    title: structured.title || 'Untitled Document',
-    subtitle: structured.subtitle || '',
-    sections: sectionsWithIds,
-    isConfidential: structured.isConfidential || false,
-  };
 }
 
 // Extract raw text from DOCX with minimal filtering (for AI structuring)
@@ -2515,17 +2546,30 @@ serve(async (req) => {
       // Extract document content based on file type
       if (fileType === 'docx') {
         // Use AI structuring if enabled (only for DOCX)
-        if (useAiStructuring) {
+        // Check file size - skip AI for very large files (base64 > 5MB = ~3.75MB file)
+        const fileSizeMB = (file.length * 0.75) / (1024 * 1024);
+        const shouldUseAi = useAiStructuring && fileSizeMB < 3;
+        
+        if (useAiStructuring && !shouldUseAi) {
+          console.log(`[transform-document-design] WARNING: Document too large (${fileSizeMB.toFixed(1)}MB), skipping AI structuring`);
+        }
+        
+        if (shouldUseAi) {
           console.log('[transform-document-design] Using AI-powered content structuring...');
           try {
             // Extract raw text with minimal filtering
             const { rawText, tables, images, isConfidential } = await extractRawDocxText(file);
             
-            // Call AI to structure the content
-            extractedDoc = await callAiStructuring(rawText, tables, images);
-            extractedDoc.isConfidential = isConfidential;
-            
-            console.log(`[transform-document-design] AI structuring complete: ${extractedDoc.sections.length} sections`);
+            // Skip AI if raw text is too large (would timeout anyway)
+            if (rawText.length > 100000) {
+              console.log(`[transform-document-design] WARNING: Document text too long (${rawText.length} chars), falling back to regex extraction`);
+              extractedDoc = await extractDocxContent(file);
+            } else {
+              // Call AI to structure the content
+              extractedDoc = await callAiStructuring(rawText, tables, images);
+              extractedDoc.isConfidential = isConfidential;
+              console.log(`[transform-document-design] AI structuring complete: ${extractedDoc.sections.length} sections`);
+            }
           } catch (aiError) {
             console.error('[transform-document-design] AI structuring failed, falling back to regex extraction:', aiError);
             // Fallback to regex-based extraction
