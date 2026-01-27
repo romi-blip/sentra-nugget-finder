@@ -211,6 +211,7 @@ const BrandDesigner: React.FC = () => {
       file,
       coverTitleHighlightWords: 3,
       outputFormat: 'pdf' as OutputFormat,
+      useAiStructuring: false, // Default to false, user can enable per document
       status: 'pending' as const,
     }));
     setBulkDocuments((prev) => [...prev, ...newItems]);
@@ -223,6 +224,12 @@ const BrandDesigner: React.FC = () => {
   const handleBulkHighlightWordsChange = useCallback((id: string, words: number) => {
     setBulkDocuments((prev) =>
       prev.map((doc) => (doc.id === id ? { ...doc, coverTitleHighlightWords: words } : doc))
+    );
+  }, []);
+
+  const handleBulkAiStructuringChange = useCallback((id: string, enabled: boolean) => {
+    setBulkDocuments((prev) =>
+      prev.map((doc) => (doc.id === id ? { ...doc, useAiStructuring: enabled } : doc))
     );
   }, []);
 
@@ -385,6 +392,7 @@ const BrandDesigner: React.FC = () => {
           'extract',
           { 
             coverTitleHighlightWords: doc.coverTitleHighlightWords,
+            useAiStructuring: doc.useAiStructuring,
           }
         );
 
@@ -519,6 +527,7 @@ const BrandDesigner: React.FC = () => {
                       documents={bulkDocuments}
                       onRemove={handleBulkRemove}
                       onHighlightWordsChange={handleBulkHighlightWordsChange}
+                      onAiStructuringChange={handleBulkAiStructuringChange}
                       onDownload={handleBulkDownload}
                       onEdit={handleBulkEdit}
                       onClearAll={handleBulkClearAll}

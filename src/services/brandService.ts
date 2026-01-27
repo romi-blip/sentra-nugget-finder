@@ -20,9 +20,11 @@ export interface BrandSettings {
 
 export interface StructuredSection {
   id: string;
-  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'page-break' | 'image';
+  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'numbered-list' | 'table' | 'feature-grid' | 'page-break' | 'image';
   content?: string;
-  items?: string[];
+  items?: string[]; // For bullet-list and numbered-list
+  tableData?: { rows: string[][] };
+  features?: Array<{ title: string; description: string }>;
   imageBase64?: string;
   imageMimeType?: string;
 }
@@ -36,6 +38,7 @@ export interface ExtractedDocument {
 
 export interface TransformOptions {
   coverTitleHighlightWords?: number;
+  useAiStructuring?: boolean; // Enable AI-powered content structuring for exact text preservation
   // Output is always PDF (DOCX has design limitations)
 }
 
@@ -92,6 +95,7 @@ export const brandService = {
         fileType,
         mode,
         coverTitleHighlightWordsOverride: options?.coverTitleHighlightWords,
+        useAiStructuring: options?.useAiStructuring,
         outputFormat: 'pdf', // Always PDF
       },
     });

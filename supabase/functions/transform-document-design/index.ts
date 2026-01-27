@@ -100,15 +100,16 @@ interface RequestBody {
   mode?: 'extract' | 'generate';
   editedContent?: ExtractedDocument;
   coverTitleHighlightWordsOverride?: number;
+  useAiStructuring?: boolean; // Enable AI-powered content structuring
 }
 
 interface StructuredSection {
   id?: string;
-  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'table' | 'feature-grid' | 'page-break' | 'heading' | 'image';
+  type: 'h1' | 'h2' | 'h3' | 'paragraph' | 'bullet-list' | 'numbered-list' | 'table' | 'feature-grid' | 'page-break' | 'heading' | 'image';
   content?: string;
   text?: string;
   level?: number;
-  items?: string[];
+  items?: string[]; // For bullet-list and numbered-list
   features?: Array<{ title: string; description: string }>;
   // Image fields
   imageBase64?: string;
@@ -123,6 +124,288 @@ interface ExtractedDocument {
   subtitle: string;
   sections: StructuredSection[];
   isConfidential: boolean;
+}
+
+// AI Structuring System Prompt - comprehensive element identification
+const AI_STRUCTURE_SYSTEM_PROMPT = `You are a document structure analyzer. Your ONLY job is to identify the structural hierarchy of a document.
+
+ABSOLUTE RULES - VIOLATION MEANS FAILURE:
+1. NEVER change, edit, paraphrase, correct spelling, or rewrite ANY text
+2. Return the EXACT text as given - character for character, word for word
+3. Only add structure metadata (heading levels, list detection, table identification)
+4. If you're unsure whether something is a heading or paragraph, keep it as paragraph
+
+ELEMENT TYPES YOU MUST IDENTIFY:
+
+1. HEADINGS (identify by: larger font indicators, short lines, no ending punctuation, numbered sections)
+   - h1: Main section titles (usually numbered like "1. Overview" or standalone major sections)
+   - h2: Subsection titles (like "1.1 Details" or clearly subordinate sections)
+   - h3: Sub-subsection titles (like "1.1.1 Specifics" or third-level headers)
+
+2. PARAGRAPHS
+   - Regular body text, usually multiple sentences
+   - Ends with punctuation (period, question mark)
+   - Keep long content blocks as single paragraphs - do NOT split them
+
+3. BULLET LISTS (unordered)
+   - Items that appear to be unordered list items
+   - Return as: { "type": "bullet-list", "items": ["item 1 text", "item 2 text"] }
+   - PRESERVE the exact text of each item (remove bullet characters but keep all text)
+
+4. NUMBERED LISTS (ordered)
+   - Items that appear to be numbered/ordered list items
+   - Return as: { "type": "numbered-list", "items": ["first item text", "second item text"] }
+   - Remove the number/letter prefix (1., 2., a., b., i., ii.) but keep all other text exactly
+
+5. TABLES
+   - Data arranged in rows and columns (you'll see TAB-separated or structured data)
+   - Return as: { "type": "table", "tableData": { "rows": [["cell1", "cell2"], ["cell3", "cell4"]] } }
+   - First row is typically the header
+   - PRESERVE exact cell text
+
+6. FEATURE GRIDS (optional - only if clear title:description pattern)
+   - Multiple pairs of short title with longer description
+   - Return as: { "type": "feature-grid", "features": [{"title": "Feature Name", "description": "Description text"}] }
+
+7. PAGE BREAKS
+   - Only add if explicitly indicated in source (like "---PAGE BREAK---")
+   - Return as: { "type": "page-break" }
+
+OUTPUT FORMAT (JSON):
+{
+  "title": "Exact document title from first major heading",
+  "subtitle": "Category or subtitle if present (short uppercase text before title)",
+  "isConfidential": false,
+  "sections": [
+    { "type": "h1", "content": "EXACT heading text" },
+    { "type": "paragraph", "content": "EXACT paragraph text..." },
+    { "type": "bullet-list", "items": ["EXACT item 1", "EXACT item 2"] },
+    { "type": "numbered-list", "items": ["EXACT item 1", "EXACT item 2"] },
+    { "type": "table", "tableData": { "rows": [["EXACT cell", "EXACT cell"]] } }
+  ]
+}
+
+CRITICAL REMINDERS:
+- You are a STRUCTURE IDENTIFIER, not an editor
+- Every word in your output MUST appear in the input
+- If content appears in input, it MUST appear in output (no omissions)
+- Do NOT add any text that wasn't in the original
+- Keep the document order exactly as provided`;
+
+// AI Structuring function - calls Lovable AI gateway
+async function callAiStructuring(rawText: string, extractedTables: Array<{ rows: string[][] }>, extractedImages: Array<{ base64: string; mimeType: string }>): Promise<ExtractedDocument> {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  
+  if (!LOVABLE_API_KEY) {
+    throw new Error('LOVABLE_API_KEY not configured for AI structuring');
+  }
+  
+  console.log('[transform-document-design] Calling AI structuring agent...');
+  console.log(`[transform-document-design] Raw text length: ${rawText.length} chars`);
+  
+  const userPrompt = `Structure this document text. Identify all headings, paragraphs, lists, and other elements.
+
+DOCUMENT TEXT:
+${rawText}
+
+${extractedTables.length > 0 ? `\nNOTE: ${extractedTables.length} table(s) were extracted separately and will be merged back in.` : ''}
+${extractedImages.length > 0 ? `\nNOTE: ${extractedImages.length} image(s) were extracted separately and will be merged back in.` : ''}`;
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-3-flash-preview',
+      messages: [
+        { role: 'system', content: AI_STRUCTURE_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1, // Low for consistency
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[transform-document-design] AI gateway error:', response.status, errorText);
+    throw new Error(`AI gateway error: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  
+  if (!content) {
+    throw new Error('No content returned from AI');
+  }
+  
+  console.log('[transform-document-design] AI response received, parsing...');
+  
+  const structured = JSON.parse(content);
+  
+  // Validate structure
+  if (!structured.sections || !Array.isArray(structured.sections)) {
+    throw new Error('Invalid AI response: missing sections array');
+  }
+  
+  // Add IDs to sections
+  const sectionsWithIds = structured.sections.map((section: any, index: number) => ({
+    ...section,
+    id: `ai-${index}-${Date.now()}`,
+  }));
+  
+  // Merge back extracted tables and images at appropriate positions
+  // Tables: insert after paragraphs that might reference them
+  // Images: append at end for now (can be repositioned in editor)
+  
+  // Add extracted images as sections
+  for (const img of extractedImages) {
+    sectionsWithIds.push({
+      id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'image',
+      imageBase64: img.base64,
+      imageMimeType: img.mimeType,
+    });
+  }
+  
+  console.log(`[transform-document-design] AI structured ${sectionsWithIds.length} sections`);
+  
+  return {
+    title: structured.title || 'Untitled Document',
+    subtitle: structured.subtitle || '',
+    sections: sectionsWithIds,
+    isConfidential: structured.isConfidential || false,
+  };
+}
+
+// Extract raw text from DOCX with minimal filtering (for AI structuring)
+async function extractRawDocxText(base64Content: string): Promise<{
+  rawText: string;
+  tables: Array<{ rows: string[][] }>;
+  images: Array<{ base64: string; mimeType: string }>;
+  isConfidential: boolean;
+}> {
+  console.log('[transform-document-design] Extracting raw text for AI structuring');
+  
+  const bytes = fastBase64ToBytes(base64Content);
+  const zip = await JSZip.loadAsync(bytes);
+  
+  // Extract images
+  const relMap = await parseDocxRelationships(zip);
+  const docxImages = await extractDocxImages(zip, relMap);
+  
+  const images: Array<{ base64: string; mimeType: string }> = [];
+  for (const [_rId, img] of docxImages) {
+    images.push({ base64: img.base64, mimeType: img.mimeType });
+  }
+  
+  const tables: Array<{ rows: string[][] }> = [];
+  let rawText = '';
+  let isConfidential = false;
+  
+  const documentFile = zip.file('word/document.xml');
+  if (documentFile) {
+    const documentXml = await documentFile.async('string');
+    
+    if (documentXml.toLowerCase().includes('confidential')) {
+      isConfidential = true;
+    }
+    
+    // Extract tables first (to identify their positions)
+    const tableRegex = /<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>/g;
+    let tableMatch;
+    const tablePositions: Array<{ start: number; end: number }> = [];
+    
+    while ((tableMatch = tableRegex.exec(documentXml)) !== null) {
+      const tableContent = tableMatch[0];
+      const rows: string[][] = [];
+      
+      const rowRegex = /<w:tr\b[^>]*>([\s\S]*?)<\/w:tr>/g;
+      let rowMatch;
+      
+      while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+        const rowContent = rowMatch[0];
+        const cells: string[] = [];
+        
+        const cellRegex = /<w:tc\b[^>]*>([\s\S]*?)<\/w:tc>/g;
+        let cellMatch;
+        
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+          const cellInner = cellMatch[1];
+          let cellText = '';
+          const textMatches = cellInner.matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/g);
+          for (const tm of textMatches) {
+            cellText += tm[1];
+          }
+          cells.push(decodeHtmlEntities(cellText.trim()));
+        }
+        
+        if (cells.length > 0) {
+          rows.push(cells);
+        }
+      }
+      
+      if (rows.length > 0) {
+        tables.push({ rows });
+        // Mark table in text with placeholder
+        rawText += `\n[TABLE_${tables.length}]\n`;
+      }
+      
+      tablePositions.push({ start: tableMatch.index, end: tableMatch.index + tableContent.length });
+    }
+    
+    // Extract all paragraphs (including those that would normally be filtered)
+    const paragraphRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g;
+    let match;
+    
+    while ((match = paragraphRegex.exec(documentXml)) !== null) {
+      const paragraphStartIndex = match.index;
+      
+      // Skip paragraphs inside tables
+      const isInsideTable = tablePositions.some(tp => paragraphStartIndex >= tp.start && paragraphStartIndex < tp.end);
+      if (isInsideTable) continue;
+      
+      const paragraphContent = match[1];
+      
+      // Skip image-only paragraphs
+      if (paragraphContent.match(/<a:blip[^>]*r:embed="(rId\d+)"/)) continue;
+      
+      let paragraphText = '';
+      const textMatches = paragraphContent.matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/g);
+      for (const tm of textMatches) {
+        paragraphText += tm[1];
+      }
+      
+      paragraphText = decodeHtmlEntities(paragraphText.trim());
+      if (!paragraphText) continue;
+      
+      // Add paragraph style hint for AI
+      const styleRegex = /<w:pStyle w:val="([^"]*)"/;
+      const styleMatch = styleRegex.exec(paragraphContent);
+      const styleName = styleMatch ? styleMatch[1] : '';
+      
+      // Check for list properties
+      const hasNumPr = /<w:numPr[\s\S]*?<\/w:numPr>/.test(paragraphContent);
+      
+      if (styleName.match(/Heading1|Title/i)) {
+        rawText += `\n## ${paragraphText}\n`;
+      } else if (styleName.match(/Heading2|Subtitle/i)) {
+        rawText += `\n### ${paragraphText}\n`;
+      } else if (styleName.match(/Heading3/i)) {
+        rawText += `\n#### ${paragraphText}\n`;
+      } else if (hasNumPr || styleName.match(/ListParagraph|ListBullet|ListNumber/i)) {
+        rawText += `• ${paragraphText}\n`;
+      } else {
+        rawText += `${paragraphText}\n\n`;
+      }
+    }
+  }
+  
+  console.log(`[transform-document-design] Raw text extracted: ${rawText.length} chars, ${tables.length} tables, ${images.length} images`);
+  
+  return { rawText, tables, images, isConfidential };
 }
 
 interface TOCEntry {
@@ -1807,6 +2090,46 @@ async function createContentPages(
       y -= style.marginBottom;
       hasContent = true;
     }
+    // Numbered list rendering (similar to bullet-list but with numbers)
+    else if (section.type === 'numbered-list' && section.items) {
+      const style = getTextStyle('bullet'); // Use same style as bullets
+      
+      for (let itemIdx = 0; itemIdx < section.items.length; itemIdx++) {
+        const item = section.items[itemIdx];
+        if (pageNumber >= MAX_PAGES) break;
+        if (y < minY + 30) {
+          if (!(await addNewPage())) break;
+        }
+
+        const numberX = margin + 4;
+        const numberText = `${itemIdx + 1}.`;
+        
+        // Draw the number
+        currentPage.drawText(numberText, {
+          x: numberX,
+          y: y,
+          size: style.fontSize,
+          font: fonts.bold,
+          color: style.color,
+        });
+
+        // Draw the item text with proper indent
+        const lines = wrapText(item, fonts.medium, style.fontSize, contentWidth - style.bulletIndent - 8);
+        for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+          currentPage.drawText(lines[lineIdx], {
+            x: margin + style.bulletIndent,
+            y: y,
+            size: style.fontSize,
+            font: fonts.medium,
+            color: style.color,
+          });
+          y -= style.fontSize + 6;
+        }
+        y -= 4;
+      }
+      y -= style.marginBottom;
+      hasContent = true;
+    }
     else if (section.type === 'table' && section.tableData) {
       // ============ Table Rendering ============
       const { rows } = section.tableData;
@@ -2152,9 +2475,9 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleHighlightWordsOverride } = body;
+    const { file, fileName, fileType, mode = 'extract', editedContent, coverTitleHighlightWordsOverride, useAiStructuring } = body;
 
-    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, coverTitleHighlightWordsOverride=${coverTitleHighlightWordsOverride ?? 'none'}`);
+    console.log(`[transform-document-design] Processing mode=${mode}, fileName=${fileName}, fileType=${fileType}, coverTitleHighlightWordsOverride=${coverTitleHighlightWordsOverride ?? 'none'}, useAiStructuring=${useAiStructuring ?? false}`);
 
     // Handle generate mode - use edited content directly
     let extractedDoc: ExtractedDocument;
@@ -2191,7 +2514,27 @@ serve(async (req) => {
 
       // Extract document content based on file type
       if (fileType === 'docx') {
-        extractedDoc = await extractDocxContent(file);
+        // Use AI structuring if enabled (only for DOCX)
+        if (useAiStructuring) {
+          console.log('[transform-document-design] Using AI-powered content structuring...');
+          try {
+            // Extract raw text with minimal filtering
+            const { rawText, tables, images, isConfidential } = await extractRawDocxText(file);
+            
+            // Call AI to structure the content
+            extractedDoc = await callAiStructuring(rawText, tables, images);
+            extractedDoc.isConfidential = isConfidential;
+            
+            console.log(`[transform-document-design] AI structuring complete: ${extractedDoc.sections.length} sections`);
+          } catch (aiError) {
+            console.error('[transform-document-design] AI structuring failed, falling back to regex extraction:', aiError);
+            // Fallback to regex-based extraction
+            extractedDoc = await extractDocxContent(file);
+          }
+        } else {
+          // Use standard regex-based extraction
+          extractedDoc = await extractDocxContent(file);
+        }
       } else {
         extractedDoc = await extractPdfContent(file);
       }
@@ -2199,7 +2542,7 @@ serve(async (req) => {
       // Add IDs to sections for editing
       extractedDoc.sections = extractedDoc.sections.map((section, index) => ({
         ...section,
-        id: `section-${index}`,
+        id: section.id || `section-${index}`,
       }));
     }
 
