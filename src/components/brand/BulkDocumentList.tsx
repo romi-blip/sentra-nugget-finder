@@ -1,8 +1,9 @@
 import React from 'react';
-import { Trash2, Download, FileText, Loader2, CheckCircle, XCircle, AlertCircle, Edit3 } from 'lucide-react';
+import { Trash2, Download, FileText, Loader2, CheckCircle, XCircle, AlertCircle, Edit3, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -12,6 +13,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { TransformResult } from '@/services/brandService';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // Output format is PDF only (DOCX has design limitations)
 export type OutputFormat = 'pdf';
@@ -21,6 +28,7 @@ export interface BulkDocumentItem {
   file: File;
   coverTitleHighlightWords: number;
   outputFormat: OutputFormat;
+  useAiStructuring: boolean; // Enable AI-powered content structuring
   status: 'pending' | 'processing' | 'complete' | 'error';
   result?: TransformResult;
   errorMessage?: string;
@@ -30,6 +38,7 @@ interface BulkDocumentListProps {
   documents: BulkDocumentItem[];
   onRemove: (id: string) => void;
   onHighlightWordsChange: (id: string, words: number) => void;
+  onAiStructuringChange: (id: string, enabled: boolean) => void;
   onDownload: (item: BulkDocumentItem) => void;
   onEdit: (item: BulkDocumentItem) => void;
   onClearAll: () => void;
@@ -40,6 +49,7 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
   documents,
   onRemove,
   onHighlightWordsChange,
+  onAiStructuringChange,
   onDownload,
   onEdit,
   onClearAll,
@@ -116,10 +126,11 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[280px]">Document</TableHead>
-              <TableHead className="w-[80px]">Size</TableHead>
-              <TableHead className="w-[150px]">Highlight Words</TableHead>
-              <TableHead className="w-[100px]">Status</TableHead>
+              <TableHead className="w-[240px]">Document</TableHead>
+              <TableHead className="w-[70px]">Size</TableHead>
+              <TableHead className="w-[130px]">Highlight Words</TableHead>
+              <TableHead className="w-[100px]">AI Structure</TableHead>
+              <TableHead className="w-[90px]">Status</TableHead>
               <TableHead className="w-[130px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -129,7 +140,7 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="truncate max-w-[240px]" title={doc.file.name}>
+                    <span className="truncate max-w-[200px]" title={doc.file.name}>
                       {doc.file.name}
                     </span>
                   </div>
@@ -146,7 +157,7 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
                       max={15}
                       step={1}
                       disabled={isProcessing || doc.status !== 'pending'}
-                      className="w-24"
+                      className="w-20"
                     />
                     <span className="w-5 text-center font-mono text-sm text-muted-foreground">
                       {doc.coverTitleHighlightWords}
@@ -154,10 +165,34 @@ const BulkDocumentList: React.FC<BulkDocumentListProps> = ({
                   </div>
                 </TableCell>
                 <TableCell>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={doc.useAiStructuring}
+                            onCheckedChange={(checked) => onAiStructuringChange(doc.id, checked)}
+                            disabled={isProcessing || doc.status !== 'pending'}
+                          />
+                          {doc.useAiStructuring && (
+                            <Sparkles className="h-3.5 w-3.5 text-primary" />
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[250px]">
+                        <p className="text-xs">
+                          AI structuring preserves exact content while identifying headings, lists, and tables.
+                          Enable for documents requiring content fidelity.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </TableCell>
+                <TableCell>
                   <div className="flex flex-col gap-1">
                     {getStatusBadge(doc.status)}
                     {doc.errorMessage && (
-                      <span className="text-xs text-destructive truncate max-w-[150px]" title={doc.errorMessage}>
+                      <span className="text-xs text-destructive truncate max-w-[100px]" title={doc.errorMessage}>
                         {doc.errorMessage}
                       </span>
                     )}
